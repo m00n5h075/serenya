@@ -11,6 +11,26 @@ Based on our agent specializations and development workflow, here are the standa
 - Handover documentation required for seamless agent transitions
 - Success criteria measurable with specific metrics
 
+## **Agent Workflow Integration**
+
+**MANDATORY**: Every task must include prerequisite validation and proper handoff following the [Agent Workflow Protocol](./agent-workflow-protocol.md).
+
+### Task Prerequisites Section
+Add this section to every task description:
+```
+## Prerequisites & Dependencies
+**Required Completed Tasks**: [List specific Linear task IDs that must be finished]
+**Environment Requirements**: [System state, deployed services, database schema]
+**File Dependencies**: [Existing files/configurations this task will modify]
+**Access Requirements**: [Credentials, permissions, API keys needed]
+```
+
+### Validation Requirements
+Before starting any task, the assigned agent must:
+1. **Verify prerequisites** using objective criteria (not assumptions)
+2. **Document validation results** in Linear task comments  
+3. **Update task status** to `agent_active` only after validation passes
+
 ## General Task Structure
 
 All tasks should include:
@@ -62,6 +82,7 @@ All tasks should include:
 3. **Network Security**: Security groups allow required traffic, block unauthorized
 
 ## Definition of Done
+- [ ] **Prerequisites validated** (following Agent Workflow Protocol)
 - [ ] Infrastructure provisioned and functional
 - [ ] Security review completed with QA validation
 - [ ] Monitoring dashboards created and accessible
@@ -69,6 +90,7 @@ All tasks should include:
 - [ ] Cost tracking configured with alerts
 - [ ] Backup/recovery procedures documented and tested
 - [ ] **Handover documentation completed** (see template below)
+- [ ] **Task status updated** to `agent_complete` with validation evidence
 
 ## Technical Specifications
 ```yaml
