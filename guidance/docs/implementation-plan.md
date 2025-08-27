@@ -94,7 +94,7 @@ FHIR Extraction → Database Storage → S3 Cleanup → User Notification
 
 **Prompt Template Architecture:**
 ```sql
--- Database Schema Extensions for Epic 6.5 (M00-61 through M00-68)
+-- Database Schema Extensions for Epic 6.5 (M00-64 through M00-71)
 CREATE TABLE prompt_templates (
     id UUID PRIMARY KEY,
     action_type VARCHAR(50), -- 'concern-assessment', 'explanation', 'comparison', 'education'
@@ -130,7 +130,7 @@ CREATE TABLE prompt_interactions (
 );
 ```
 
-**Dynamic Prompt Assembly Engine (M00-64):**
+**Dynamic Prompt Assembly Engine (M00-67):**
 - **Input**: User action + Current lab result + User medical context
 - **Process**: Template selection → Context aggregation → Prompt assembly → Safety validation
 - **Output**: Contextualized prompt ready for AI API
@@ -154,13 +154,13 @@ const userContext = {
 // Provide assessment with conservative medical bias. Always recommend healthcare provider consultation for abnormal values."
 ```
 
-**Action-Specific Templates (M00-63):**
+**Action-Specific Templates (M00-66):**
 1. **"What does this mean?"** → Educational explanation with medical term translation
 2. **"Should I be concerned?"** → Risk assessment with conservative bias and consultation triggers
 3. **"Compare to previous results"** → Trend analysis with timeline visualization
 4. **"Learn more about this condition"** → Condition-specific educational content with disclaimers
 
-**Response Consistency Framework (M00-65):**
+**Response Consistency Framework (M00-68):**
 ```javascript
 // Standardized AI response format
 {
@@ -181,7 +181,7 @@ const userContext = {
 
 **Cross-References:**
 - **UI Screens**: Complete Screen Inventory - Screens 15 & 16 (Individual Result Detail & Plain Language Interpretation)
-- **Project Tasks**: Epic 6.5 tasks M00-61 through M00-68 in Project Plan document
+- **Project Tasks**: Epic 6.5 tasks M00-64 through M00-71 in Project Plan document
 - **Database Schema**: Extends existing FHIR-inspired schema from Epic 2 (M00-25, M00-39)
 
 ## Phase 2: User Experience & AWS Enhancement (Weeks 5-6)
