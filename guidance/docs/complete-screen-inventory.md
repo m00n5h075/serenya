@@ -117,12 +117,16 @@
     - Reference ranges with visual indicators  
     - AI confidence score display
     - Plain language interpretation
+    - **Predefined action buttons** for deeper exploration (e.g., "What does this mean?", "Should I be concerned?", "Compare to previous results")
+    - *Technical implementation: See Epic 6.5 (M00-61 to M00-68) in Project Plan and Implementation Plan Week 4*
 
 16. **Plain Language Interpretation Display**
     - Medical term translation
     - Conservative bias implementation
     - "Consult your doctor" recommendations
     - Anxiety-aware messaging
+    - **Guided follow-up prompts** instead of free-form questions (e.g., "Learn more about this condition", "See normal ranges", "View trends over time")
+    - *Technical implementation: See Epic 6.5 (M00-63, M00-64) for prompt templates and assembly engine*
 
 17. **AI Confidence Scoring Interface**
     - Traffic light system (Red/Yellow/Green)

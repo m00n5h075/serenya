@@ -89,6 +89,101 @@ FHIR Extraction → Database Storage → S3 Cleanup → User Notification
 - Response formatting for consistent FHIR-like output
 - Cost tracking per AI API call
 
+### Week 4: AI Prompt Engineering & Contextualization System
+**Core Requirement:** Transform predefined UI button clicks into intelligent, contextualized AI interactions
+
+**Prompt Template Architecture:**
+```sql
+-- Database Schema Extensions for Epic 6.5 (M00-61 through M00-68)
+CREATE TABLE prompt_templates (
+    id UUID PRIMARY KEY,
+    action_type VARCHAR(50), -- 'concern-assessment', 'explanation', 'comparison', 'education'
+    template_version INTEGER,
+    base_prompt_text TEXT,
+    context_placeholders JSONB, -- {user_history, current_result, risk_factors}
+    safety_rules JSONB, -- Medical disclaimers, consultation triggers
+    created_at TIMESTAMP,
+    is_active BOOLEAN DEFAULT true
+);
+
+CREATE TABLE user_context_cache (
+    user_id UUID REFERENCES users(id),
+    medical_summary JSONB, -- Compiled medical history
+    risk_factors TEXT[], -- ['diabetes', 'hypertension', 'family_history_cvd']
+    current_medications TEXT[],
+    last_updated TIMESTAMP,
+    PRIMARY KEY (user_id)
+);
+
+CREATE TABLE prompt_interactions (
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES users(id),
+    prompt_template_id UUID REFERENCES prompt_templates(id),
+    user_action VARCHAR(50), -- Button clicked: 'what_does_this_mean', 'should_i_be_concerned'
+    assembled_prompt TEXT, -- Final contextualized prompt sent to AI
+    user_context_used JSONB, -- Medical context included in this interaction
+    ai_response TEXT,
+    confidence_score INTEGER, -- AI confidence 1-10
+    user_satisfaction INTEGER, -- Optional feedback 1-5
+    processing_time_ms INTEGER,
+    created_at TIMESTAMP
+);
+```
+
+**Dynamic Prompt Assembly Engine (M00-64):**
+- **Input**: User action + Current lab result + User medical context
+- **Process**: Template selection → Context aggregation → Prompt assembly → Safety validation
+- **Output**: Contextualized prompt ready for AI API
+
+**Example Prompt Assembly Flow:**
+```javascript
+// User clicks "Should I be concerned?" on cholesterol result
+const userAction = 'concern-assessment';
+const currentResult = { type: 'LDL', value: 180, unit: 'mg/dL', reference: '<100' };
+const userContext = {
+  age: 45, gender: 'male', 
+  previousResults: [{ LDL: 160, date: '2024-06-15' }],
+  medications: ['atorvastatin 20mg'],
+  riskFactors: ['family_history_cvd']
+};
+
+// Assembled prompt sent to AI:
+// "Analyze this cholesterol result for concern level. Patient: 45-year-old male, 
+// previous LDL 160 mg/dL (6 months ago), currently on atorvastatin 20mg, 
+// family history of cardiovascular disease. Current LDL: 180 mg/dL (reference <100).
+// Provide assessment with conservative medical bias. Always recommend healthcare provider consultation for abnormal values."
+```
+
+**Action-Specific Templates (M00-63):**
+1. **"What does this mean?"** → Educational explanation with medical term translation
+2. **"Should I be concerned?"** → Risk assessment with conservative bias and consultation triggers
+3. **"Compare to previous results"** → Trend analysis with timeline visualization
+4. **"Learn more about this condition"** → Condition-specific educational content with disclaimers
+
+**Response Consistency Framework (M00-65):**
+```javascript
+// Standardized AI response format
+{
+  "explanation": "Plain language interpretation",
+  "confidence_score": 8,
+  "risk_level": "moderate", // low, moderate, high
+  "recommendations": ["Consult your healthcare provider", "Continue current medication"],
+  "disclaimers": ["This is not medical advice", "For educational purposes only"],
+  "follow_up_actions": ["Schedule appointment", "Monitor trends", "Learn about cholesterol"]
+}
+```
+
+**Integration with Existing Pipeline:**
+- **Triggered by**: Predefined UI button clicks (Epic 6.5 connects to Epic 6)
+- **Data source**: User medical history from diagnostic_reports and observations tables
+- **AI Processing**: Enhanced Claude API integration with contextualized prompts
+- **Output**: Personalized responses displayed in Individual Result Detail Screen
+
+**Cross-References:**
+- **UI Screens**: Complete Screen Inventory - Screens 15 & 16 (Individual Result Detail & Plain Language Interpretation)
+- **Project Tasks**: Epic 6.5 tasks M00-61 through M00-68 in Project Plan document
+- **Database Schema**: Extends existing FHIR-inspired schema from Epic 2 (M00-25, M00-39)
+
 ## Phase 2: User Experience & AWS Enhancement (Weeks 5-6)
 
 ### Week 5: Frontend Interface & CloudFront CDN
