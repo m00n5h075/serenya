@@ -1,0 +1,68 @@
+# Serenya PR/FAQ
+
+## 📢 Press Release (Mock)
+
+**FOR IMMEDIATE RELEASE**  
+
+**Introducing Serenya: Your Friendly AI Health Agent for Lab Results & Medical Interpretation**  
+
+Lisbon, Portugal — Today, Serenya announced the launch of its new AI Health Agent designed to provide medical interpretation of lab results and empower better healthcare relationships.  
+
+For millions of people, medical test results are confusing, full of numbers and acronyms that leave patients searching online for answers or walking into doctor appointments unprepared. Serenya solves this by acting as your friendly AI nurse, providing clear medical interpretation of lab results — in seconds.  
+
+Using secure AI technology, Serenya helps users:  
+- Upload and get medical interpretation of lab results with ease.  
+- View their health data over time, with clear trends and contextual understanding.  
+- Generate doctor-ready reports that summarize AI nurse insights, highlight questions, and strengthen conversations with healthcare providers.  
+
+Free users can upload results and receive immediate medical interpretation. Premium subscribers unlock deeper insights: their results are interpreted in the context of medical history and ongoing health relationships, with personalized doctor reports included.  
+
+Serenya is built with **privacy first**. User-uploaded files are not stored, only structured medical data is retained in compliance with HIPAA, GDPR, and FHIR standards.  
+
+"Serenya's mission is to empower patients with clarity and confidence," said [Founder Name], founder of Serenya. "We're like having a friendly AI nurse who helps you understand your health data. We don't replace doctors — we strengthen healthcare relationships by helping people walk into appointments informed and confident."  
+
+Serenya launches in [date/year], available globally. Premium subscriptions start at **€9.99/month** with an annual plan at **€99/year**.  
+
+
+## ❓ FAQ
+
+### Q1. Who is Serenya for?  
+Anyone who receives lab results and feels confused or anxious. Serenya is especially useful for people managing chronic conditions, monitoring ongoing health, or simply wanting more clarity before talking to their doctor.  
+
+### Q2. What's unique about Serenya compared to "Dr. Google"?  
+- Medical interpretation is personalized to the user's age, gender, health profile, and medical history (for premium users).  
+- Acts like a friendly AI nurse helping you understand your results, not generic health information.
+- Reports are designed to *strengthen* healthcare relationships, not replace them.  
+- Privacy is central: files aren't stored, only structured health data is retained under strict compliance standards.  
+
+### Q3. What are the main features for free users vs. premium?  
+- **Free Users:**  
+  - Upload lab results (PDF, image, photo)  
+  - Receive immediate AI nurse medical interpretation  
+  - Export summary with basic analysis  
+
+- **Premium Users (€9.99/month or €99/year):**  
+  - All free features  
+  - AI nurse contextual interpretation with medical history  
+  - Doctor-ready PDF reports with comprehensive insights  
+  - Access to full health relationship history and trends  
+
+### Q4. How does Serenya make money?  
+Through a freemium subscription model: free entry, premium tier for advanced features. No ads, no data monetization.  
+
+### Q5. How do you handle medical regulations like HIPAA/GDPR?  
+- We never store the uploaded files.  
+- Only structured medical data is retained, in FHIR-compliant format.  
+- All infrastructure is HIPAA and GDPR compliant.  
+- Users remain in control of their data, with export and deletion available anytime.  
+
+### Q6. What if AI parsing makes a mistake?  
+Parsing isn't perfect. Serenya includes disclaimers highlighting this risk and emphasizes that we provide medical interpretation assistance, not medical advice. Premium users benefit from contextual history analysis and comprehensive AI nurse insights, which help provide better understanding of results over time.  
+
+### Q7. What’s next on the roadmap?  
+- Adding symptom tracking and health profile evolution over time.  
+- Exploring integrations with EHRs and wearable devices.  
+- Expanding language support for global accessibility.  
+
+### Q8. Does Serenya replace doctors?  
+No. Serenya is like having a friendly AI nurse who helps you understand your health data before you talk to your doctor. Our mission is to strengthen healthcare relationships by reducing anxiety, increasing understanding, and making medical conversations more effective and empowered.  
