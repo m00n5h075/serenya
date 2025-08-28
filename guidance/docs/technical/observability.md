@@ -1,35 +1,47 @@
-# Serenya Observability Implementation Plan
-**Date:** August 25, 2025  
-**Implementation Timeline:** Weeks 3-6 (parallel to main MVP development)  
-**Focus:** Core business metrics + essential technical performance monitoring
+# Serenya Observability Implementation
+**Focus:** Business Metrics + Technical Performance Monitoring  
+**Timeline:** Weeks 3-6 (parallel to MVP development)  
+**Cost:** €101/month (1.7% of infrastructure budget)  
+**Date:** August 27, 2025
 
-## Overview
+---
 
-This implementation provides a centralized observability system to track Serenya's key business and technical metrics. The design prioritizes practical measurement from existing database events and application logs, avoiding theoretical metrics that cannot be reliably implemented.
+## 📋 Executive Summary
 
-## Core Metrics Requirements
+Complete observability system for Serenya's AI Health Agent, optimized for AWS-first architecture and startup cost efficiency. This implementation provides actionable business insights and technical performance monitoring through PostgreSQL-based metrics collection with Grafana Cloud dashboards.
 
-### Business Metrics (Founder Requirements)
-- **Files submitted** - Total count of uploaded documents
-- **Files processed successfully** - Completed AI analyses
+**Key Business Requirements:**
+- Real-time business metrics for founder decision-making
+- Technical performance monitoring for engineering team
+- Cost-efficient tooling within €101/month budget
+- Implementation parallel to MVP development (weeks 3-6)
+
+---
+
+## 🎯 Core Metrics Architecture
+
+### **Business Metrics (Founder Priority)**
+- **Files submitted** - Total uploaded documents
+- **Files processed successfully** - Completed AI analyses  
 - **Files failed** - Processing failures with reasons
 - **Reports generated** - Total doctor reports created
 - **AI analyses completed** - Successful medical interpretations
 - **Total users** - All registered users
 - **Users per plan** - Free tier vs Premium breakdown
 
-### Technical Performance Metrics
+### **Technical Performance Metrics**
 - **API response times** - Request latency tracking
 - **Database query performance** - Slow query identification
 - **AI processing time per document** - End-to-end analysis duration
 - **System uptime** - Service availability monitoring
 
-## Database Schema Design
+---
 
-### New Metrics Tables
+## 🗄️ Database Schema for Metrics Collection
 
+### **Core Metrics Tables**
 ```sql
--- Core metrics aggregation table
+-- Business metrics aggregation
 CREATE TABLE metrics_snapshots (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     metric_name VARCHAR(100) NOT NULL,
@@ -53,7 +65,7 @@ CREATE TABLE api_performance_logs (
     error_details TEXT
 );
 
--- Database query performance
+-- Database query performance monitoring
 CREATE TABLE query_performance_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     query_hash VARCHAR(64) NOT NULL, -- SHA256 hash of query
@@ -73,7 +85,23 @@ CREATE TABLE business_events (
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Hourly/daily metric aggregates for dashboard performance
+-- AI processing performance
+CREATE TABLE ai_processing_metrics (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    processing_job_id UUID REFERENCES ai_processing_jobs(id),
+    user_id UUID REFERENCES users(id),
+    ai_provider VARCHAR(50) NOT NULL,
+    input_tokens INTEGER NOT NULL,
+    output_tokens INTEGER NOT NULL,
+    processing_time_ms INTEGER NOT NULL,
+    cost_cents INTEGER NOT NULL,
+    success BOOLEAN NOT NULL,
+    error_type VARCHAR(100),
+    confidence_score INTEGER, -- 1-10 AI confidence level
+    recorded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Hourly/daily aggregates for dashboard performance
 CREATE TABLE metrics_aggregates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     metric_name VARCHAR(100) NOT NULL,
@@ -88,44 +116,44 @@ CREATE TABLE metrics_aggregates (
 );
 ```
 
-### Enhanced Existing Tables
-
+### **Enhanced Existing Tables**
 ```sql
--- Add metrics columns to existing tables
+-- Add metrics tracking to existing tables
 ALTER TABLE diagnostic_reports 
 ADD COLUMN processing_time_ms INTEGER,
 ADD COLUMN ai_confidence_score NUMERIC(3,2),
-ADD COLUMN processing_status VARCHAR(20) DEFAULT 'completed';
+ADD COLUMN processing_status VARCHAR(20) DEFAULT 'completed',
+ADD COLUMN file_size_bytes INTEGER;
 
 ALTER TABLE ai_processing_jobs 
 ADD COLUMN queue_wait_time_ms INTEGER,
 ADD COLUMN actual_processing_time_ms INTEGER,
-ADD COLUMN error_category VARCHAR(50);
+ADD COLUMN error_category VARCHAR(50),
+ADD COLUMN retry_count INTEGER DEFAULT 0;
 
--- Add subscription tracking
 ALTER TABLE users 
+ADD COLUMN last_activity_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 ADD COLUMN plan_changed_at TIMESTAMP WITH TIME ZONE,
 ADD COLUMN plan_change_reason VARCHAR(100);
 ```
 
-### Optimized Indexes
-
+### **Performance Indexes**
 ```sql
--- Performance indexes for dashboard queries
+-- Optimized indexes for dashboard queries
 CREATE INDEX idx_metrics_snapshots_name_time ON metrics_snapshots(metric_name, recorded_at DESC);
 CREATE INDEX idx_api_performance_endpoint_time ON api_performance_logs(endpoint, timestamp DESC);
 CREATE INDEX idx_business_events_type_time ON business_events(event_type, timestamp DESC);
 CREATE INDEX idx_metrics_aggregates_lookup ON metrics_aggregates(metric_name, bucket_type, time_bucket DESC);
-
--- User metrics indexes
 CREATE INDEX idx_users_plan_created ON users(subscription_plan, created_at);
 CREATE INDEX idx_diagnostic_reports_user_date ON diagnostic_reports(user_id, report_date DESC);
+CREATE INDEX idx_ai_processing_time ON ai_processing_metrics(recorded_at DESC, success);
 ```
 
-## Data Collection Implementation
+---
 
-### 1. Express Middleware for API Metrics
+## 💻 Data Collection Implementation
 
+### **Express Middleware for API Metrics**
 ```javascript
 // middleware/metrics-collector.js
 const collectAPIMetrics = (req, res, next) => {
@@ -154,8 +182,7 @@ const collectAPIMetrics = (req, res, next) => {
 };
 ```
 
-### 2. Business Metrics Service
-
+### **Business Metrics Service**
 ```javascript
 // services/metrics-service.js
 class MetricsService {
@@ -168,6 +195,24 @@ class MetricsService {
     });
     
     await this.incrementCounter('files_submitted_total');
+  }
+  
+  async recordAIAnalysis(processingJobId, success, processingTime, cost, confidence) {
+    await Promise.all([
+      this.recordBusinessEvent(userId, 'ai_analysis_complete', {
+        success: success,
+        processing_time_ms: processingTime,
+        confidence_score: confidence
+      }),
+      
+      db.query(`
+        INSERT INTO ai_processing_metrics 
+        (processing_job_id, ai_provider, processing_time_ms, cost_cents, success, confidence_score)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, [processingJobId, 'anthropic_claude', processingTime, cost, success, confidence])
+    ]);
+    
+    await this.incrementCounter('ai_analyses_completed');
   }
   
   async recordReportGenerated(userId, reportType) {
@@ -206,8 +251,7 @@ class MetricsService {
 }
 ```
 
-### 3. Database Performance Wrapper
-
+### **Database Performance Wrapper**
 ```javascript
 // database/performance-wrapper.js
 const originalQuery = db.query;
@@ -247,10 +291,82 @@ db.query = async function(text, params) {
 };
 ```
 
-## Dashboard Queries
+### **Automated Metrics Collection Jobs**
+```javascript
+// jobs/metrics-aggregation.js
+const cron = require('node-cron');
 
-### Business Metrics SQL Queries
+class MetricsCollector {
+  static startPeriodicCollection() {
+    // Collect daily business metrics every hour
+    cron.schedule('0 * * * *', async () => {
+      await this.aggregateHourlyMetrics();
+    });
 
+    // Collect system metrics every 5 minutes  
+    cron.schedule('*/5 * * * *', async () => {
+      await this.collectSystemMetrics();
+    });
+
+    // Daily aggregation at midnight
+    cron.schedule('0 0 * * *', async () => {
+      await this.aggregateDailyMetrics();
+    });
+  }
+
+  static async aggregateHourlyMetrics() {
+    const currentHour = new Date();
+    currentHour.setMinutes(0, 0, 0);
+    
+    // Aggregate API performance by hour
+    await db.query(`
+      INSERT INTO metrics_aggregates (metric_name, time_bucket, bucket_type, total_count, average_value, min_value, max_value)
+      SELECT 
+        CONCAT('api_response_time_', endpoint) as metric_name,
+        $1 as time_bucket,
+        'hour' as bucket_type,
+        COUNT(*) as total_count,
+        AVG(response_time_ms) as average_value,
+        MIN(response_time_ms) as min_value,
+        MAX(response_time_ms) as max_value
+      FROM api_performance_logs 
+      WHERE timestamp >= $1 AND timestamp < $1 + INTERVAL '1 hour'
+      GROUP BY endpoint
+    `, [currentHour]);
+    
+    // Clean up raw data older than 7 days
+    await db.query(`
+      DELETE FROM api_performance_logs 
+      WHERE timestamp < NOW() - INTERVAL '7 days'
+    `);
+  }
+
+  static async aggregateDailyMetrics() {
+    const currentDay = new Date();
+    currentDay.setHours(0, 0, 0, 0);
+    
+    // User growth metrics
+    await db.query(`
+      INSERT INTO metrics_aggregates (metric_name, time_bucket, bucket_type, total_count)
+      VALUES 
+        ('new_users', $1, 'day', (
+          SELECT COUNT(*) FROM users 
+          WHERE created_at >= $1 AND created_at < $1 + INTERVAL '1 day'
+        )),
+        ('total_users', $1, 'day', (
+          SELECT COUNT(*) FROM users 
+          WHERE created_at <= $1 + INTERVAL '1 day'
+        ))
+    `, [currentDay]);
+  }
+}
+```
+
+---
+
+## 📊 Dashboard Queries & Implementation
+
+### **Business Metrics SQL Queries**
 ```sql
 -- Total files submitted (all time)
 SELECT COUNT(*) as total_files_submitted 
@@ -261,23 +377,36 @@ WHERE event_type = 'file_upload';
 SELECT 
   SUM(CASE WHEN processing_status = 'completed' THEN 1 ELSE 0 END) as successful,
   SUM(CASE WHEN processing_status = 'failed' THEN 1 ELSE 0 END) as failed,
-  COUNT(*) as total
+  COUNT(*) as total,
+  ROUND(
+    SUM(CASE WHEN processing_status = 'completed' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 
+    2
+  ) as success_rate_percent
 FROM diagnostic_reports;
 
--- Reports generated (by type)
+-- Reports generated by type (last 30 days)
 SELECT 
   event_details->>'report_type' as report_type,
   COUNT(*) as count
 FROM business_events 
 WHERE event_type = 'report_generated'
+  AND timestamp >= NOW() - INTERVAL '30 days'
 GROUP BY event_details->>'report_type';
 
--- AI analyses completed
-SELECT COUNT(*) as analyses_completed
-FROM ai_processing_jobs 
-WHERE status = 'completed';
+-- AI analyses performance
+SELECT 
+  DATE(recorded_at) as date,
+  COUNT(*) as total_analyses,
+  COUNT(*) FILTER (WHERE success = true) as successful,
+  ROUND(AVG(processing_time_ms)::numeric, 0) as avg_processing_time_ms,
+  ROUND(AVG(confidence_score)::numeric, 1) as avg_confidence_score,
+  SUM(cost_cents)/100.0 as total_cost_euros
+FROM ai_processing_metrics 
+WHERE recorded_at >= NOW() - INTERVAL '30 days'
+GROUP BY DATE(recorded_at)
+ORDER BY date;
 
--- Users by plan
+-- Users by plan distribution
 SELECT 
   subscription_plan,
   COUNT(*) as user_count,
@@ -285,7 +414,7 @@ SELECT
 FROM users 
 GROUP BY subscription_plan;
 
--- Monthly active users (users with activity in last 30 days)
+-- Monthly active users (activity in last 30 days)
 SELECT COUNT(DISTINCT user_id) as monthly_active_users
 FROM business_events 
 WHERE timestamp >= NOW() - INTERVAL '30 days';
@@ -302,8 +431,7 @@ GROUP BY DATE(timestamp)
 ORDER BY date;
 ```
 
-### Technical Performance Queries
-
+### **Technical Performance Queries**
 ```sql
 -- API response time percentiles (last 24 hours)
 SELECT 
@@ -337,129 +465,47 @@ ORDER BY error_rate_percent DESC;
 SELECT 
   query_hash,
   operation_type,
+  table_name,
   COUNT(*) as execution_count,
   ROUND(AVG(execution_time_ms)::numeric, 2) as avg_time_ms,
   MAX(execution_time_ms) as max_time_ms
 FROM query_performance_logs 
 WHERE timestamp >= NOW() - INTERVAL '24 hours'
-AND execution_time_ms > 50
-GROUP BY query_hash, operation_type
+  AND execution_time_ms > 50
+GROUP BY query_hash, operation_type, table_name
 ORDER BY avg_time_ms DESC
 LIMIT 20;
-
--- AI processing performance
-SELECT 
-  DATE(created_at) as date,
-  COUNT(*) as total_jobs,
-  ROUND(AVG(actual_processing_time_ms)::numeric, 2) as avg_processing_time_ms,
-  SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as successful_jobs,
-  SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed_jobs
-FROM ai_processing_jobs
-WHERE created_at >= NOW() - INTERVAL '30 days'
-GROUP BY DATE(created_at)
-ORDER BY date;
 ```
 
-## Metric Aggregation Jobs
+---
 
-### Cron Job Implementation
+## 🛠️ Recommended Tool Stack
 
-```javascript
-// jobs/metrics-aggregation.js
-// Runs every hour via cron: 0 * * * *
+### **Primary: Grafana Cloud (€50/month)**
+- **Features**: Dashboards, alerting, PostgreSQL integration
+- **Benefits**: Managed service, no infrastructure overhead
+- **Rationale**: Direct database connection, proven reliability
 
-async function aggregateHourlyMetrics() {
-  const currentHour = new Date();
-  currentHour.setMinutes(0, 0, 0);
-  
-  // Aggregate API performance by hour
-  await db.query(`
-    INSERT INTO metrics_aggregates (metric_name, time_bucket, bucket_type, total_count, average_value, min_value, max_value)
-    SELECT 
-      CONCAT('api_response_time_', endpoint) as metric_name,
-      $1 as time_bucket,
-      'hour' as bucket_type,
-      COUNT(*) as total_count,
-      AVG(response_time_ms) as average_value,
-      MIN(response_time_ms) as min_value,
-      MAX(response_time_ms) as max_value
-    FROM api_performance_logs 
-    WHERE timestamp >= $1 AND timestamp < $1 + INTERVAL '1 hour'
-    GROUP BY endpoint
-  `, [currentHour]);
-  
-  // Aggregate business events by hour
-  await db.query(`
-    INSERT INTO metrics_aggregates (metric_name, time_bucket, bucket_type, total_count, unique_users)
-    SELECT 
-      event_type as metric_name,
-      $1 as time_bucket,
-      'hour' as bucket_type,
-      COUNT(*) as total_count,
-      COUNT(DISTINCT user_id) as unique_users
-    FROM business_events 
-    WHERE timestamp >= $1 AND timestamp < $1 + INTERVAL '1 hour'
-    GROUP BY event_type
-  `, [currentHour]);
-  
-  // Clean up raw data older than 7 days
-  await db.query(`
-    DELETE FROM api_performance_logs 
-    WHERE timestamp < NOW() - INTERVAL '7 days'
-  `);
-}
+### **Application Monitoring: Sentry (€26/month)**
+- **Features**: Error tracking, performance monitoring, user impact
+- **Benefits**: Node.js SDK, real-time alerting
+- **Rationale**: Critical error detection and user experience monitoring
 
-// Daily aggregation job (runs at 1 AM)
-async function aggregateDailyMetrics() {
-  const currentDay = new Date();
-  currentDay.setHours(0, 0, 0, 0);
-  
-  // User growth metrics
-  await db.query(`
-    INSERT INTO metrics_aggregates (metric_name, time_bucket, bucket_type, total_count)
-    VALUES 
-      ('new_users', $1, 'day', (
-        SELECT COUNT(*) FROM users 
-        WHERE created_at >= $1 AND created_at < $1 + INTERVAL '1 day'
-      )),
-      ('total_users', $1, 'day', (
-        SELECT COUNT(*) FROM users 
-        WHERE created_at <= $1 + INTERVAL '1 day'
-      ))
-  `, [currentDay]);
-}
-```
+### **Infrastructure: AWS CloudWatch (Free tier)**
+- **Features**: System metrics, custom metrics, log aggregation
+- **Benefits**: Included with AWS services, 10 free custom metrics
+- **Rationale**: Native AWS integration, cost-effective
 
-## Tool Stack & Implementation
+### **Additional: Custom Metrics API**
+- **Features**: Real-time dashboard data via Express endpoints
+- **Benefits**: Cached queries, JSON API, external integrations
+- **Rationale**: Fast dashboard loading, business-specific metrics
 
-### Recommended Observability Stack
+---
 
-**1. Grafana Cloud (€50/month)**
-- Pre-built dashboards for PostgreSQL metrics
-- Custom business metric dashboards
-- Alert management with Slack/email integration
-- 14-day data retention (sufficient for MVP)
+## 📊 Dashboard Architecture
 
-**2. Sentry (€26/month for 100k errors)**
-- Application error tracking and performance monitoring
-- Release tracking and error attribution
-- Real-time alerting for critical errors
-- Integration with existing codebase
-
-**3. DigitalOcean Monitoring (Free)**
-- VPS resource monitoring (CPU, memory, disk)
-- Database connection monitoring
-- Network metrics and uptime tracking
-- Basic alerting capabilities
-
-**4. Custom Metrics API**
-- Express.js endpoint for real-time dashboard data
-- Cached queries with 5-minute refresh rate
-- JSON API for external integrations
-
-### Dashboard Architecture
-
-#### Executive Dashboard (Business Metrics)
+### **Executive Dashboard (Business Metrics)**
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ SERENYA BUSINESS DASHBOARD                              │
@@ -467,15 +513,16 @@ async function aggregateDailyMetrics() {
 │ Today's Metrics:                                        │
 │ • Files Uploaded: 47          • Reports Generated: 23   │
 │ • AI Analyses: 45             • New Users: 8            │
-│ • Premium Users: 127 (18%)    • Free Users: 578 (82%)   │
+│ • Premium Users: 127 (18%)    • Success Rate: 94.5%     │
 ├─────────────────────────────────────────────────────────┤
 │ [7-Day Trend Chart: Files & Reports]                   │
 │ [30-Day User Growth Chart]                              │
-│ [Success Rate: 94.5% Processing Success]               │
+│ [AI Confidence Score Distribution]                      │
+│ [Cost per Analysis Trend]                               │
 └─────────────────────────────────────────────────────────┘
 ```
 
-#### Technical Dashboard (Engineering Metrics)
+### **Technical Dashboard (Engineering Metrics)**
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ SERENYA TECHNICAL DASHBOARD                             │
@@ -494,11 +541,13 @@ async function aggregateDailyMetrics() {
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Implementation Timeline
+---
 
-### Week 3-4: Foundation Setup
+## 🗓️ Implementation Timeline
+
+### **Week 3-4: Foundation Setup**
 **Tasks:**
-- Database schema migration (1 day)
+- Database schema migration and indexes (1 day)
 - Express middleware integration (2 days)
 - Basic metrics collection service (3 days)
 - Grafana Cloud setup and connection (1 day)
@@ -508,7 +557,7 @@ async function aggregateDailyMetrics() {
 - Basic business dashboard functional
 - API performance tracking enabled
 
-### Week 5: Dashboard Development
+### **Week 5: Dashboard Development**
 **Tasks:**
 - Custom business metrics dashboard (3 days)
 - Technical performance dashboard (2 days)
@@ -520,7 +569,7 @@ async function aggregateDailyMetrics() {
 - Automated alerting system
 - Error tracking and reporting
 
-### Week 6: Optimization & Documentation
+### **Week 6: Optimization & Production**
 **Tasks:**
 - Query performance optimization (2 days)
 - Metric aggregation job implementation (2 days)
@@ -530,60 +579,82 @@ async function aggregateDailyMetrics() {
 **Deliverables:**
 - Production-ready observability system
 - Operations documentation
-- Performance-validated dashboard queries
+- Performance-validated queries
 
-## Cost Analysis
+---
 
-### Monthly Tool Costs
+## 💰 Cost Analysis & ROI
+
+### **Monthly Tool Costs**
 ```
 Grafana Cloud (Starter):        €50/month
 Sentry (Team plan):            €26/month  
-DigitalOcean Monitoring:       €0 (included)
-Custom metrics storage:        ~€5/month (database storage)
-Additional CPU/Memory:         ~€20/month (5-10% overhead)
+AWS CloudWatch (free tier):     €0/month
+Custom metrics storage:        ~€5/month (database)
+Additional infrastructure:     ~€20/month (5-10% overhead)
 ────────────────────────────────────────
 Total Monthly Cost:            €101/month
 ```
 
-### Infrastructure Impact
-- **Database storage:** +~500MB/month for metrics tables
-- **CPU overhead:** ~5% additional load for metrics collection
-- **Memory usage:** +~100MB for metrics service caching
-- **Network:** Negligible additional bandwidth
+### **Infrastructure Impact**
+- **Database storage**: +~500MB/month for metrics tables
+- **CPU overhead**: ~5% additional load for metrics collection
+- **Memory usage**: +~100MB for metrics service caching
+- **Network usage**: Negligible additional bandwidth
 
-### ROI Analysis
-- **Cost percentage:** €101/month = 1.7% of total infrastructure budget (€6,030/month)
-- **Business value:** Complete visibility into user behavior, system performance, and business metrics
-- **Decision support:** Data-driven insights for product development and scaling decisions
-- **Risk mitigation:** Early detection of technical issues and business problems
+### **ROI Analysis**
+- **Cost percentage**: €101/month = 1.7% of total infrastructure budget
+- **Business value**: Complete visibility into user behavior and system performance
+- **Decision support**: Data-driven insights for product development
+- **Risk mitigation**: Early detection of technical and business issues
 
-## Security & Privacy Considerations
+---
 
-### Data Privacy
-- **No PHI in metrics:** Only aggregate counts and performance data, no medical content
-- **User anonymization:** User IDs hashed in aggregated metrics
-- **GDPR compliance:** Metrics data retention aligned with business requirements (90 days max)
-- **Access controls:** Dashboard access restricted by role (exec, eng, ops)
+## 🔒 Security & Privacy
 
-### Technical Security
-- **Encrypted transit:** All metrics data transmitted via HTTPS/TLS
-- **Database encryption:** Metrics tables encrypted at rest
-- **Access logging:** All dashboard access logged and monitored
-- **API authentication:** Metrics endpoints require valid JWT tokens
+### **Data Privacy**
+- **No PHI in metrics**: Only aggregate counts and performance data
+- **User anonymization**: User IDs hashed in aggregated metrics  
+- **GDPR compliance**: 90-day data retention aligned with business requirements
+- **Access controls**: Dashboard access restricted by role (exec, eng, ops)
 
-## Success Metrics for Observability Implementation
+### **Technical Security**
+- **Encrypted transit**: All metrics data via HTTPS/TLS
+- **Database encryption**: Metrics tables encrypted at rest
+- **Access logging**: All dashboard access logged and monitored
+- **API authentication**: Metrics endpoints require valid JWT tokens
 
-### Technical Success Criteria
-- **Dashboard load time:** <2 seconds for all views
-- **Data freshness:** Business metrics updated within 5 minutes
-- **Query performance:** All dashboard queries complete in <500ms
-- **System impact:** <5% additional CPU/memory overhead
-- **Uptime:** 99.9% availability for dashboard and metrics collection
+---
 
-### Business Success Criteria
-- **Daily usage:** Dashboard accessed daily by product and engineering teams
-- **Decision impact:** At least 3 product decisions informed by dashboard data per month
-- **Problem detection:** Technical issues detected via metrics before user reports
-- **Trend identification:** Business trend insights delivered weekly to leadership
+## ✅ Success Metrics & Validation
 
-This implementation provides comprehensive, practical observability for Serenya while maintaining focus on measurable, actionable metrics that directly support business goals and technical operations.
+### **Technical Success Criteria**
+- **Dashboard load time**: <2 seconds for all views
+- **Data freshness**: Business metrics updated within 5 minutes
+- **Query performance**: All dashboard queries <500ms
+- **System impact**: <5% additional CPU/memory overhead
+- **Uptime**: 99.9% availability for dashboard and metrics collection
+
+### **Business Success Criteria**
+- **Daily usage**: Dashboard accessed daily by product/engineering teams
+- **Decision impact**: 3+ product decisions per month informed by metrics
+- **Problem detection**: Technical issues detected before user reports
+- **Trend identification**: Weekly business insights delivered to leadership
+
+---
+
+## 📚 Cross-References
+
+**Related Documents:**
+- **Technical Architecture**: `technical-overview.md` (AWS infrastructure foundation)
+- **Healthcare Compliance**: `healthcare-compliance-migration.md` (compliance monitoring)
+- **Development Standards**: `our-dev-rules.md` (team coordination)
+
+**Linear Task Integration:**
+- Epic 10: Observability & Monitoring (M00-105 to M00-112)
+- Epic 6.5: AI Prompt Engineering (M00-64 to M00-71) - AI confidence metrics
+- Epic 8: Medical Safety Framework (M00-88 to M00-95) - safety metrics
+
+---
+
+This observability implementation provides comprehensive, cost-effective monitoring for Serenya's AWS-first architecture while maintaining startup budget constraints and enabling data-driven decision making from day one.

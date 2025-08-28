@@ -4,22 +4,24 @@ This folder contains project management and coordination documentation for Seren
 
 ## 📋 Contents
 
-### Project Planning
-- `serenya-project-plan.md` - Master project plan with epics, tasks, and timelines
+### Project Planning & Roadmap
+- `mvp-requirements.md` - **MVP EPICS & TASKS**: Complete Linear task structure (M00-21 to M00-121) for 8-10 week launch
+- `future-phases.md` - **POST-MVP EPICS & TASKS**: Healthcare compliance and evolution (M00-122+) for months 3-18
+- `project-overview.md` - High-level project status and roadmap navigation
 - `linear-task-templates.md` - Standardized templates for creating Linear tasks
 
 ### Team Coordination
-- `agent-workflow-protocol.md` - **NEW**: Systematic AI agent workflow and validation requirements
-- `product-team-requirements-review.md` - Requirements review and team alignment
-- `team-positioning-update.md` - Team positioning and strategic updates
+- `agent-workflow-protocol.md` - **START HERE**: Systematic AI agent workflow and validation requirements
 
-## 🎯 Key Documents
-- **Agent Workflow**: `agent-workflow-protocol.md` - **START HERE** for systematic agent coordination
-- **Master Plan**: `serenya-project-plan.md` - Complete project roadmap
-- **Task Creation**: `linear-task-templates.md` - Guidelines for consistent task creation
-- **Team Alignment**: Review requirements and positioning documents for current team direction
+## 🎯 Key Documents Priority Order
+1. **Agent Workflow**: `agent-workflow-protocol.md` - **MANDATORY** for all agent coordination
+2. **MVP Requirements**: `mvp-requirements.md` - **CRITICAL PATH** with complete Linear task IDs (M00-21 to M00-121)
+3. **Future Phases**: `future-phases.md` - **POST-MVP TASKS** with Linear task IDs (M00-122+)
+4. **Project Overview**: `project-overview.md` - High-level roadmap and current status
 
-## 📊 Project Status
-- Epic 12-14 tasks created (M00-122 to M00-145)
-- All tasks properly configured in Linear with priorities and labels
-- Project plan updated with consistent task ID formatting
+## 📊 Current Project Status
+- **Phase:** MVP Development (8-10 weeks)
+- **Epic Status:** Complete task structure (M00-21 to M00-145) distributed across MVP and future phases
+- **Documentation:** Streamlined into two focused execution documents with all Linear task IDs
+- **Team Analysis:** Critical safety and UX requirements integrated into MVP epics
+- **Agent Workflow:** Systematic validation and handoff protocol established

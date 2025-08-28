@@ -15,9 +15,11 @@ Product documentation including PRDs, specifications, user flows, and business r
 
 ## 📋 Quick Reference
 
-- **Technical Architecture**: See `/technical/technical-architecture-decisions.md`
-- **Implementation Plans**: See `/technical/implementation-plan.md`
-- **Project Overview**: See `/project/serenya-project-plan.md`
-- **Product Requirements**: See `/product/Serenya_PRD_v2.txt`
-- **Screen Inventory**: See `/product/complete-screen-inventory.md`
-- **Development Rules**: See `/technical/our-dev-rules.md`
+- **Technical Overview**: See `/technical/technical-overview.md` - Complete AWS architecture + implementation
+- **Observability**: See `/technical/observability.md` - Monitoring and metrics setup
+- **Healthcare Migration**: See `/technical/healthcare-compliance-migration.md` - Post-MVP evolution
+- **MVP Requirements**: See `/project/mvp-requirements.md` - 8-10 week plan with Linear tasks
+- **Future Phases**: See `/project/future-phases.md` - Months 3-18 roadmap
+- **Product Requirements**: See `/product/Serenya_PRD_v2.txt` - Complete product specification
+- **Screen Inventory**: See `/product/complete-screen-inventory.md` - UI/UX comprehensive reference
+- **Development Rules**: See `/technical/our-dev-rules.md` - Team standards

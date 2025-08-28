@@ -59,10 +59,10 @@ Through a freemium subscription model: free entry, premium tier for advanced fea
 ### Q6. What if AI parsing makes a mistake?  
 Parsing isn't perfect. Serenya includes disclaimers highlighting this risk and emphasizes that we provide medical interpretation assistance, not medical advice. Premium users benefit from contextual history analysis and comprehensive AI nurse insights, which help provide better understanding of results over time.  
 
-### Q7. What’s next on the roadmap?  
+### Q7. What's next on the roadmap?  
 - Adding symptom tracking and health profile evolution over time.  
 - Exploring integrations with EHRs and wearable devices.  
 - Expanding language support for global accessibility.  
 
 ### Q8. Does Serenya replace doctors?  
-No. Serenya is like having a friendly AI nurse who helps you understand your health data before you talk to your doctor. Our mission is to strengthen healthcare relationships by reducing anxiety, increasing understanding, and making medical conversations more effective and empowered.  
+No. Serenya is like having a friendly AI nurse who helps you understand your health data before you talk to your doctor. Our mission is to strengthen healthcare relationships by reducing anxiety, increasing understanding, and making medical conversations more effective and empowered.
