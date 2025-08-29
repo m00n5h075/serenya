@@ -41,19 +41,22 @@ Each Linear task is being enhanced with comprehensive new template sections base
 - **Batch 1**: M00-145 through M00-136 (10 tasks) ✅
 - **Batch 2**: M00-135 through M00-126 (10 tasks) ✅  
 - **Batch 3**: M00-125 through M00-116 (10 tasks) ✅
-- **Batch 4**: M00-115 through M00-096 (17 out of 21 tasks completed) ⚠️
+- **Batch 4**: M00-115 through M00-096 (21 tasks completed) ✅
+- **Batch 5**: M00-95 through M00-92 (4 out of 4 tasks completed in current session) ✅
 
 ### Total Progress:
-- **Tasks Successfully Updated**: 47 tasks
-- **Tasks with Issues**: 4 tasks (M00-099, M00-098, M00-097, M00-096)
-- **Remaining Tasks**: ~50+ tasks (M00-095 down to M00-21)
+- **Tasks Successfully Updated**: 51 tasks
+- **Tasks with Title/Content Mismatches Fixed**: 5 tasks (M00-100 through M00-104)
+- **Previously Missing Tasks Updated**: 4 tasks (M00-99, M00-98, M00-97, M00-96)
+- **Remaining Tasks**: ~47 tasks (M00-91 down to M00-21)
 
-## Current Issues - Requires Investigation
+## RESOLVED Issues - Linear ID Format Discovery
 
-### Missing Tasks (CRITICAL):
-- **M00-099, M00-098, M00-097, M00-096**: Do NOT exist in Linear system
-- User confirmed seeing these in the menu, but API returns "Entity not found"
-- **Action Required**: Manual investigation of Linear interface vs API discrepancy
+### Missing Tasks Issue RESOLVED:
+- **ROOT CAUSE**: Linear uses non-zero-padded task IDs
+- **M00-099, M00-098, M00-097, M00-096** don't exist because Linear uses **M00-99, M00-98, M00-97, M00-96**
+- **API Confirmation**: All tasks exist and are accessible using correct non-padded format
+- **Documentation Error**: Previous documentation assumed zero-padding that doesn't match Linear's actual format
 
 ### Title/Content Mismatches Discovered:
 - **M00-100**: Title: "IAM policies" → Content: "Healthcare data anonymization"
@@ -70,27 +73,28 @@ Each completed task enhanced with:
 - **Medical Safety Checklists**
 - **Required Handover Documentation** for different teams
 
-## Batch 5 Attempt Results:
+## Current Status & Next Actions:
 
-**M00-095**: "Entity not found" error - Task does not exist in Linear system
-- Similar issue to M00-099, M00-098, M00-097, M00-096 from previous batch
-- Pattern emerging: Multiple task IDs in 090s range appear to be missing
+### Completed In Current Session:
+1. ✅ **Fixed title/content mismatches** in M00-100 through M00-104 (COMPLETED)
+2. ✅ **Updated batch processing** to use correct non-padded format (COMPLETED)
+3. ✅ **Updated M00-95 through M00-92** with comprehensive template enhancements (COMPLETED)
 
-## Updated Missing Tasks List:
-- **M00-099, M00-098, M00-097, M00-096**: Confirmed missing (Batch 4)
-- **M00-095**: Confirmed missing (Batch 5 attempt)
-- **Potential pattern**: Tasks in M00-090s range may have systematic gaps
+### Current Session Progress:
+- **M00-95**: Build layered information disclosure system (Enhanced with healthcare-focused progressive disclosure)
+- **M00-94**: Medical boundaries and disclaimers (Enhanced with comprehensive legal protection framework)
+- **M00-93**: Layered information disclosure system (Enhanced with medical content classification)
+- **M00-92**: Create anxiety-aware interface design patterns (Enhanced with anxiety-aware healthcare interface)
 
-## Next Steps:
+### Next Immediate Actions:
+1. **Continue with M00-91**: Implement emergency care detection for critical lab values
+2. **Complete remaining batch**: M00-91 through M00-76 (16 more tasks)
+3. **Maintain template consistency**: Apply same comprehensive enhancement pattern
 
-1. **Investigate missing tasks**: Check Linear UI directly for all M00-090s range tasks
-2. **Fix title/content mismatches** in existing tasks  
-3. **Continue Batch 5**: Skip missing tasks, update M00-094 through M00-076 (adjusting for gaps)
-4. **Batch size**: Changed from 10 to 20 tasks per user request
-
-## User Feedback:
-- "I can see those tasks in the menu, the three that you say I'm missing. Please try to update them again."
-- Suggests UI/API inconsistency requiring manual investigation
+### Linear ID Format Documentation:
+- **Correct Format**: M00-1, M00-2, M00-21, M00-95, M00-100, M00-145
+- **Incorrect Assumptions**: M00-001, M00-002, M00-021, M00-095, etc.
+- **API Calls**: Must use exact Linear format without zero-padding
 
 ## Template Structure Reference:
 - Healthcare-focused enhancements applied to all tasks
