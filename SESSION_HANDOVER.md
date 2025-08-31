@@ -1,37 +1,35 @@
 # Serenya Project - Session Handover Document
 
-**Date:** 2025-08-30 (Updated)  
-**Session Context:** Epic 15 & 16 Story/Task Creation - Future Phases Development  
+**Last Updated:** August 31, 2025  
+**Development Status:** Core Flutter Foundation Complete - Ready for Backend Integration  
 **Project Root:** `/Users/m00n5h075ai/development/serenya/`
-
-## 🚨 SESSION CRASH RECOVERY
-
-**Previous Session Context:** Session crashed while creating stories and tasks for Epic 15 (Cost Optimization & Free Tier Management) and Epic 16 (Healthcare Services Evolution) from the future phases document.
-
-**Recovery Status:** Need to resume story/task creation for these epics using Linear MCP server.
-
-**Epic 15 Focus:** AWS Cost Optimization & Free Tier Management (High Priority, Ongoing Timeline)
-**Epic 16 Focus:** Healthcare Services Evolution (Low Priority, Months 6-18 Timeline)
 
 ## Project Overview
 
-**Serenya** is an AI Health Agent designed to help users interpret lab results through medical analysis. Core positioning: "Your friendly AI nurse that helps you understand your lab results and empowers better conversations with your healthcare provider."
+**Serenya** is an AI Health Agent mobile app that provides secure, device-only storage for health documents with cloud-based AI interpretation. The app prioritizes privacy, medical safety, and user trust through comprehensive disclaimers and conservative bias.
 
-### Key Project Files to Read First
-1. `/guidance/docs/product/Serenya_PRD_v2.md` - Complete product requirements
-2. `/guidance/docs/technical/our-dev-rules.md` - Development standards and workflow
-3. `/guidance/mock-ups/README.md` - UI/UX design system and standards
-4. `/guidance/mock-ups/STREAMLINED_4_SLIDE_COPY.md` - Final approved onboarding flow copy
-5. `/archive/completed-projects/linear-task-update-progress-COMPLETED-2025-08-30.md` - Archived linear task template methodology
+Core positioning: "Your friendly AI nurse that helps you understand your lab results and empowers better conversations with your healthcare provider."
 
-## Current Status & Recent Completion
+## Current Development Status
+
+### ✅ COMPLETED: Core Flutter Foundation (8/8 Tasks)
+
+All foundational Flutter app components are fully implemented and tested:
+
+1. **Flutter App Architecture** - Provider-based state management with clean folder structure
+2. **SQLite Encryption** - Device-only storage with sqflite_cipher integration
+3. **JWT Authentication** - Google OAuth2 with secure token management
+4. **Core UI Components** - Reusable widgets following Material Design patterns
+5. **AWS Lambda Pipeline** - Processing service architecture with retry logic
+6. **Upload Workflow** - Complete icon button state machine with camera/gallery/file options
+7. **AI Integration** - Confidence scoring system with interpretation display
+8. **Medical Safety** - Comprehensive disclaimer framework throughout app
 
 ### ✅ COMPLETED: Linear Task Template Updates Project - FULLY ARCHIVED
-**Status:** 100% COMPLETE - All 145+ Linear tasks updated with comprehensive healthcare templates
+**Status:** 100% COMPLETE - All 145+ Linear tasks updated with comprehensive healthcare templates  
 **Archive Location:** `/archive/completed-projects/linear-task-update-progress-COMPLETED-2025-08-30.md`
 
-### 🎯 CURRENT FOCUS: Epic 15 & 16 Story/Task Creation
-
+### ✅ COMPLETED: Epic 15 & 16 Story/Task Creation
 **Epic 15: AWS Cost Optimization & Free Tier Management**
 - **Priority:** High | **Timeline:** Ongoing
 - **Status:** ✅ COMPLETE - All 8 tasks created (M00-146 through M00-153)
@@ -42,133 +40,266 @@
 - **Status:** ✅ COMPLETE - All 8 tasks created (M00-154 through M00-161)
 - **Scope:** AWS Comprehend Medical, HealthLake, Textract, EHR integration, and enterprise architecture
 
-### ✅ SESSION RECOVERY COMPLETED:
-1. **✅ Epic 15 story/task creation COMPLETE** - AWS Cost Optimization (M00-146 through M00-153)
-2. **✅ Epic 16 story/task creation COMPLETE** - Healthcare Services Evolution (M00-154 through M00-161)
-3. **✅ Linear MCP server used** to create comprehensive user stories and tasks with healthcare templates
-4. **✅ Healthcare-focused templates applied** consistent with previous Linear task enhancements
-5. **✅ Documentation updated** - Future phases document updated with all task IDs
+## 🎯 CURRENT PRIORITY: Backend Integration (Priority 1)
 
-### 🏆 EPIC 15/16 TASK CREATION: MISSION ACCOMPLISHED
+The Flutter app is complete and waiting for backend services. Critical path forward:
 
-**✅ COMPLETED ACHIEVEMENTS:**
-- **16 comprehensive tasks created** with full healthcare-focused templates
-- **Epic 15 (M00-146 to M00-153)**: AWS Cost Optimization & Free Tier Management - All 8 tasks complete
-- **Epic 16 (M00-154 to M00-161)**: Healthcare Services Evolution - All 8 tasks complete
-- **Future phases document updated** with all task IDs
-- **Session crash recovery successful** - all interrupted work completed
+### 1. AWS Lambda Setup Required
+- Deploy processing service with 3-minute timeout
+- Implement job status tracking endpoints
+- Configure secure file upload/download
+- Set up automatic cleanup after processing
 
-### 📋 NEW IMMEDIATE NEXT STEPS:
-1. **TRANSITION TO UI/UX DESIGN PHASE** (As recommended by Product Manager)
-   - **Critical Gap**: 0/40 screens completed - major deliverable needed
-   - **Legal Priority**: Onboarding flow and safety screens are launch blockers
-   - **Framework Ready**: Comprehensive design system in mock-ups README available
-   - **Tools Ready**: Frame0 MCP server integration available
+### 2. API Endpoints to Implement
+```
+POST /api/v1/auth/google          # Google OAuth verification
+POST /api/v1/process              # Document upload & processing
+GET  /api/v1/process/{job_id}     # Status polling
+GET  /api/v1/interpret/{job_id}   # Get AI results
+POST /api/v1/process/{job_id}/retry # Retry failed processing
+```
 
-2. **Alternative Options:**
-   - **Development Phase**: Begin implementing core Serenya features using comprehensive Linear tasks (161 total)
-   - **Quality Review Phase**: Validate all Linear task creation meets healthcare standards
+### 3. AI Integration Setup
+- Implement mock AI responses for testing
+- Configure confidence scoring algorithm
+- Set up medical flag detection system
+- Create sample interpretation data
 
-**STRONG RECOMMENDATION**: Proceed with UI/UX Design Phase immediately - Product Manager assessment identified this as the critical path forward with comprehensive Linear task foundation now complete
+## Technical Architecture Status
 
-## Key Technical Context
+### Flutter App Implementation ✅ COMPLETE
 
-### Epic 15 & 16 Story/Task Creation Status
-- **Epic 15 Reference**: `/guidance/docs/project/future-phases.md` - AWS Cost Optimization & Free Tier Management section
-- **Epic 16 Reference**: `/guidance/docs/project/future-phases.md` - Healthcare Services Evolution section
-- **Creation Method**: Use Linear MCP server to create comprehensive user stories and tasks
-- **Template Standards**: Apply healthcare-focused templates consistent with archived Linear task methodology
-- **Current Status**: 
-  - **🔄 IN PROGRESS**: Epic 15 story/task creation (session crashed during process)
-  - **⏳ PENDING**: Epic 16 story/task creation (not yet started)
-  - **📋 TEMPLATE REQUIRED**: Each task needs Prerequisites, Technical Requirements, QA Criteria, Medical Safety, Handover Documentation
+**Device-Only Storage Philosophy:**
+- Health documents encrypted locally using SQLite with dynamic keys
+- Temporary server processing with automatic deletion after interpretation
+- No persistent storage of health data on servers
+- All sensitive data remains on user's device
 
-### UI/UX Design System ✅ IMPLEMENTED
-- **Framework**: Mobile-first healthcare design (320px×690px frames)
-- **Colors**: #2563EB (medical blue), #059669 (trust green), #FFFFFF (backgrounds), #1F2937/#6B7280 (text)
-- **Typography**: 26px titles, 20px headers, 18px emphasis, 16px body minimum
-- **Spacing**: 8px sub-component, 16px element, 20px component hierarchy ✅ VERIFIED
-- **Tools**: Frame0 MCP server (⚠️ Limited: visual export only, no filesystem saves)
-- **Status**: 4-slide onboarding flow complete, ready for Phase 2 screens
+**Upload & Processing Workflow:**
+- Non-blocking upload with persistent button states (idle → loading → results ready)
+- Progressive retry mechanism: 30s → 2m → 5m with vibration feedback
+- 3-minute timeout alignment between client and server
+- Background processing monitoring with real-time status updates
 
-### Development Workflow
-- **Standards**: Follow `/guidance/docs/technical/our-dev-rules.md`
-- **Agent Coordination**: Use specialized agents (Product Manager, UI/UX Designer, Medical Advocate)
-- **Verification**: Always verify changes with appropriate tools before claiming completion
-- **Todo Management**: Use TodoWrite tool extensively for task tracking
+**Medical Safety Framework:**
+- Conservative bias in all AI interpretations
+- Multi-tier disclaimer system (general, emergency, consultation, privacy)
+- Confidence-based consultation triggers
+- Medical flags for abnormal findings
+
+### File Structure (Flutter App - Complete)
+
+```
+serenya_app/lib/
+├── core/
+│   ├── constants/
+│   │   └── app_constants.dart          # App-wide configuration
+│   ├── database/
+│   │   ├── database_service.dart       # SQLite encryption service
+│   │   └── health_data_repository.dart # Data access layer
+│   ├── providers/
+│   │   ├── app_state_provider.dart     # App-wide state management
+│   │   └── health_data_provider.dart   # Health data state management
+│   └── utils/
+│       └── encryption_utils.dart       # Security utilities
+├── features/                           # Feature-based folders (ready for expansion)
+│   ├── interpretation/
+│   ├── timeline/
+│   └── upload/
+├── models/
+│   ├── health_document.dart            # Core data models
+│   └── user.dart
+├── screens/
+│   ├── home_screen.dart                # Main app interface
+│   ├── login_screen.dart               # Google OAuth authentication
+│   ├── results_screen.dart             # AI analysis display
+│   └── onboarding/                     # Complete onboarding flow
+│       ├── onboarding_flow.dart
+│       └── slides/                     # Individual onboarding screens
+├── services/
+│   ├── api_service.dart                # HTTP client for backend
+│   ├── auth_service.dart               # Google OAuth & JWT management
+│   ├── consent_service.dart            # User consent tracking
+│   ├── processing_service.dart         # Document processing orchestration
+│   ├── upload_service.dart             # File upload handling
+│   └── notification_service.dart       # In-app notifications
+└── widgets/
+    ├── common_button.dart              # Reusable button component
+    ├── confidence_indicator.dart       # AI confidence display
+    ├── document_card.dart              # Document list item
+    ├── loading_state.dart              # Loading animations
+    ├── medical_disclaimer.dart         # Medical safety disclaimers
+    └── upload_button.dart              # Smart upload FAB with state machine
+```
+
+## Key Project Files to Read First
+
+1. `/guidance/docs/product/Serenya_PRD_v2.md` - Complete product requirements
+2. `/guidance/docs/technical/our-dev-rules.md` - Development standards and workflow  
+3. `/guidance/docs/project/agent-workflow-protocol.md` - Task execution process, validation requirements, handoff procedures
+4. `/guidance/mock-ups/README.md` - UI/UX design system and standards
+5. `/guidance/mock-ups/STREAMLINED_4_SLIDE_COPY.md` - Final approved onboarding flow copy
+6. `/serenya_app/lib/` - Complete Flutter implementation ready for backend integration
+
+## Development Commands (Flutter App)
+
+```bash
+cd /Users/m00n5h075ai/development/serenya/serenya_app
+
+# Quick start development
+./test_runner.sh web              # Launch in browser
+
+# Code quality
+./test_runner.sh analyze          # Run static analysis
+./test_runner.sh test            # Run all tests
+
+# Environment setup
+./test_runner.sh doctor          # Check Flutter setup
+./test_runner.sh get             # Install dependencies
+```
+
+## Critical Configuration Details
+
+### Database Schema (SQLite with Encryption - Implemented)
+```sql
+-- Core document storage
+health_documents: id, file_name, file_type, file_size, upload_date, 
+                  processing_status, ai_confidence_score, interpretation_text
+
+-- AI interpretations
+interpretations: id, document_id, interpretation_type, confidence_score, 
+                interpretation_text, medical_flags
+
+-- User preferences & consent tracking
+user_preferences: preference_key, preference_value
+consent_records: consent_type, consent_given, consent_date, version
+```
+
+### Medical Safety Configuration (Implemented)
+```dart
+// Confidence thresholds trigger different UI behaviors
+lowConfidenceThreshold: 3.0     // Show basic disclaimer
+moderateConfidenceThreshold: 6.0 // Suggest doctor consultation
+highConfidenceThreshold: 7.0     // Full confidence in results
+
+// Retry configuration for robust processing
+maxRetryAttempts: 3
+retryDelaySeconds: [30, 120, 300] // Progressive backoff
+processingTimeoutMinutes: 3       // Aligned with backend Lambda timeout
+```
+
+### API Configuration (Ready for Backend)
+```dart
+// lib/core/constants/app_constants.dart
+baseApiUrl: 'https://api.serenya.health'
+processingEndpoint: '/api/v1/process'
+authEndpoint: '/api/v1/auth'
+```
 
 ## Required Agent Setup & Context
 
-### 1. Product Manager Agent
+### 1. Technical/Backend Agent (Current Priority)
+**Context Needed:**
+- Read: `/guidance/docs/project/future-phases.md` - AWS infrastructure requirements
+- Read: `/guidance/docs/technical/our-dev-rules.md` - Development standards
+- Read: `/serenya_app/lib/services/` - Flutter service implementations to understand API contracts
+- Tools: AWS CLI, Terraform, Linear MCP server
+- **Immediate Focus:** Deploy AWS Lambda processing pipeline to match Flutter app's API expectations
+
+### 2. Product Manager Agent
 **Context Needed:**
 - Read: `/guidance/docs/product/Serenya_PRD_v2.md`
 - Focus: Healthcare positioning, user experience, business requirements
 - Responsibilities: Strategic decisions, feature prioritization, user journey optimization
 
-### 2. UI/UX Designer Agent  
+### 3. UI/UX Designer Agent  
 **Context Needed:**
 - Read: `/guidance/mock-ups/README.md` (comprehensive design system)
 - Read: `/guidance/mock-ups/IMPLEMENTATION_WORKFLOW.md`
 - Read: `/guidance/mock-ups/STREAMLINED_4_SLIDE_COPY.md` (approved copy)
 - Tools: Frame0 MCP server integration
-- Responsibilities: Create 4-slide onboarding flow, ensure design system compliance, export PNG files
-
-### 3. Technical/Backend Agent
-**Context Needed:**
-- Read: `/guidance/docs/project/future-phases.md` - Epic 15 & 16 specifications
-- Read: `/guidance/docs/technical/our-dev-rules.md`
-- Read: `/archive/completed-projects/linear-task-update-progress-COMPLETED-2025-08-30.md` - Template methodology
-- Tools: Linear MCP server for task creation and management
-- Responsibilities: Complete Epic 15 & 16 story/task creation with comprehensive healthcare templates
+- **Status:** Phase 2 screens ready for creation after backend integration
 
 ### 4. Medical Advocate Agent
 **Context Needed:**
 - Read: `/guidance/docs/product/Serenya_PRD_v2.md` (medical safety, compliance)
 - Focus: HIPAA/GDPR compliance, medical disclaimers, safety messaging
-- Responsibilities: Ensure AI Safety & Error Handling screens meet medical standards
+- **Status:** Medical safety framework implemented in Flutter app
 
-## Critical Implementation Notes
+## Testing Status
 
-### Frame0 Design Work
-- **MUST READ**: `/guidance/mock-ups/README.md` for complete design system
-- **Background**: Always use #FFFFFF (white), never Frame0 defaults
-- **Colors**: Use exact hex codes (#2563EB, #1F2937, #6B7280, #9CA3AF)
-- **Verification**: Always verify changes with get_page() before claiming completion
-- **Exports**: PNG files required in `/guidance/mock-ups/` folder
+### Flutter App Testing ✅ COMPLETE
+- ✅ Flutter analysis passes (0 issues)
+- ✅ Unit tests for core services
+- ✅ Widget tests for onboarding
+- ✅ Web testing environment ready
 
-### Epic Story/Task Creation Standards
-- **Template Reference**: `/archive/completed-projects/linear-task-update-progress-COMPLETED-2025-08-30.md`
-- **Epic Specifications**: `/guidance/docs/project/future-phases.md` - Epic 15 & 16 details
-- **Creation Standards**: Apply comprehensive healthcare-focused templates to all new tasks
-- **Verification Requirements**: Confirm task creation with Linear MCP server get_issue() calls
-- **Quality Standards**: Each task must include Prerequisites, Technical Requirements, QA Criteria, Medical Safety Checklists, Handover Documentation
+### Backend Integration Testing ⏳ PENDING
+- ⏳ Backend integration tests pending
+- ⏳ End-to-end upload flow tests pending
+- ⏳ API endpoint testing pending
+- ⏳ AI integration testing pending
 
-### Medical Safety Considerations
-- All health-related screens must include appropriate disclaimers
-- Position as "medical interpretation assistance, not medical advice"
-- Emphasize "always consult healthcare professionals"
-- Maintain anxiety-aware, supportive tone
+## Architecture Decisions Made
 
-## Session Startup Commands
+1. **Device-Only Storage:** Chosen SQLite encryption over cloud storage for maximum privacy
+2. **Progressive Retry:** Implemented exponential backoff (30s→2m→5m) for robust processing
+3. **Conservative Medical Bias:** All AI results include disclaimers and consultation suggestions
+4. **State-Driven UI:** Upload button reflects processing state for clear user feedback
+5. **Provider Pattern:** Clean separation of UI and business logic for maintainability
 
-1. **Read core documents:**
+## Medical Safety Considerations
+
+- All health-related screens include appropriate disclaimers ✅ IMPLEMENTED
+- Position as "medical interpretation assistance, not medical advice" ✅ IMPLEMENTED
+- Emphasize "always consult healthcare professionals" ✅ IMPLEMENTED
+- Maintain anxiety-aware, supportive tone ✅ IMPLEMENTED
+
+---
+
+## 🚀 **AGENT STARTUP PROTOCOL - BACKEND INTEGRATION FOCUS**
+
+**Current Work Scope: Backend Integration for Complete Flutter App**
+
+### Step 1: Read This Document ✅ 
+You're reading it now. **Key Context**: Flutter app is 100% complete - we need backend services to match existing API contracts.
+
+### Step 2: Understand Current Architecture
+1. **Flutter App Analysis**: 
+   ```bash
+   cd /Users/m00n5h075ai/development/serenya/serenya_app
+   ./test_runner.sh web  # See working app
    ```
-   Read /guidance/docs/product/Serenya_PRD_v2.md
-   Read /guidance/docs/project/future-phases.md (Epic 15 & 16 specifications)
-   Read /archive/completed-projects/linear-task-update-progress-COMPLETED-2025-08-30.md (template methodology)
-   ```
+2. **API Contract Review**: Read `/serenya_app/lib/services/api_service.dart` to understand expected endpoints
+3. **Processing Flow**: Review `/serenya_app/lib/services/processing_service.dart` for retry logic and timeout expectations
 
-2. **Understand session crash context:**
-   ```
-   Review Epic 15 & 16 specifications for story/task creation requirements
-   Identify where Epic 15 story/task creation was interrupted
-   ```
+### Step 3: Backend Development Setup
+1. **Read AWS Requirements**: `/guidance/docs/project/future-phases.md` - Epic 15 AWS infrastructure
+2. **Review Development Standards**: `/guidance/docs/technical/our-dev-rules.md`
+3. **Check Linear Tasks**: Epic 15 tasks M00-146 through M00-153 contain AWS deployment specifications
 
-3. **Set up Linear task creation workflow:**
-   ```
-   Use TodoWrite to track Epic 15 & 16 story/task creation progress
-   Use Linear MCP server for task creation and verification
-   ```
+### Step 4: Ready to Deploy
+**Your immediate focus should be:**
+- **AWS Lambda Functions**: Deploy processing service with 3-minute timeout
+- **API Gateway**: Create endpoints matching Flutter service contracts  
+- **S3 Integration**: Secure file upload/download with automatic cleanup
+- **Database**: Job status tracking and processing results storage
+
+**Success Criteria**: Flutter app can upload documents → get processing status → receive AI interpretations
+
+### Step 5: Validation Protocol
+1. **End-to-End Testing**: Upload document through Flutter app and verify complete flow
+2. **Medical Safety**: Ensure AI responses include proper disclaimers and confidence scores
+3. **Performance**: Validate 3-minute timeout alignment and retry mechanisms work
+4. **Security**: Confirm no health data persists on servers after processing
+
+**You now have:**
+- Complete Flutter app ready for integration
+- Clear API contracts to implement
+- AWS infrastructure requirements
+- Medical safety standards to maintain
+
+---
 
 ## Quality Standards
 
@@ -176,52 +307,29 @@
 - **Design System Compliance**: No deviations from established colors/typography
 - **Medical Safety**: All health content must be safety-reviewed
 - **Documentation**: Update progress files as work proceeds
-- **Export Requirements**: PNG exports mandatory for all UI work
+- **Testing Requirements**: All backend changes must include comprehensive tests
 
-## Success Criteria & Status
+## Success Criteria & Next Steps
 
-**✅ COMPLETED (Previous Sessions):**
-- [x] Linear Task Template Updates Project - 145+ tasks with comprehensive healthcare templates
-- [x] Project archived to `/archive/completed-projects/linear-task-update-progress-COMPLETED-2025-08-30.md`
-- [x] Product Manager comprehensive project review and UI/UX Design Phase recommendation
-- [x] Session handover document updated to reflect Epic 15/16 focus
+**✅ COMPLETED:**
+- [x] Flutter app foundation (8/8 core tasks)
+- [x] Linear task template updates (145+ tasks)
+- [x] Epic 15/16 story creation (16 comprehensive tasks)
+- [x] Medical safety framework implementation
+- [x] Device-only storage architecture
+- [x] Upload workflow with state management
 
-**✅ COMPLETED (Current Session Recovery):**
-- [x] **COMPLETE**: Epic 15 story/task creation (M00-146 through M00-153 - AWS Cost Optimization & Free Tier Management)
-- [x] **COMPLETE**: Epic 16 story/task creation (M00-154 through M00-161 - Healthcare Services Evolution)
-- [x] Applied comprehensive healthcare templates to all 16 new Epic 15/16 tasks
-- [x] Updated future phases document and session handover with task completion status
+**🎯 IMMEDIATE PRIORITIES:**
+1. **Backend Integration** - Deploy AWS Lambda processing pipeline
+2. **API Implementation** - Create endpoints matching Flutter service contracts
+3. **AI Integration** - Implement confidence scoring and medical flag detection
+4. **End-to-End Testing** - Validate complete upload → processing → results flow
 
-**📋 SHORT-TERM (Post-Epic Creation):**
-- [ ] Transition to UI/UX Design Phase (0/40 screens completed - critical gap identified)
-- [ ] Create onboarding flow and safety screens (legal compliance requirement)
-- [ ] Begin core development phase with comprehensive Linear task foundation
-
-**⚠️ KNOWN LIMITATIONS:**
-- [ ] Frame0 MCP server cannot automatically save PNG files to filesystem
-- [ ] Manual PNG export required via Frame0 UI → Downloads → Move to mock-ups folder
-
----
-
-## 🚀 **AGENT STARTUP PROTOCOL**
-
-**Every new session, follow this exact sequence:**
-
-### Step 1: Read This Document
-You're reading it now. This gives you current priorities and project status.
-
-### Step 2: Read Essential Context (Always)
-1. **`/guidance/docs/technical/our-dev-rules.md`** - How we work, verification standards, quality requirements
-2. **`/guidance/docs/project/agent-workflow-protocol.md`** - Task execution process, validation requirements, handoff procedures
-
-### Step 3: Ready to Work
-After reading those 2 files, ask: *"What should I work on first?"*
-
-**That's it. You now have:**
-- Current project state and immediate priorities (this document)
-- Work standards and verification requirements (dev rules)  
-- Systematic task execution process (workflow protocol)
-- Complete context to pick up any task effectively
+**📋 MEDIUM-TERM:**
+- [ ] UI/UX Phase 2 screens (after backend integration)
+- [ ] Production deployment configuration
+- [ ] Performance optimization and monitoring
+- [ ] Additional medical safety validations
 
 ---
 
