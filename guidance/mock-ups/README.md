@@ -4,10 +4,23 @@
 
 ## Quick Reference
 
-- **Complete Screen Requirements:** See `/guidance/docs/complete-screen-inventory.md` 
+- **🎯 NEW: Complete UI System:** `/guidance/docs/product/ui-specifications.md` (comprehensive design system)
+- **Screen Requirements:** See complete-screen-inventory.md (if still needed)
 - **Total Screens Needed:** 40 (20 MVP Critical, 12 Post-MVP, 8 Future)
 - **Frame0 Project:** "Serenya Onboarding Flow" page ready
 - **Current Progress:** 0/40 screens completed
+
+## ⚠️ IMPORTANT UPDATE (September 1, 2025)
+
+**UI/UX Design System Superseded**: The comprehensive design system below has been **replaced by the new domain-driven architecture**:
+
+👉 **Use Instead**: `/guidance/docs/product/ui-specifications.md` 
+- Complete component specifications with CSS implementations
+- AI agent optimized for structured implementation  
+- Cross-references to database, user flows, and API contracts
+- Professional design system with 400+ lines of detailed specs
+
+**Legacy Content Below**: The design system content in this file is **maintained for reference only** but should not be the primary source for UI/UX implementation.
 
 ## Design Standards Checklist
 

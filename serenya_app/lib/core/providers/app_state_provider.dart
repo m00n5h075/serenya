@@ -1,0 +1,132 @@
+import 'package:flutter/foundation.dart';
+import '../../services/auth_service.dart';
+import '../../services/consent_service.dart';
+
+class AppStateProvider extends ChangeNotifier {
+  bool _isInitialized = false;
+  bool _isOnboardingComplete = false;
+  bool _isLoggedIn = false;
+  bool _isLoading = true;
+  String? _error;
+  
+  final AuthService _authService = AuthService();
+  final ConsentService _consentService = ConsentService();
+
+  bool get isInitialized => _isInitialized;
+  bool get isOnboardingComplete => _isOnboardingComplete;
+  bool get isLoggedIn => _isLoggedIn;
+  bool get isLoading => _isLoading;
+  String? get error => _error;
+
+  Future<void> initialize() async {
+    if (_isInitialized) return;
+
+    _setLoading(true);
+    _clearError();
+
+    try {
+      await _checkAppState();
+      _isInitialized = true;
+    } catch (e) {
+      _setError('Failed to initialize app: $e');
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<void> _checkAppState() async {
+    final onboardingComplete = await _consentService.isOnboardingCompleted();
+    final loggedIn = await _authService.isLoggedIn();
+    
+    _isOnboardingComplete = onboardingComplete;
+    _isLoggedIn = loggedIn;
+    notifyListeners();
+  }
+
+  Future<void> completeOnboarding() async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      await _consentService.markOnboardingCompleted();
+      _isOnboardingComplete = true;
+      notifyListeners();
+    } catch (e) {
+      _setError('Failed to complete onboarding: $e');
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<void> login() async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      final success = await _authService.signInWithGoogle();
+      if (success) {
+        _isLoggedIn = true;
+        notifyListeners();
+      } else {
+        _setError('Login failed');
+      }
+    } catch (e) {
+      _setError('Login error: $e');
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<void> logout() async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      await _authService.signOut();
+      _isLoggedIn = false;
+      notifyListeners();
+    } catch (e) {
+      _setError('Logout error: $e');
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<void> resetApp() async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      await _authService.signOut();
+      await _consentService.clearAllConsent();
+      
+      _isOnboardingComplete = false;
+      _isLoggedIn = false;
+      notifyListeners();
+    } catch (e) {
+      _setError('Failed to reset app: $e');
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  void _setLoading(bool loading) {
+    _isLoading = loading;
+    notifyListeners();
+  }
+
+  void _setError(String error) {
+    _error = error;
+    notifyListeners();
+  }
+
+  void _clearError() {
+    _error = null;
+  }
+
+  // Method to set logged in status directly (for onboarding flow)
+  void setLoggedIn(bool loggedIn) {
+    _isLoggedIn = loggedIn;
+    notifyListeners();
+  }
+}

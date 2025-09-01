@@ -1,0 +1,3706 @@
+{
+ "Description": "Serenya AI Health Agent Backend - dev environment",
+ "Resources": {
+  "SerenyaEncryptionKey30AB90B6": {
+   "Type": "AWS::KMS::Key",
+   "Properties": {
+    "Description": "Serenya dev encryption key for PHI data",
+    "EnableKeyRotation": true,
+    "KeyPolicy": {
+     "Statement": [
+      {
+       "Action": "kms:*",
+       "Effect": "Allow",
+       "Principal": {
+        "AWS": {
+         "Fn::Join": [
+          "",
+          [
+           "arn:aws:iam::",
+           {
+            "Ref": "AWS::AccountId"
+           },
+           ":root"
+          ]
+         ]
+        }
+       },
+       "Resource": "*"
+      },
+      {
+       "Action": [
+        "kms:CreateGrant",
+        "kms:Decrypt",
+        "kms:DescribeKey",
+        "kms:Encrypt",
+        "kms:GenerateDataKey*",
+        "kms:ReEncrypt*"
+       ],
+       "Condition": {
+        "StringEquals": {
+         "kms:ViaService": "secretsmanager.eu-west-1.amazonaws.com"
+        }
+       },
+       "Effect": "Allow",
+       "Principal": {
+        "AWS": {
+         "Fn::Join": [
+          "",
+          [
+           "arn:aws:iam::",
+           {
+            "Ref": "AWS::AccountId"
+           },
+           ":root"
+          ]
+         ]
+        }
+       },
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaEncryptionKey/Resource"
+   }
+  },
+  "SerenyaApiSecretsA24BF8CE": {
+   "Type": "AWS::SecretsManager::Secret",
+   "Properties": {
+    "Description": "Serenya dev API secrets",
+    "GenerateSecretString": {
+     "ExcludeCharacters": "\"@/\\",
+     "GenerateStringKey": "jwtSecret",
+     "PasswordLength": 64,
+     "SecretStringTemplate": "{\"jwtSecret\":\"\",\"anthropicApiKey\":\"\",\"googleClientId\":\"\",\"googleClientSecret\":\"\"}"
+    },
+    "KmsKeyId": {
+     "Fn::GetAtt": [
+      "SerenyaEncryptionKey30AB90B6",
+      "Arn"
+     ]
+    },
+    "Name": "serenya/dev/api-secrets"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApiSecrets/Resource"
+   }
+  },
+  "TempFilesBucketC6626CD1": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "BucketEncryption": {
+     "ServerSideEncryptionConfiguration": [
+      {
+       "ServerSideEncryptionByDefault": {
+        "KMSMasterKeyID": {
+         "Fn::GetAtt": [
+          "SerenyaEncryptionKey30AB90B6",
+          "Arn"
+         ]
+        },
+        "SSEAlgorithm": "aws:kms"
+       }
+      }
+     ]
+    },
+    "BucketName": {
+     "Fn::Join": [
+      "",
+      [
+       "serenya-temp-files-dev-",
+       {
+        "Ref": "AWS::AccountId"
+       }
+      ]
+     ]
+    },
+    "CorsConfiguration": {
+     "CorsRules": [
+      {
+       "AllowedHeaders": [
+        "*"
+       ],
+       "AllowedMethods": [
+        "POST",
+        "PUT"
+       ],
+       "AllowedOrigins": [
+        "http://localhost:*"
+       ],
+       "MaxAge": 3600
+      }
+     ]
+    },
+    "LifecycleConfiguration": {
+     "Rules": [
+      {
+       "ExpirationInDays": 1,
+       "Id": "DeleteTempFiles",
+       "Status": "Enabled"
+      },
+      {
+       "AbortIncompleteMultipartUpload": {
+        "DaysAfterInitiation": 1
+       },
+       "Id": "DeleteIncompleteUploads",
+       "Status": "Enabled"
+      }
+     ]
+    },
+    "PublicAccessBlockConfiguration": {
+     "BlockPublicAcls": true,
+     "BlockPublicPolicy": true,
+     "IgnorePublicAcls": true,
+     "RestrictPublicBuckets": true
+    },
+    "Tags": [
+     {
+      "Key": "aws-cdk:auto-delete-objects",
+      "Value": "true"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/TempFilesBucket/Resource"
+   }
+  },
+  "TempFilesBucketPolicy4E1F091D": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "TempFilesBucketC6626CD1"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "Bool": {
+         "aws:SecureTransport": "false"
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "TempFilesBucketC6626CD1",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "TempFilesBucketC6626CD1",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "s3:DeleteObject*",
+        "s3:GetBucket*",
+        "s3:List*",
+        "s3:PutBucketPolicy"
+       ],
+       "Effect": "Allow",
+       "Principal": {
+        "AWS": {
+         "Fn::GetAtt": [
+          "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+          "Arn"
+         ]
+        }
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "TempFilesBucketC6626CD1",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "TempFilesBucketC6626CD1",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/TempFilesBucket/Policy/Resource"
+   }
+  },
+  "TempFilesBucketAutoDeleteObjectsCustomResource197835EE": {
+   "Type": "Custom::S3AutoDeleteObjects",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+      "Arn"
+     ]
+    },
+    "BucketName": {
+     "Ref": "TempFilesBucketC6626CD1"
+    }
+   },
+   "DependsOn": [
+    "TempFilesBucketPolicy4E1F091D"
+   ],
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/TempFilesBucket/AutoDeleteObjectsCustomResource/Default"
+   }
+  },
+  "TempFilesBucketNotifications6FCB54EC": {
+   "Type": "Custom::S3BucketNotifications",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "BucketNotificationsHandler050a0587b7544547bf325f094a3db8347ECC3691",
+      "Arn"
+     ]
+    },
+    "BucketName": {
+     "Ref": "TempFilesBucketC6626CD1"
+    },
+    "NotificationConfiguration": {
+     "LambdaFunctionConfigurations": [
+      {
+       "Events": [
+        "s3:ObjectCreated:*"
+       ],
+       "Filter": {
+        "Key": {
+         "FilterRules": [
+          {
+           "Name": "prefix",
+           "Value": "uploads/"
+          }
+         ]
+        }
+       },
+       "LambdaFunctionArn": {
+        "Fn::GetAtt": [
+         "ProcessFunction7E4ECD78",
+         "Arn"
+        ]
+       }
+      }
+     ]
+    },
+    "Managed": true,
+    "SkipDestinationValidation": false
+   },
+   "DependsOn": [
+    "TempFilesBucketAllowBucketNotificationsToSerenyaBackenddevProcessFunction341714C2E7FDACD9",
+    "TempFilesBucketPolicy4E1F091D"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/TempFilesBucket/Notifications/Resource"
+   }
+  },
+  "TempFilesBucketAllowBucketNotificationsToSerenyaBackenddevProcessFunction341714C2E7FDACD9": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "ProcessFunction7E4ECD78",
+      "Arn"
+     ]
+    },
+    "Principal": "s3.amazonaws.com",
+    "SourceAccount": {
+     "Ref": "AWS::AccountId"
+    },
+    "SourceArn": {
+     "Fn::GetAtt": [
+      "TempFilesBucketC6626CD1",
+      "Arn"
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/TempFilesBucket/AllowBucketNotificationsToSerenyaBackenddevProcessFunction341714C2"
+   }
+  },
+  "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Version": "2012-10-17",
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ]
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/Custom::S3AutoDeleteObjectsCustomResourceProvider/Role"
+   }
+  },
+  "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1"
+     },
+     "S3Key": "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6.zip"
+    },
+    "Timeout": 900,
+    "MemorySize": 128,
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs22.x",
+    "Description": {
+     "Fn::Join": [
+      "",
+      [
+       "Lambda function for auto-deleting objects in ",
+       {
+        "Ref": "TempFilesBucketC6626CD1"
+       },
+       " S3 bucket."
+      ]
+     ]
+    }
+   },
+   "DependsOn": [
+    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/Custom::S3AutoDeleteObjectsCustomResourceProvider/Handler",
+    "aws:asset:path": "asset.faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6",
+    "aws:asset:property": "Code"
+   }
+  },
+  "ProcessingJobsTable00D8CF66": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "jobId",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "userId",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "createdAt",
+      "AttributeType": "N"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "GlobalSecondaryIndexes": [
+     {
+      "IndexName": "UserJobsIndex",
+      "KeySchema": [
+       {
+        "AttributeName": "userId",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "createdAt",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     }
+    ],
+    "KeySchema": [
+     {
+      "AttributeName": "jobId",
+      "KeyType": "HASH"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": false
+    },
+    "SSESpecification": {
+     "KMSMasterKeyId": {
+      "Fn::GetAtt": [
+       "SerenyaEncryptionKey30AB90B6",
+       "Arn"
+      ]
+     },
+     "SSEEnabled": true,
+     "SSEType": "KMS"
+    },
+    "TableName": "serenya-jobs-dev",
+    "TimeToLiveSpecification": {
+     "AttributeName": "ttl",
+     "Enabled": true
+    }
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/ProcessingJobsTable/Resource"
+   }
+  },
+  "UsersTable9725E9C8": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "userId",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "userId",
+      "KeyType": "HASH"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": false
+    },
+    "SSESpecification": {
+     "KMSMasterKeyId": {
+      "Fn::GetAtt": [
+       "SerenyaEncryptionKey30AB90B6",
+       "Arn"
+      ]
+     },
+     "SSEEnabled": true,
+     "SSEType": "KMS"
+    },
+    "TableName": "serenya-users-dev",
+    "TimeToLiveSpecification": {
+     "AttributeName": "ttl",
+     "Enabled": true
+    }
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/UsersTable/Resource"
+   }
+  },
+  "LambdaExecutionRoleD5C26073": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "Policies": [
+     {
+      "PolicyDocument": {
+       "Statement": [
+        {
+         "Action": [
+          "dynamodb:DeleteItem",
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:Query",
+          "dynamodb:Scan",
+          "dynamodb:UpdateItem"
+         ],
+         "Effect": "Allow",
+         "Resource": [
+          {
+           "Fn::GetAtt": [
+            "ProcessingJobsTable00D8CF66",
+            "Arn"
+           ]
+          },
+          {
+           "Fn::GetAtt": [
+            "UsersTable9725E9C8",
+            "Arn"
+           ]
+          },
+          {
+           "Fn::Join": [
+            "",
+            [
+             {
+              "Fn::GetAtt": [
+               "ProcessingJobsTable00D8CF66",
+               "Arn"
+              ]
+             },
+             "/index/*"
+            ]
+           ]
+          },
+          {
+           "Fn::Join": [
+            "",
+            [
+             {
+              "Fn::GetAtt": [
+               "UsersTable9725E9C8",
+               "Arn"
+              ]
+             },
+             "/index/*"
+            ]
+           ]
+          }
+         ]
+        },
+        {
+         "Action": [
+          "s3:DeleteObject",
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:PutObjectAcl"
+         ],
+         "Effect": "Allow",
+         "Resource": {
+          "Fn::Join": [
+           "",
+           [
+            {
+             "Fn::GetAtt": [
+              "TempFilesBucketC6626CD1",
+              "Arn"
+             ]
+            },
+            "/*"
+           ]
+          ]
+         }
+        },
+        {
+         "Action": "secretsmanager:GetSecretValue",
+         "Effect": "Allow",
+         "Resource": {
+          "Ref": "SerenyaApiSecretsA24BF8CE"
+         }
+        },
+        {
+         "Action": [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+         ],
+         "Effect": "Allow",
+         "Resource": {
+          "Fn::GetAtt": [
+           "SerenyaEncryptionKey30AB90B6",
+           "Arn"
+          ]
+         }
+        }
+       ],
+       "Version": "2012-10-17"
+      },
+      "PolicyName": "SerenyaLambdaPolicy"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/LambdaExecutionRole/Resource"
+   }
+  },
+  "AuthFunctionA1CD5E0F": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1"
+     },
+     "S3Key": "c4bd0b2f13daf417449158fe46027abda42adf451cc8cddc6f5987d3b4b74919.zip"
+    },
+    "Description": "Google OAuth verification and JWT generation",
+    "Environment": {
+     "Variables": {
+      "REGION": "eu-west-1",
+      "ENVIRONMENT": "dev",
+      "JOBS_TABLE_NAME": {
+       "Ref": "ProcessingJobsTable00D8CF66"
+      },
+      "USERS_TABLE_NAME": {
+       "Ref": "UsersTable9725E9C8"
+      },
+      "TEMP_BUCKET_NAME": {
+       "Ref": "TempFilesBucketC6626CD1"
+      },
+      "API_SECRETS_ARN": {
+       "Ref": "SerenyaApiSecretsA24BF8CE"
+      },
+      "KMS_KEY_ID": {
+       "Ref": "SerenyaEncryptionKey30AB90B6"
+      },
+      "ENABLE_DETAILED_LOGGING": "true"
+     }
+    },
+    "Handler": "auth.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "LambdaExecutionRoleD5C26073",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "LambdaExecutionRoleD5C26073"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/AuthFunction/Resource",
+    "aws:asset:path": "asset.c4bd0b2f13daf417449158fe46027abda42adf451cc8cddc6f5987d3b4b74919",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "AuthFunctionLogRetention5816710E": {
+   "Type": "Custom::LogRetention",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aFD4BFC8A",
+      "Arn"
+     ]
+    },
+    "LogGroupName": {
+     "Fn::Join": [
+      "",
+      [
+       "/aws/lambda/",
+       {
+        "Ref": "AuthFunctionA1CD5E0F"
+       }
+      ]
+     ]
+    },
+    "RetentionInDays": 30
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/AuthFunction/LogRetention/Resource"
+   }
+  },
+  "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/ServiceRole/Resource"
+   }
+  },
+  "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRoleDefaultPolicyADDA7DEB": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "logs:DeleteRetentionPolicy",
+        "logs:PutRetentionPolicy"
+       ],
+       "Effect": "Allow",
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRoleDefaultPolicyADDA7DEB",
+    "Roles": [
+     {
+      "Ref": "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aFD4BFC8A": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Handler": "index.handler",
+    "Runtime": "nodejs22.x",
+    "Timeout": 900,
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1"
+     },
+     "S3Key": "2819175352ad1ce0dae768e83fc328fb70fb5f10b4a8ff0ccbcb791f02b0716d.zip"
+    },
+    "Role": {
+     "Fn::GetAtt": [
+      "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB",
+      "Arn"
+     ]
+    }
+   },
+   "DependsOn": [
+    "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRoleDefaultPolicyADDA7DEB",
+    "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/Resource",
+    "aws:asset:path": "asset.2819175352ad1ce0dae768e83fc328fb70fb5f10b4a8ff0ccbcb791f02b0716d",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "UserProfileFunctionF5A2461B": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1"
+     },
+     "S3Key": "36876df275e463541b41e2c407dc919aace28fc766fc97a00224f5d403aee4f7.zip"
+    },
+    "Description": "User profile management",
+    "Environment": {
+     "Variables": {
+      "REGION": "eu-west-1",
+      "ENVIRONMENT": "dev",
+      "JOBS_TABLE_NAME": {
+       "Ref": "ProcessingJobsTable00D8CF66"
+      },
+      "USERS_TABLE_NAME": {
+       "Ref": "UsersTable9725E9C8"
+      },
+      "TEMP_BUCKET_NAME": {
+       "Ref": "TempFilesBucketC6626CD1"
+      },
+      "API_SECRETS_ARN": {
+       "Ref": "SerenyaApiSecretsA24BF8CE"
+      },
+      "KMS_KEY_ID": {
+       "Ref": "SerenyaEncryptionKey30AB90B6"
+      },
+      "ENABLE_DETAILED_LOGGING": "true"
+     }
+    },
+    "Handler": "userProfile.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "LambdaExecutionRoleD5C26073",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Timeout": 15
+   },
+   "DependsOn": [
+    "LambdaExecutionRoleD5C26073"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/UserProfileFunction/Resource",
+    "aws:asset:path": "asset.36876df275e463541b41e2c407dc919aace28fc766fc97a00224f5d403aee4f7",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "UserProfileFunctionLogRetention1CA0BC00": {
+   "Type": "Custom::LogRetention",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aFD4BFC8A",
+      "Arn"
+     ]
+    },
+    "LogGroupName": {
+     "Fn::Join": [
+      "",
+      [
+       "/aws/lambda/",
+       {
+        "Ref": "UserProfileFunctionF5A2461B"
+       }
+      ]
+     ]
+    },
+    "RetentionInDays": 30
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/UserProfileFunction/LogRetention/Resource"
+   }
+  },
+  "UploadFunction18838DD8": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1"
+     },
+     "S3Key": "a96c2bf039e56a4db8b54dbe715adbaa2289ddda38b249a0a33484c812730e65.zip"
+    },
+    "Description": "File upload with virus scanning",
+    "Environment": {
+     "Variables": {
+      "REGION": "eu-west-1",
+      "ENVIRONMENT": "dev",
+      "JOBS_TABLE_NAME": {
+       "Ref": "ProcessingJobsTable00D8CF66"
+      },
+      "USERS_TABLE_NAME": {
+       "Ref": "UsersTable9725E9C8"
+      },
+      "TEMP_BUCKET_NAME": {
+       "Ref": "TempFilesBucketC6626CD1"
+      },
+      "API_SECRETS_ARN": {
+       "Ref": "SerenyaApiSecretsA24BF8CE"
+      },
+      "KMS_KEY_ID": {
+       "Ref": "SerenyaEncryptionKey30AB90B6"
+      },
+      "ENABLE_DETAILED_LOGGING": "true"
+     }
+    },
+    "Handler": "upload.handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "LambdaExecutionRoleD5C26073",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Timeout": 60
+   },
+   "DependsOn": [
+    "LambdaExecutionRoleD5C26073"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/UploadFunction/Resource",
+    "aws:asset:path": "asset.a96c2bf039e56a4db8b54dbe715adbaa2289ddda38b249a0a33484c812730e65",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "UploadFunctionLogRetention873B5782": {
+   "Type": "Custom::LogRetention",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aFD4BFC8A",
+      "Arn"
+     ]
+    },
+    "LogGroupName": {
+     "Fn::Join": [
+      "",
+      [
+       "/aws/lambda/",
+       {
+        "Ref": "UploadFunction18838DD8"
+       }
+      ]
+     ]
+    },
+    "RetentionInDays": 30
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/UploadFunction/LogRetention/Resource"
+   }
+  },
+  "ProcessFunction7E4ECD78": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1"
+     },
+     "S3Key": "6c60c896d7e35e05fd1cb143af97e491505366c1574b986d30b7a4fd5219bcd0.zip"
+    },
+    "Description": "AI processing with Anthropic Claude",
+    "Environment": {
+     "Variables": {
+      "REGION": "eu-west-1",
+      "ENVIRONMENT": "dev",
+      "JOBS_TABLE_NAME": {
+       "Ref": "ProcessingJobsTable00D8CF66"
+      },
+      "USERS_TABLE_NAME": {
+       "Ref": "UsersTable9725E9C8"
+      },
+      "TEMP_BUCKET_NAME": {
+       "Ref": "TempFilesBucketC6626CD1"
+      },
+      "API_SECRETS_ARN": {
+       "Ref": "SerenyaApiSecretsA24BF8CE"
+      },
+      "KMS_KEY_ID": {
+       "Ref": "SerenyaEncryptionKey30AB90B6"
+      },
+      "ENABLE_DETAILED_LOGGING": "true"
+     }
+    },
+    "Handler": "process.handler",
+    "MemorySize": 1024,
+    "Role": {
+     "Fn::GetAtt": [
+      "LambdaExecutionRoleD5C26073",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Timeout": 180
+   },
+   "DependsOn": [
+    "LambdaExecutionRoleD5C26073"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/ProcessFunction/Resource",
+    "aws:asset:path": "asset.6c60c896d7e35e05fd1cb143af97e491505366c1574b986d30b7a4fd5219bcd0",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ProcessFunctionLogRetention57E0A35A": {
+   "Type": "Custom::LogRetention",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aFD4BFC8A",
+      "Arn"
+     ]
+    },
+    "LogGroupName": {
+     "Fn::Join": [
+      "",
+      [
+       "/aws/lambda/",
+       {
+        "Ref": "ProcessFunction7E4ECD78"
+       }
+      ]
+     ]
+    },
+    "RetentionInDays": 30
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/ProcessFunction/LogRetention/Resource"
+   }
+  },
+  "StatusFunction598A4497": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1"
+     },
+     "S3Key": "0c2e92dca7d853080649d64f5662e238d8d83ed9b9ee5444c62a704c612b0653.zip"
+    },
+    "Description": "Processing status tracking",
+    "Environment": {
+     "Variables": {
+      "REGION": "eu-west-1",
+      "ENVIRONMENT": "dev",
+      "JOBS_TABLE_NAME": {
+       "Ref": "ProcessingJobsTable00D8CF66"
+      },
+      "USERS_TABLE_NAME": {
+       "Ref": "UsersTable9725E9C8"
+      },
+      "TEMP_BUCKET_NAME": {
+       "Ref": "TempFilesBucketC6626CD1"
+      },
+      "API_SECRETS_ARN": {
+       "Ref": "SerenyaApiSecretsA24BF8CE"
+      },
+      "KMS_KEY_ID": {
+       "Ref": "SerenyaEncryptionKey30AB90B6"
+      },
+      "ENABLE_DETAILED_LOGGING": "true"
+     }
+    },
+    "Handler": "status.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "LambdaExecutionRoleD5C26073",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Timeout": 15
+   },
+   "DependsOn": [
+    "LambdaExecutionRoleD5C26073"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/StatusFunction/Resource",
+    "aws:asset:path": "asset.0c2e92dca7d853080649d64f5662e238d8d83ed9b9ee5444c62a704c612b0653",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "StatusFunctionLogRetention86438395": {
+   "Type": "Custom::LogRetention",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aFD4BFC8A",
+      "Arn"
+     ]
+    },
+    "LogGroupName": {
+     "Fn::Join": [
+      "",
+      [
+       "/aws/lambda/",
+       {
+        "Ref": "StatusFunction598A4497"
+       }
+      ]
+     ]
+    },
+    "RetentionInDays": 30
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/StatusFunction/LogRetention/Resource"
+   }
+  },
+  "ResultFunctionB52330A7": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1"
+     },
+     "S3Key": "c789aa47fcf887914a8a3701205c8a3ac5fd90562e7f2690e8aab1a475c5cd6b.zip"
+    },
+    "Description": "Results retrieval",
+    "Environment": {
+     "Variables": {
+      "REGION": "eu-west-1",
+      "ENVIRONMENT": "dev",
+      "JOBS_TABLE_NAME": {
+       "Ref": "ProcessingJobsTable00D8CF66"
+      },
+      "USERS_TABLE_NAME": {
+       "Ref": "UsersTable9725E9C8"
+      },
+      "TEMP_BUCKET_NAME": {
+       "Ref": "TempFilesBucketC6626CD1"
+      },
+      "API_SECRETS_ARN": {
+       "Ref": "SerenyaApiSecretsA24BF8CE"
+      },
+      "KMS_KEY_ID": {
+       "Ref": "SerenyaEncryptionKey30AB90B6"
+      },
+      "ENABLE_DETAILED_LOGGING": "true"
+     }
+    },
+    "Handler": "result.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "LambdaExecutionRoleD5C26073",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "LambdaExecutionRoleD5C26073"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/ResultFunction/Resource",
+    "aws:asset:path": "asset.c789aa47fcf887914a8a3701205c8a3ac5fd90562e7f2690e8aab1a475c5cd6b",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ResultFunctionLogRetention8F9B47D5": {
+   "Type": "Custom::LogRetention",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aFD4BFC8A",
+      "Arn"
+     ]
+    },
+    "LogGroupName": {
+     "Fn::Join": [
+      "",
+      [
+       "/aws/lambda/",
+       {
+        "Ref": "ResultFunctionB52330A7"
+       }
+      ]
+     ]
+    },
+    "RetentionInDays": 30
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/ResultFunction/LogRetention/Resource"
+   }
+  },
+  "RetryFunction31519513": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1"
+     },
+     "S3Key": "2fd43a9746007e51062e649b95ba9df5d4c768b4d955f468a6a0fd11bc28f524.zip"
+    },
+    "Description": "Processing retry management",
+    "Environment": {
+     "Variables": {
+      "REGION": "eu-west-1",
+      "ENVIRONMENT": "dev",
+      "JOBS_TABLE_NAME": {
+       "Ref": "ProcessingJobsTable00D8CF66"
+      },
+      "USERS_TABLE_NAME": {
+       "Ref": "UsersTable9725E9C8"
+      },
+      "TEMP_BUCKET_NAME": {
+       "Ref": "TempFilesBucketC6626CD1"
+      },
+      "API_SECRETS_ARN": {
+       "Ref": "SerenyaApiSecretsA24BF8CE"
+      },
+      "KMS_KEY_ID": {
+       "Ref": "SerenyaEncryptionKey30AB90B6"
+      },
+      "ENABLE_DETAILED_LOGGING": "true"
+     }
+    },
+    "Handler": "retry.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "LambdaExecutionRoleD5C26073",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "LambdaExecutionRoleD5C26073"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/RetryFunction/Resource",
+    "aws:asset:path": "asset.2fd43a9746007e51062e649b95ba9df5d4c768b4d955f468a6a0fd11bc28f524",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "RetryFunctionLogRetention48D40D10": {
+   "Type": "Custom::LogRetention",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aFD4BFC8A",
+      "Arn"
+     ]
+    },
+    "LogGroupName": {
+     "Fn::Join": [
+      "",
+      [
+       "/aws/lambda/",
+       {
+        "Ref": "RetryFunction31519513"
+       }
+      ]
+     ]
+    },
+    "RetentionInDays": 30
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/RetryFunction/LogRetention/Resource"
+   }
+  },
+  "DoctorReportFunction156B2584": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1"
+     },
+     "S3Key": "d8b2fd2b19c266cbd08cb02b48337144f1425fceef85852ace17ba3eba0292de.zip"
+    },
+    "Description": "Premium doctor report generation",
+    "Environment": {
+     "Variables": {
+      "REGION": "eu-west-1",
+      "ENVIRONMENT": "dev",
+      "JOBS_TABLE_NAME": {
+       "Ref": "ProcessingJobsTable00D8CF66"
+      },
+      "USERS_TABLE_NAME": {
+       "Ref": "UsersTable9725E9C8"
+      },
+      "TEMP_BUCKET_NAME": {
+       "Ref": "TempFilesBucketC6626CD1"
+      },
+      "API_SECRETS_ARN": {
+       "Ref": "SerenyaApiSecretsA24BF8CE"
+      },
+      "KMS_KEY_ID": {
+       "Ref": "SerenyaEncryptionKey30AB90B6"
+      },
+      "ENABLE_DETAILED_LOGGING": "true"
+     }
+    },
+    "Handler": "doctorReport.handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "LambdaExecutionRoleD5C26073",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Timeout": 120
+   },
+   "DependsOn": [
+    "LambdaExecutionRoleD5C26073"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/DoctorReportFunction/Resource",
+    "aws:asset:path": "asset.d8b2fd2b19c266cbd08cb02b48337144f1425fceef85852ace17ba3eba0292de",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "DoctorReportFunctionLogRetention7F741CDF": {
+   "Type": "Custom::LogRetention",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aFD4BFC8A",
+      "Arn"
+     ]
+    },
+    "LogGroupName": {
+     "Fn::Join": [
+      "",
+      [
+       "/aws/lambda/",
+       {
+        "Ref": "DoctorReportFunction156B2584"
+       }
+      ]
+     ]
+    },
+    "RetentionInDays": 30
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/DoctorReportFunction/LogRetention/Resource"
+   }
+  },
+  "AuthorizerFunctionB4DBAA43": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1"
+     },
+     "S3Key": "51dbe1af963c1317ceefda80ed6c5fa7ea9b96fa5c6321c22863d1f648ad9a39.zip"
+    },
+    "Description": "JWT token authorization",
+    "Environment": {
+     "Variables": {
+      "REGION": "eu-west-1",
+      "ENVIRONMENT": "dev",
+      "JOBS_TABLE_NAME": {
+       "Ref": "ProcessingJobsTable00D8CF66"
+      },
+      "USERS_TABLE_NAME": {
+       "Ref": "UsersTable9725E9C8"
+      },
+      "TEMP_BUCKET_NAME": {
+       "Ref": "TempFilesBucketC6626CD1"
+      },
+      "API_SECRETS_ARN": {
+       "Ref": "SerenyaApiSecretsA24BF8CE"
+      },
+      "KMS_KEY_ID": {
+       "Ref": "SerenyaEncryptionKey30AB90B6"
+      },
+      "ENABLE_DETAILED_LOGGING": "true",
+      "TOKEN_ISSUER": "serenya.health",
+      "TOKEN_AUDIENCE": "serenya-mobile-app"
+     }
+    },
+    "Handler": "authorizer.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "LambdaExecutionRoleD5C26073",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Timeout": 15
+   },
+   "DependsOn": [
+    "LambdaExecutionRoleD5C26073"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/AuthorizerFunction/Resource",
+    "aws:asset:path": "asset.51dbe1af963c1317ceefda80ed6c5fa7ea9b96fa5c6321c22863d1f648ad9a39",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "AuthorizerFunctionLogRetention20FD5AF7": {
+   "Type": "Custom::LogRetention",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aFD4BFC8A",
+      "Arn"
+     ]
+    },
+    "LogGroupName": {
+     "Fn::Join": [
+      "",
+      [
+       "/aws/lambda/",
+       {
+        "Ref": "AuthorizerFunctionB4DBAA43"
+       }
+      ]
+     ]
+    },
+    "RetentionInDays": 30
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/AuthorizerFunction/LogRetention/Resource"
+   }
+  },
+  "AuthorizerFunctionSerenyaBackenddevJWTAuthorizer6D9C8E7EPermissions9F0806F8": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AuthorizerFunctionB4DBAA43",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:aws:execute-api:eu-west-1:",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SerenyaApi961F1E55"
+       },
+       "/authorizers/",
+       {
+        "Ref": "JWTAuthorizerE8D8D90E"
+       }
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/AuthorizerFunction/SerenyaBackenddevJWTAuthorizer6D9C8E7E:Permissions"
+   }
+  },
+  "JWTAuthorizerE8D8D90E": {
+   "Type": "AWS::ApiGateway::Authorizer",
+   "Properties": {
+    "AuthorizerResultTtlInSeconds": 300,
+    "AuthorizerUri": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Fn::Select": [
+         1,
+         {
+          "Fn::Split": [
+           ":",
+           {
+            "Fn::GetAtt": [
+             "AuthorizerFunctionB4DBAA43",
+             "Arn"
+            ]
+           }
+          ]
+         }
+        ]
+       },
+       ":apigateway:",
+       {
+        "Fn::Select": [
+         3,
+         {
+          "Fn::Split": [
+           ":",
+           {
+            "Fn::GetAtt": [
+             "AuthorizerFunctionB4DBAA43",
+             "Arn"
+            ]
+           }
+          ]
+         }
+        ]
+       },
+       ":lambda:path/2015-03-31/functions/",
+       {
+        "Fn::GetAtt": [
+         "AuthorizerFunctionB4DBAA43",
+         "Arn"
+        ]
+       },
+       "/invocations"
+      ]
+     ]
+    },
+    "IdentitySource": "method.request.header.Authorization",
+    "Name": "SerenyaJWTAuthorizer",
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    },
+    "Type": "TOKEN"
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/JWTAuthorizer/Resource"
+   }
+  },
+  "SerenyaApi961F1E55": {
+   "Type": "AWS::ApiGateway::RestApi",
+   "Properties": {
+    "Description": "Serenya AI Health Agent API - dev",
+    "EndpointConfiguration": {
+     "Types": [
+      "REGIONAL"
+     ]
+    },
+    "Name": "serenya-api-dev"
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Resource"
+   }
+  },
+  "SerenyaApiCloudWatchRole9E2E72EB": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "apigateway.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+       ]
+      ]
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/CloudWatchRole/Resource"
+   }
+  },
+  "SerenyaApiAccount6A099A6F": {
+   "Type": "AWS::ApiGateway::Account",
+   "Properties": {
+    "CloudWatchRoleArn": {
+     "Fn::GetAtt": [
+      "SerenyaApiCloudWatchRole9E2E72EB",
+      "Arn"
+     ]
+    }
+   },
+   "DependsOn": [
+    "SerenyaApi961F1E55"
+   ],
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Account"
+   }
+  },
+  "SerenyaApiDeployment9A430DAEb1f7cf150d6faa49132bf0d3eef4c827": {
+   "Type": "AWS::ApiGateway::Deployment",
+   "Properties": {
+    "Description": "Serenya AI Health Agent API - dev",
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "DependsOn": [
+    "JWTAuthorizerE8D8D90E",
+    "SerenyaApiapiOPTIONSFB35DE81",
+    "SerenyaApiapi446775AA",
+    "SerenyaApiapiv1OPTIONSD1E10A59",
+    "SerenyaApiapiv1processdoctorreportOPTIONS2BFFF0B0",
+    "SerenyaApiapiv1processdoctorreportPOST398F6D27",
+    "SerenyaApiapiv1processdoctorreport764BEBC9",
+    "SerenyaApiapiv1processOPTIONS1D179255",
+    "SerenyaApiapiv1process29862BC2",
+    "SerenyaApiapiv1processresultjobIdGETFB4D756B",
+    "SerenyaApiapiv1processresultjobIdOPTIONS94949444",
+    "SerenyaApiapiv1processresultjobId0A980F14",
+    "SerenyaApiapiv1processresultOPTIONS4BB0ED9F",
+    "SerenyaApiapiv1processresult295F2A1C",
+    "SerenyaApiapiv1processretryjobIdOPTIONS6FC39338",
+    "SerenyaApiapiv1processretryjobIdPOST8FFA0E78",
+    "SerenyaApiapiv1processretryjobId4A76E717",
+    "SerenyaApiapiv1processretryOPTIONS2BCD5A28",
+    "SerenyaApiapiv1processretryCD5D1F00",
+    "SerenyaApiapiv1processstatusjobIdGET29689FC3",
+    "SerenyaApiapiv1processstatusjobIdOPTIONS3316DFD1",
+    "SerenyaApiapiv1processstatusjobId56622832",
+    "SerenyaApiapiv1processstatusOPTIONS05404032",
+    "SerenyaApiapiv1processstatus741E1B89",
+    "SerenyaApiapiv1processuploadOPTIONSEE80B0CE",
+    "SerenyaApiapiv1processuploadPOST4E4A4315",
+    "SerenyaApiapiv1processuploadD4F3885C",
+    "SerenyaApiapiv14ABB7B5A",
+    "SerenyaApiauthgoogleOPTIONS1BDA8C9D",
+    "SerenyaApiauthgooglePOST7615B967",
+    "SerenyaApiauthgoogle2CDDBC50",
+    "SerenyaApiauthOPTIONS9C0749B3",
+    "SerenyaApiauthA4A1C07F",
+    "SerenyaApiOPTIONS2436B4B6",
+    "SerenyaApiuserOPTIONSF8FE17BC",
+    "SerenyaApiuserprofileGET3FBD1683",
+    "SerenyaApiuserprofileOPTIONS74F7AA86",
+    "SerenyaApiuserprofileCB053673",
+    "SerenyaApiuserFF13A6AA"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Deployment/Resource",
+    "aws:cdk:do-not-refactor": true
+   }
+  },
+  "SerenyaApiDeploymentStagedevC49EB2C2": {
+   "Type": "AWS::ApiGateway::Stage",
+   "Properties": {
+    "DeploymentId": {
+     "Ref": "SerenyaApiDeployment9A430DAEb1f7cf150d6faa49132bf0d3eef4c827"
+    },
+    "MethodSettings": [
+     {
+      "DataTraceEnabled": true,
+      "HttpMethod": "*",
+      "LoggingLevel": "INFO",
+      "MetricsEnabled": true,
+      "ResourcePath": "/*",
+      "ThrottlingBurstLimit": 200,
+      "ThrottlingRateLimit": 100
+     }
+    ],
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    },
+    "StageName": "dev"
+   },
+   "DependsOn": [
+    "SerenyaApiAccount6A099A6F"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/DeploymentStage.dev/Resource"
+   }
+  },
+  "SerenyaApiOPTIONS2436B4B6": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+        "method.response.header.Access-Control-Allow-Origin": "'http://localhost:*'",
+        "method.response.header.Vary": "'Origin'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Vary": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Fn::GetAtt": [
+      "SerenyaApi961F1E55",
+      "RootResourceId"
+     ]
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/OPTIONS/Resource"
+   }
+  },
+  "SerenyaApiauthA4A1C07F": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Fn::GetAtt": [
+      "SerenyaApi961F1E55",
+      "RootResourceId"
+     ]
+    },
+    "PathPart": "auth",
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/auth/Resource"
+   }
+  },
+  "SerenyaApiauthOPTIONS9C0749B3": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+        "method.response.header.Access-Control-Allow-Origin": "'http://localhost:*'",
+        "method.response.header.Vary": "'Origin'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Vary": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "SerenyaApiauthA4A1C07F"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/auth/OPTIONS/Resource"
+   }
+  },
+  "SerenyaApiauthgoogle2CDDBC50": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SerenyaApiauthA4A1C07F"
+    },
+    "PathPart": "google",
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/auth/google/Resource"
+   }
+  },
+  "SerenyaApiauthgoogleOPTIONS1BDA8C9D": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+        "method.response.header.Access-Control-Allow-Origin": "'http://localhost:*'",
+        "method.response.header.Vary": "'Origin'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Vary": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "SerenyaApiauthgoogle2CDDBC50"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/auth/google/OPTIONS/Resource"
+   }
+  },
+  "SerenyaApiauthgooglePOSTApiPermissionSerenyaBackenddevSerenyaApiC0B2749BPOSTauthgoogle3D67A8D6": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AuthFunctionA1CD5E0F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:aws:execute-api:eu-west-1:",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SerenyaApi961F1E55"
+       },
+       "/",
+       {
+        "Ref": "SerenyaApiDeploymentStagedevC49EB2C2"
+       },
+       "/POST/auth/google"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/auth/google/POST/ApiPermission.SerenyaBackenddevSerenyaApiC0B2749B.POST..auth.google"
+   }
+  },
+  "SerenyaApiauthgooglePOSTApiPermissionTestSerenyaBackenddevSerenyaApiC0B2749BPOSTauthgoogleE5113C7D": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AuthFunctionA1CD5E0F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:aws:execute-api:eu-west-1:",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SerenyaApi961F1E55"
+       },
+       "/test-invoke-stage/POST/auth/google"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/auth/google/POST/ApiPermission.Test.SerenyaBackenddevSerenyaApiC0B2749B.POST..auth.google"
+   }
+  },
+  "SerenyaApiauthgooglePOST7615B967": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "NONE",
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:aws:apigateway:eu-west-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "AuthFunctionA1CD5E0F",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Origin": true
+      },
+      "StatusCode": "200"
+     },
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Origin": true
+      },
+      "StatusCode": "400"
+     },
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Origin": true
+      },
+      "StatusCode": "500"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "SerenyaApiauthgoogle2CDDBC50"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/auth/google/POST/Resource"
+   }
+  },
+  "SerenyaApiuserFF13A6AA": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Fn::GetAtt": [
+      "SerenyaApi961F1E55",
+      "RootResourceId"
+     ]
+    },
+    "PathPart": "user",
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/user/Resource"
+   }
+  },
+  "SerenyaApiuserOPTIONSF8FE17BC": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+        "method.response.header.Access-Control-Allow-Origin": "'http://localhost:*'",
+        "method.response.header.Vary": "'Origin'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Vary": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "SerenyaApiuserFF13A6AA"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/user/OPTIONS/Resource"
+   }
+  },
+  "SerenyaApiuserprofileCB053673": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SerenyaApiuserFF13A6AA"
+    },
+    "PathPart": "profile",
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/user/profile/Resource"
+   }
+  },
+  "SerenyaApiuserprofileOPTIONS74F7AA86": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+        "method.response.header.Access-Control-Allow-Origin": "'http://localhost:*'",
+        "method.response.header.Vary": "'Origin'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Vary": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "SerenyaApiuserprofileCB053673"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/user/profile/OPTIONS/Resource"
+   }
+  },
+  "SerenyaApiuserprofileGETApiPermissionSerenyaBackenddevSerenyaApiC0B2749BGETuserprofileD17F8AA3": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "UserProfileFunctionF5A2461B",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:aws:execute-api:eu-west-1:",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SerenyaApi961F1E55"
+       },
+       "/",
+       {
+        "Ref": "SerenyaApiDeploymentStagedevC49EB2C2"
+       },
+       "/GET/user/profile"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/user/profile/GET/ApiPermission.SerenyaBackenddevSerenyaApiC0B2749B.GET..user.profile"
+   }
+  },
+  "SerenyaApiuserprofileGETApiPermissionTestSerenyaBackenddevSerenyaApiC0B2749BGETuserprofile12B89797": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "UserProfileFunctionF5A2461B",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:aws:execute-api:eu-west-1:",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SerenyaApi961F1E55"
+       },
+       "/test-invoke-stage/GET/user/profile"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/user/profile/GET/ApiPermission.Test.SerenyaBackenddevSerenyaApiC0B2749B.GET..user.profile"
+   }
+  },
+  "SerenyaApiuserprofileGET3FBD1683": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "CUSTOM",
+    "AuthorizerId": {
+     "Ref": "JWTAuthorizerE8D8D90E"
+    },
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:aws:apigateway:eu-west-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "UserProfileFunctionF5A2461B",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "SerenyaApiuserprofileCB053673"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/user/profile/GET/Resource"
+   }
+  },
+  "SerenyaApiapi446775AA": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Fn::GetAtt": [
+      "SerenyaApi961F1E55",
+      "RootResourceId"
+     ]
+    },
+    "PathPart": "api",
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/Resource"
+   }
+  },
+  "SerenyaApiapiOPTIONSFB35DE81": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+        "method.response.header.Access-Control-Allow-Origin": "'http://localhost:*'",
+        "method.response.header.Vary": "'Origin'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Vary": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "SerenyaApiapi446775AA"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/OPTIONS/Resource"
+   }
+  },
+  "SerenyaApiapiv14ABB7B5A": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SerenyaApiapi446775AA"
+    },
+    "PathPart": "v1",
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/Resource"
+   }
+  },
+  "SerenyaApiapiv1OPTIONSD1E10A59": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+        "method.response.header.Access-Control-Allow-Origin": "'http://localhost:*'",
+        "method.response.header.Vary": "'Origin'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Vary": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "SerenyaApiapiv14ABB7B5A"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/OPTIONS/Resource"
+   }
+  },
+  "SerenyaApiapiv1process29862BC2": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SerenyaApiapiv14ABB7B5A"
+    },
+    "PathPart": "process",
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/Resource"
+   }
+  },
+  "SerenyaApiapiv1processOPTIONS1D179255": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+        "method.response.header.Access-Control-Allow-Origin": "'http://localhost:*'",
+        "method.response.header.Vary": "'Origin'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Vary": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "SerenyaApiapiv1process29862BC2"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/OPTIONS/Resource"
+   }
+  },
+  "SerenyaApiapiv1processuploadD4F3885C": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SerenyaApiapiv1process29862BC2"
+    },
+    "PathPart": "upload",
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/upload/Resource"
+   }
+  },
+  "SerenyaApiapiv1processuploadOPTIONSEE80B0CE": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+        "method.response.header.Access-Control-Allow-Origin": "'http://localhost:*'",
+        "method.response.header.Vary": "'Origin'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Vary": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "SerenyaApiapiv1processuploadD4F3885C"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/upload/OPTIONS/Resource"
+   }
+  },
+  "SerenyaApiapiv1processuploadPOSTApiPermissionSerenyaBackenddevSerenyaApiC0B2749BPOSTapiv1processupload6FB2AC3C": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "UploadFunction18838DD8",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:aws:execute-api:eu-west-1:",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SerenyaApi961F1E55"
+       },
+       "/",
+       {
+        "Ref": "SerenyaApiDeploymentStagedevC49EB2C2"
+       },
+       "/POST/api/v1/process/upload"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/upload/POST/ApiPermission.SerenyaBackenddevSerenyaApiC0B2749B.POST..api.v1.process.upload"
+   }
+  },
+  "SerenyaApiapiv1processuploadPOSTApiPermissionTestSerenyaBackenddevSerenyaApiC0B2749BPOSTapiv1processuploadDDB6212A": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "UploadFunction18838DD8",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:aws:execute-api:eu-west-1:",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SerenyaApi961F1E55"
+       },
+       "/test-invoke-stage/POST/api/v1/process/upload"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/upload/POST/ApiPermission.Test.SerenyaBackenddevSerenyaApiC0B2749B.POST..api.v1.process.upload"
+   }
+  },
+  "SerenyaApiapiv1processuploadPOST4E4A4315": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "CUSTOM",
+    "AuthorizerId": {
+     "Ref": "JWTAuthorizerE8D8D90E"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:aws:apigateway:eu-west-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "UploadFunction18838DD8",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "RequestParameters": {
+     "method.request.header.Content-Type": true
+    },
+    "ResourceId": {
+     "Ref": "SerenyaApiapiv1processuploadD4F3885C"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/upload/POST/Resource"
+   }
+  },
+  "SerenyaApiapiv1processstatus741E1B89": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SerenyaApiapiv1process29862BC2"
+    },
+    "PathPart": "status",
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/status/Resource"
+   }
+  },
+  "SerenyaApiapiv1processstatusOPTIONS05404032": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+        "method.response.header.Access-Control-Allow-Origin": "'http://localhost:*'",
+        "method.response.header.Vary": "'Origin'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Vary": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "SerenyaApiapiv1processstatus741E1B89"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/status/OPTIONS/Resource"
+   }
+  },
+  "SerenyaApiapiv1processstatusjobId56622832": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SerenyaApiapiv1processstatus741E1B89"
+    },
+    "PathPart": "{jobId}",
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/status/{jobId}/Resource"
+   }
+  },
+  "SerenyaApiapiv1processstatusjobIdOPTIONS3316DFD1": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+        "method.response.header.Access-Control-Allow-Origin": "'http://localhost:*'",
+        "method.response.header.Vary": "'Origin'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Vary": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "SerenyaApiapiv1processstatusjobId56622832"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/status/{jobId}/OPTIONS/Resource"
+   }
+  },
+  "SerenyaApiapiv1processstatusjobIdGETApiPermissionSerenyaBackenddevSerenyaApiC0B2749BGETapiv1processstatusjobIdF78FD46E": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "StatusFunction598A4497",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:aws:execute-api:eu-west-1:",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SerenyaApi961F1E55"
+       },
+       "/",
+       {
+        "Ref": "SerenyaApiDeploymentStagedevC49EB2C2"
+       },
+       "/GET/api/v1/process/status/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/status/{jobId}/GET/ApiPermission.SerenyaBackenddevSerenyaApiC0B2749B.GET..api.v1.process.status.{jobId}"
+   }
+  },
+  "SerenyaApiapiv1processstatusjobIdGETApiPermissionTestSerenyaBackenddevSerenyaApiC0B2749BGETapiv1processstatusjobIdBCDF8C70": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "StatusFunction598A4497",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:aws:execute-api:eu-west-1:",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SerenyaApi961F1E55"
+       },
+       "/test-invoke-stage/GET/api/v1/process/status/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/status/{jobId}/GET/ApiPermission.Test.SerenyaBackenddevSerenyaApiC0B2749B.GET..api.v1.process.status.{jobId}"
+   }
+  },
+  "SerenyaApiapiv1processstatusjobIdGET29689FC3": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "CUSTOM",
+    "AuthorizerId": {
+     "Ref": "JWTAuthorizerE8D8D90E"
+    },
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:aws:apigateway:eu-west-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "StatusFunction598A4497",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "RequestParameters": {
+     "method.request.path.jobId": true
+    },
+    "ResourceId": {
+     "Ref": "SerenyaApiapiv1processstatusjobId56622832"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/status/{jobId}/GET/Resource"
+   }
+  },
+  "SerenyaApiapiv1processresult295F2A1C": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SerenyaApiapiv1process29862BC2"
+    },
+    "PathPart": "result",
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/result/Resource"
+   }
+  },
+  "SerenyaApiapiv1processresultOPTIONS4BB0ED9F": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+        "method.response.header.Access-Control-Allow-Origin": "'http://localhost:*'",
+        "method.response.header.Vary": "'Origin'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Vary": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "SerenyaApiapiv1processresult295F2A1C"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/result/OPTIONS/Resource"
+   }
+  },
+  "SerenyaApiapiv1processresultjobId0A980F14": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SerenyaApiapiv1processresult295F2A1C"
+    },
+    "PathPart": "{jobId}",
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/result/{jobId}/Resource"
+   }
+  },
+  "SerenyaApiapiv1processresultjobIdOPTIONS94949444": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+        "method.response.header.Access-Control-Allow-Origin": "'http://localhost:*'",
+        "method.response.header.Vary": "'Origin'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Vary": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "SerenyaApiapiv1processresultjobId0A980F14"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/result/{jobId}/OPTIONS/Resource"
+   }
+  },
+  "SerenyaApiapiv1processresultjobIdGETApiPermissionSerenyaBackenddevSerenyaApiC0B2749BGETapiv1processresultjobId46E02565": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "ResultFunctionB52330A7",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:aws:execute-api:eu-west-1:",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SerenyaApi961F1E55"
+       },
+       "/",
+       {
+        "Ref": "SerenyaApiDeploymentStagedevC49EB2C2"
+       },
+       "/GET/api/v1/process/result/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/result/{jobId}/GET/ApiPermission.SerenyaBackenddevSerenyaApiC0B2749B.GET..api.v1.process.result.{jobId}"
+   }
+  },
+  "SerenyaApiapiv1processresultjobIdGETApiPermissionTestSerenyaBackenddevSerenyaApiC0B2749BGETapiv1processresultjobId47482300": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "ResultFunctionB52330A7",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:aws:execute-api:eu-west-1:",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SerenyaApi961F1E55"
+       },
+       "/test-invoke-stage/GET/api/v1/process/result/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/result/{jobId}/GET/ApiPermission.Test.SerenyaBackenddevSerenyaApiC0B2749B.GET..api.v1.process.result.{jobId}"
+   }
+  },
+  "SerenyaApiapiv1processresultjobIdGETFB4D756B": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "CUSTOM",
+    "AuthorizerId": {
+     "Ref": "JWTAuthorizerE8D8D90E"
+    },
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:aws:apigateway:eu-west-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "ResultFunctionB52330A7",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "RequestParameters": {
+     "method.request.path.jobId": true
+    },
+    "ResourceId": {
+     "Ref": "SerenyaApiapiv1processresultjobId0A980F14"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/result/{jobId}/GET/Resource"
+   }
+  },
+  "SerenyaApiapiv1processretryCD5D1F00": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SerenyaApiapiv1process29862BC2"
+    },
+    "PathPart": "retry",
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/retry/Resource"
+   }
+  },
+  "SerenyaApiapiv1processretryOPTIONS2BCD5A28": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+        "method.response.header.Access-Control-Allow-Origin": "'http://localhost:*'",
+        "method.response.header.Vary": "'Origin'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Vary": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "SerenyaApiapiv1processretryCD5D1F00"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/retry/OPTIONS/Resource"
+   }
+  },
+  "SerenyaApiapiv1processretryjobId4A76E717": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SerenyaApiapiv1processretryCD5D1F00"
+    },
+    "PathPart": "{jobId}",
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/retry/{jobId}/Resource"
+   }
+  },
+  "SerenyaApiapiv1processretryjobIdOPTIONS6FC39338": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+        "method.response.header.Access-Control-Allow-Origin": "'http://localhost:*'",
+        "method.response.header.Vary": "'Origin'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Vary": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "SerenyaApiapiv1processretryjobId4A76E717"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/retry/{jobId}/OPTIONS/Resource"
+   }
+  },
+  "SerenyaApiapiv1processretryjobIdPOSTApiPermissionSerenyaBackenddevSerenyaApiC0B2749BPOSTapiv1processretryjobIdD485901B": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "RetryFunction31519513",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:aws:execute-api:eu-west-1:",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SerenyaApi961F1E55"
+       },
+       "/",
+       {
+        "Ref": "SerenyaApiDeploymentStagedevC49EB2C2"
+       },
+       "/POST/api/v1/process/retry/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/retry/{jobId}/POST/ApiPermission.SerenyaBackenddevSerenyaApiC0B2749B.POST..api.v1.process.retry.{jobId}"
+   }
+  },
+  "SerenyaApiapiv1processretryjobIdPOSTApiPermissionTestSerenyaBackenddevSerenyaApiC0B2749BPOSTapiv1processretryjobId6B4A7A5C": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "RetryFunction31519513",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:aws:execute-api:eu-west-1:",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SerenyaApi961F1E55"
+       },
+       "/test-invoke-stage/POST/api/v1/process/retry/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/retry/{jobId}/POST/ApiPermission.Test.SerenyaBackenddevSerenyaApiC0B2749B.POST..api.v1.process.retry.{jobId}"
+   }
+  },
+  "SerenyaApiapiv1processretryjobIdPOST8FFA0E78": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "CUSTOM",
+    "AuthorizerId": {
+     "Ref": "JWTAuthorizerE8D8D90E"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:aws:apigateway:eu-west-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "RetryFunction31519513",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "RequestParameters": {
+     "method.request.path.jobId": true
+    },
+    "ResourceId": {
+     "Ref": "SerenyaApiapiv1processretryjobId4A76E717"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/retry/{jobId}/POST/Resource"
+   }
+  },
+  "SerenyaApiapiv1processdoctorreport764BEBC9": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SerenyaApiapiv1process29862BC2"
+    },
+    "PathPart": "doctor-report",
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/doctor-report/Resource"
+   }
+  },
+  "SerenyaApiapiv1processdoctorreportOPTIONS2BFFF0B0": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+        "method.response.header.Access-Control-Allow-Origin": "'http://localhost:*'",
+        "method.response.header.Vary": "'Origin'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Vary": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "SerenyaApiapiv1processdoctorreport764BEBC9"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/doctor-report/OPTIONS/Resource"
+   }
+  },
+  "SerenyaApiapiv1processdoctorreportPOSTApiPermissionSerenyaBackenddevSerenyaApiC0B2749BPOSTapiv1processdoctorreportA6F92A67": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "DoctorReportFunction156B2584",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:aws:execute-api:eu-west-1:",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SerenyaApi961F1E55"
+       },
+       "/",
+       {
+        "Ref": "SerenyaApiDeploymentStagedevC49EB2C2"
+       },
+       "/POST/api/v1/process/doctor-report"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/doctor-report/POST/ApiPermission.SerenyaBackenddevSerenyaApiC0B2749B.POST..api.v1.process.doctor-report"
+   }
+  },
+  "SerenyaApiapiv1processdoctorreportPOSTApiPermissionTestSerenyaBackenddevSerenyaApiC0B2749BPOSTapiv1processdoctorreport1D8B9074": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "DoctorReportFunction156B2584",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:aws:execute-api:eu-west-1:",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SerenyaApi961F1E55"
+       },
+       "/test-invoke-stage/POST/api/v1/process/doctor-report"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/doctor-report/POST/ApiPermission.Test.SerenyaBackenddevSerenyaApiC0B2749B.POST..api.v1.process.doctor-report"
+   }
+  },
+  "SerenyaApiapiv1processdoctorreportPOST398F6D27": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "CUSTOM",
+    "AuthorizerId": {
+     "Ref": "JWTAuthorizerE8D8D90E"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:aws:apigateway:eu-west-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "DoctorReportFunction156B2584",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "SerenyaApiapiv1processdoctorreport764BEBC9"
+    },
+    "RestApiId": {
+     "Ref": "SerenyaApi961F1E55"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/doctor-report/POST/Resource"
+   }
+  },
+  "ApiGatewayLogGroupA9770429": {
+   "Type": "AWS::Logs::LogGroup",
+   "Properties": {
+    "LogGroupName": "/aws/apigateway/serenya-dev",
+    "RetentionInDays": 30
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/ApiGatewayLogGroup/Resource"
+   }
+  },
+  "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleB6FB88EC": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/BucketNotificationsHandler050a0587b7544547bf325f094a3db834/Role/Resource"
+   }
+  },
+  "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleDefaultPolicy2CF63D36": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:PutBucketNotification",
+       "Effect": "Allow",
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleDefaultPolicy2CF63D36",
+    "Roles": [
+     {
+      "Ref": "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleB6FB88EC"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/BucketNotificationsHandler050a0587b7544547bf325f094a3db834/Role/DefaultPolicy/Resource"
+   }
+  },
+  "BucketNotificationsHandler050a0587b7544547bf325f094a3db8347ECC3691": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Description": "AWS CloudFormation handler for \"Custom::S3BucketNotifications\" resources (@aws-cdk/aws-s3)",
+    "Code": {
+     "ZipFile": "import boto3  # type: ignore\nimport json\nimport logging\nimport urllib.request\n\ns3 = boto3.client(\"s3\")\n\nEVENTBRIDGE_CONFIGURATION = 'EventBridgeConfiguration'\nCONFIGURATION_TYPES = [\"TopicConfigurations\", \"QueueConfigurations\", \"LambdaFunctionConfigurations\"]\n\ndef handler(event: dict, context):\n  response_status = \"SUCCESS\"\n  error_message = \"\"\n  try:\n    props = event[\"ResourceProperties\"]\n    notification_configuration = props[\"NotificationConfiguration\"]\n    managed = props.get('Managed', 'true').lower() == 'true'\n    skipDestinationValidation = props.get('SkipDestinationValidation', 'false').lower() == 'true'\n    stack_id = event['StackId']\n    old = event.get(\"OldResourceProperties\", {}).get(\"NotificationConfiguration\", {})\n    if managed:\n      config = handle_managed(event[\"RequestType\"], notification_configuration)\n    else:\n      config = handle_unmanaged(props[\"BucketName\"], stack_id, event[\"RequestType\"], notification_configuration, old)\n    s3.put_bucket_notification_configuration(Bucket=props[\"BucketName\"], NotificationConfiguration=config, SkipDestinationValidation=skipDestinationValidation)\n  except Exception as e:\n    logging.exception(\"Failed to put bucket notification configuration\")\n    response_status = \"FAILED\"\n    error_message = f\"Error: {str(e)}. \"\n  finally:\n    submit_response(event, context, response_status, error_message)\n\ndef handle_managed(request_type, notification_configuration):\n  if request_type == 'Delete':\n    return {}\n  return notification_configuration\n\ndef handle_unmanaged(bucket, stack_id, request_type, notification_configuration, old):\n  def get_id(n):\n    n['Id'] = ''\n    sorted_notifications = sort_filter_rules(n)\n    strToHash=json.dumps(sorted_notifications, sort_keys=True).replace('\"Name\": \"prefix\"', '\"Name\": \"Prefix\"').replace('\"Name\": \"suffix\"', '\"Name\": \"Suffix\"')\n    return f\"{stack_id}-{hash(strToHash)}\"\n  def with_id(n):\n    n['Id'] = get_id(n)\n    return n\n\n  external_notifications = {}\n  existing_notifications = s3.get_bucket_notification_configuration(Bucket=bucket)\n  for t in CONFIGURATION_TYPES:\n    if request_type == 'Update':\n        old_incoming_ids = [get_id(n) for n in old.get(t, [])]\n        external_notifications[t] = [n for n in existing_notifications.get(t, []) if not get_id(n) in old_incoming_ids]      \n    elif request_type == 'Delete':\n        external_notifications[t] = [n for n in existing_notifications.get(t, []) if not n['Id'].startswith(f\"{stack_id}-\")]\n    elif request_type == 'Create':\n        external_notifications[t] = [n for n in existing_notifications.get(t, [])]\n  if EVENTBRIDGE_CONFIGURATION in existing_notifications:\n    external_notifications[EVENTBRIDGE_CONFIGURATION] = existing_notifications[EVENTBRIDGE_CONFIGURATION]\n\n  if request_type == 'Delete':\n    return external_notifications\n\n  notifications = {}\n  for t in CONFIGURATION_TYPES:\n    external = external_notifications.get(t, [])\n    incoming = [with_id(n) for n in notification_configuration.get(t, [])]\n    notifications[t] = external + incoming\n\n  if EVENTBRIDGE_CONFIGURATION in notification_configuration:\n    notifications[EVENTBRIDGE_CONFIGURATION] = notification_configuration[EVENTBRIDGE_CONFIGURATION]\n  elif EVENTBRIDGE_CONFIGURATION in external_notifications:\n    notifications[EVENTBRIDGE_CONFIGURATION] = external_notifications[EVENTBRIDGE_CONFIGURATION]\n\n  return notifications\n\ndef submit_response(event: dict, context, response_status: str, error_message: str):\n  response_body = json.dumps(\n    {\n      \"Status\": response_status,\n      \"Reason\": f\"{error_message}See the details in CloudWatch Log Stream: {context.log_stream_name}\",\n      \"PhysicalResourceId\": event.get(\"PhysicalResourceId\") or event[\"LogicalResourceId\"],\n      \"StackId\": event[\"StackId\"],\n      \"RequestId\": event[\"RequestId\"],\n      \"LogicalResourceId\": event[\"LogicalResourceId\"],\n      \"NoEcho\": False,\n    }\n  ).encode(\"utf-8\")\n  headers = {\"content-type\": \"\", \"content-length\": str(len(response_body))}\n  try:\n    req = urllib.request.Request(url=event[\"ResponseURL\"], headers=headers, data=response_body, method=\"PUT\")\n    with urllib.request.urlopen(req) as response:\n      print(response.read().decode(\"utf-8\"))\n    print(\"Status code: \" + response.reason)\n  except Exception as e:\n      print(\"send(..) failed executing request.urlopen(..): \" + str(e))\n\ndef sort_filter_rules(json_obj):\n  if not isinstance(json_obj, dict):\n      return json_obj\n  for key, value in json_obj.items():\n      if isinstance(value, dict):\n          json_obj[key] = sort_filter_rules(value)\n      elif isinstance(value, list):\n          json_obj[key] = [sort_filter_rules(item) for item in value]\n  if \"Filter\" in json_obj and \"Key\" in json_obj[\"Filter\"] and \"FilterRules\" in json_obj[\"Filter\"][\"Key\"]:\n      filter_rules = json_obj[\"Filter\"][\"Key\"][\"FilterRules\"]\n      sorted_filter_rules = sorted(filter_rules, key=lambda x: x[\"Name\"])\n      json_obj[\"Filter\"][\"Key\"][\"FilterRules\"] = sorted_filter_rules\n  return json_obj"
+    },
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleB6FB88EC",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.11",
+    "Timeout": 300
+   },
+   "DependsOn": [
+    "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleDefaultPolicy2CF63D36",
+    "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleB6FB88EC"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/BucketNotificationsHandler050a0587b7544547bf325f094a3db834/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/22QQW/CMAyFfwv3kEG57ApM2wGmocIdhdSU0Cau4gTURfnvU1IQbNrJ3/NL/CwXvJjO+GQkrjSWVTNu1YGHrROyYeJK+9Bo4mEFPVsezQr6yAikBUdaGFGD5WGbdbIHioxmPCy8bIbujYaywVbJ/tG+6UEsBEFkrdCHSvCwPJoNWK2IFBr27o10CZZHc+fIqt4IjdWBh504tJDMDJEpoXkocejl+ogeKO25F0TgiM9TYS3WxMMa6xIcmJy2xvrDou/StztHJjpVCwdX0fOwwwbM3LsTWvUNNj18UiWQm3cqL/HAuZTojWNv0LXYazD5UE9q60SdNx+gBEJvJaQDsU9wJ6ySeaO7ewvJHCNbenKo/zP/WBuLF1WBzdPzJVKqMvWvyV/edd5FZrACfqaXS1Hw6SufjM6k1Nh645QGXg71Byn6hb5VAgAA"
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "SerenyaApiEndpoint7B880D7A": {
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      "https://",
+      {
+       "Ref": "SerenyaApi961F1E55"
+      },
+      ".execute-api.eu-west-1.",
+      {
+       "Ref": "AWS::URLSuffix"
+      },
+      "/",
+      {
+       "Ref": "SerenyaApiDeploymentStagedevC49EB2C2"
+      },
+      "/"
+     ]
+    ]
+   }
+  },
+  "ApiUrl": {
+   "Description": "Serenya API Gateway URL",
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      "https://",
+      {
+       "Ref": "SerenyaApi961F1E55"
+      },
+      ".execute-api.eu-west-1.",
+      {
+       "Ref": "AWS::URLSuffix"
+      },
+      "/",
+      {
+       "Ref": "SerenyaApiDeploymentStagedevC49EB2C2"
+      },
+      "/"
+     ]
+    ]
+   },
+   "Export": {
+    "Name": "serenya-api-url-dev"
+   }
+  },
+  "ApiId": {
+   "Description": "Serenya API Gateway ID",
+   "Value": {
+    "Ref": "SerenyaApi961F1E55"
+   },
+   "Export": {
+    "Name": "serenya-api-id-dev"
+   }
+  },
+  "TempBucketName": {
+   "Description": "Temporary files S3 bucket name",
+   "Value": {
+    "Ref": "TempFilesBucketC6626CD1"
+   },
+   "Export": {
+    "Name": "serenya-temp-bucket-dev"
+   }
+  },
+  "KmsKeyId": {
+   "Description": "KMS encryption key ID",
+   "Value": {
+    "Ref": "SerenyaEncryptionKey30AB90B6"
+   },
+   "Export": {
+    "Name": "serenya-kms-key-dev"
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

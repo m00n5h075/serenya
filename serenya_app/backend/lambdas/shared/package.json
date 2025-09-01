@@ -1,0 +1,11 @@
+{
+  "name": "serenya-shared-utils",
+  "version": "1.0.0",
+  "description": "Shared utilities for Serenya Lambda functions",
+  "main": "utils.js",
+  "dependencies": {
+    "aws-sdk": "^2.1481.0",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^9.0.1"
+  }
+}

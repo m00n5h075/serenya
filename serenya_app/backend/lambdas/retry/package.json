@@ -1,0 +1,9 @@
+{
+  "name": "serenya-retry-lambda",
+  "version": "1.0.0",
+  "description": "Processing retry management with exponential backoff",
+  "main": "retry.js",
+  "dependencies": {
+    "aws-sdk": "^2.1481.0"
+  }
+}
