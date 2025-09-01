@@ -1,204 +1,154 @@
-# Agent Workflow Protocol
+# Agent Workflow Protocol - Serenya Implementation
 
-**Purpose**: Establish clear, systematic workflow for AI agent task execution and handoffs in the Serenya project.
+**Purpose**: Streamlined workflow for sequential AI agent task execution in Serenya's healthcare platform development.
 
-**Scope**: All AI agents working on Linear tasks must follow this protocol for consistent, verifiable work.
+**Scope**: Optimized for single-implementer using specialized agents with clear handoff requirements.
+
+**Principle**: Thorough documentation exists in task descriptions - agents focus on **essential handoff information** only.
 
 ---
 
-## 🔄 **Core Workflow Phases**
+## 🔄 **Streamlined Workflow**
 
-### **Phase 1: Task Pickup & Validation**
-**MANDATORY**: Every agent must validate predecessor's work before starting
+### **Phase 1: Task Pickup** (2-3 minutes)
 
-1. **Read Linear Task Context**
-   - Review full task description and acceptance criteria
-   - Check **Agent Context** section for prerequisites
-   - Review any existing **Handoff Notes** from previous agents
+1. **Linear Task Review**
+   - Read task description and acceptance criteria
+   - Check dependencies and handoff notes from previous agent
 
-2. **Validate Prerequisites** 
-   - **REQUIRED**: Verify all prerequisite tasks are genuinely complete
-   - Use objective, measurable validation criteria
-   - Document validation results in Linear task comments
-   - **If validation fails**: Update task status to `blocked` and escalate
-
-3. **Environment Assessment**
-   - Verify current system state matches expected state
-   - Check file locations, configurations, database schema
-   - Confirm access to required resources and tools
-
-### **Phase 2: Active Work Execution**
-
-1. **Initialize Task Status**
-   - Update Linear task status to `agent_active`
-   - Use TodoWrite to document current task and planned approach
-   - Commit to systematic progress tracking
-
-2. **Progressive Documentation**
-   - Update TodoWrite at key decision points (not just completion)
-   - Document architectural/design choices and rationale
-   - Note alternative approaches considered and why they were rejected
-   - Preserve partial work with clear commit messages
-
-3. **Decision Point Protocol**
-   - For major decisions: Document in Linear task comments
-   - Include reasoning, alternatives considered, and impact assessment
-   - When uncertain: Document the uncertainty and chosen approach
-
-### **Phase 3: Task Completion & Handoff**
-
-1. **Completion Verification**
-   - Verify all acceptance criteria are met with measurable evidence
-   - Run tests, checks, or validations as specified
-   - Document verification results with timestamps
-
-2. **Handoff Documentation** 
-   - Complete **Agent Completion Report** in Linear task
-   - Update TodoWrite with completion status
-   - Commit all code/documentation changes with clear messages
+2. **Quick Validation** (Only if critical dependency)
+   - **AWS → Flutter handoffs**: Verify APIs accessible
+   - **Database changes**: Confirm schema updates applied
+   - **Authentication**: Test login flow working
+   - **Skip validation** for foundational tasks (1-4) - just start building
 
 3. **Status Update**
-   - Change Linear task status to `agent_complete`
-   - Ensure next agent has all context needed to proceed
+   - Change Linear task status to `In Progress`
 
----
+### **Phase 2: Implementation** (Focus on building)
 
-## 📊 **Task Status Definitions**
+1. **Build According to Spec**
+   - Follow task description and acceptance criteria
+   - Use TodoWrite for progress tracking only if complex
+   - Code/implement as specified
 
-| Status | Description | Next Action |
-|--------|-------------|-------------|
-| `agent_ready` | Task ready for agent pickup | Agent can start Phase 1 |
-| `agent_active` | Currently being worked on | Continue execution |
-| `agent_blocked` | Stuck, needs escalation | Human intervention required |
-| `agent_complete` | Ready for next agent | Next agent starts validation |
-| `task_complete` | Fully finished | No further action needed |
+2. **Document Only Deviations**
+   - **IF** you deviate from original spec: Document why in Linear comments
+   - **IF** you discover missing requirements: Note them for next agent
+   - **OTHERWISE**: Just build what's specified
 
----
+3. **Commit Frequently**
+   - Clear commit messages describing what was implemented
+   - Working increments that next agent can pick up
 
-## ✅ **Validation Requirements Between Handoffs**
+### **Phase 3: Handoff** (5 minutes max)
 
-### **MANDATORY VALIDATION CHECKLIST**
+1. **Verify Acceptance Criteria**
+   - Check each acceptance criterion is met
+   - Test that implementation works as specified
 
-Before starting any task, the receiving agent MUST verify:
-
-#### **Technical Validation**
-- [ ] All files mentioned in predecessor's completion report exist
-- [ ] Code compiles/runs without errors  
-- [ ] Database changes are applied and functional
-- [ ] Tests pass (if applicable)
-- [ ] Configuration changes are active
-
-#### **Functional Validation**
-- [ ] Acceptance criteria from prerequisite tasks are demonstrably met
-- [ ] Features work as described in specifications
-- [ ] Integration points function correctly
-- [ ] Performance meets stated requirements
-
-#### **Documentation Validation**
-- [ ] All promised documentation exists and is accurate
-- [ ] Code comments match implementation
-- [ ] Configuration is documented
-- [ ] Known limitations are clearly stated
-
-### **Validation Documentation Format**
-
-```markdown
-## Prerequisite Validation Report
-**Validating Agent**: [Agent Type]
-**Validation Date**: [ISO Date]
-**Predecessor Task(s)**: [Task IDs]
-
-### Technical Checks
-- ✅ File X exists at path Y
-- ✅ Database schema includes tables A, B, C
-- ✅ Service responds at endpoint Z
-
-### Functional Checks  
-- ✅ Feature X works as specified
-- ✅ Integration with Y system functional
-- ⚠️ Performance slower than expected (documented)
-
-### Issues Found
-- [None / List specific issues]
-
-### Overall Status
-- ✅ VALIDATED - Ready to proceed
-- ❌ BLOCKED - Issues must be resolved first
-```
-
----
-
-## 🚨 **Blocking & Escalation Protocol**
-
-### **When Agent Gets Stuck (After 3 Attempts)**
-
-1. **Document the Block**
+2. **Essential Handoff Info** (Linear comment)
    ```markdown
-   ## BLOCKING ISSUE
-   **Issue**: [Specific problem description]
-   **Attempted Solutions**: 
-   1. [Solution 1] - [Result]
-   2. [Solution 2] - [Result] 
-   3. [Solution 3] - [Result]
-   
-   **Research Done**: [Resources consulted]
-   **Decision Needed**: [Specific question for human]
-   **Work Preserved**: [What was completed/committed]
+   ## Handoff to Next Agent
+   **Completed**: [What was built]
+   **Location**: [Key files/endpoints created] 
+   **Next Agent Needs**: [Specific info for next task]
+   **Issues/Notes**: [Any deviations or discoveries]
    ```
 
-2. **Update Task Status**
-   - Change Linear status to `agent_blocked`
-   - Add blocking issue documentation to task comments
-   - Preserve all partial work with clear commit messages
-
-3. **Escalation Action**
-   - Tag task with `needs-human-input` label
-   - Use TodoWrite to document current status
-   - Stop work and await human resolution
-
-### **When Validation Fails**
-
-1. **Document Validation Failure**
-   - Specific criteria that failed
-   - Evidence of the failure
-   - Impact on current task
-
-2. **Escalate to Previous Agent's Work**
-   - Update predecessor task status to `validation_failed`
-   - Document specific issues found
-   - Do not proceed with current task until resolved
+3. **Status Update**
+   - Change Linear task status to `Done`
+   - Next agent can start immediately
 
 ---
 
-## 📝 **Agent Handoff Checklist**
+## 📊 **Linear Task Status Flow**
 
-### **Before Starting Any Task**
-- [ ] Validate all prerequisite work is complete
-- [ ] Document validation results in Linear
-- [ ] Update task status to `agent_active`
-- [ ] Initialize TodoWrite with task and approach
-
-### **During Task Execution**
-- [ ] Update TodoWrite at key decision points
-- [ ] Document major decisions in Linear comments
-- [ ] Commit partial progress with clear messages
-- [ ] Follow established coding/documentation standards
-
-### **Before Completing Task**
-- [ ] Verify all acceptance criteria met
-- [ ] Complete Agent Completion Report
-- [ ] Update TodoWrite with completion status
-- [ ] Change task status to `agent_complete`
+| Status | When to Use | Next Step |
+|--------|-------------|----------|
+| `Backlog` | Task waiting to be started | Ready for agent pickup |
+| `In Progress` | Agent actively working | Implementation in progress |
+| `Blocked` | Stuck, need help | Human intervention required |
+| `Done` | Task completed with handoff | Next agent can start |
 
 ---
 
-## 🎯 **Success Metrics**
+## ✅ **Critical Handoff Validation** 
 
-**Effective workflow demonstrated by:**
-- Zero tasks requiring rework due to incomplete handoffs
-- Clear audit trail of decisions and progress
-- Smooth transitions between different agent types
-- Measurable validation of all prerequisite work
-- Consistent documentation standards across agents
+**Only validate when crossing domains** (AWS → Flutter, Flutter → AWS)
 
-This protocol ensures systematic, verifiable progress while maintaining the flexibility needed for complex AI-driven development.
+### **Quick Validation Checklist**
+
+**AWS Cloud Engineer → Flutter Developer**:
+- [ ] API endpoints respond (test with curl/Postman)
+- [ ] Database tables exist and are accessible
+- [ ] Authentication flow returns valid tokens
+
+**Flutter Developer → AWS Cloud Engineer**:
+- [ ] Mobile app builds and runs
+- [ ] Local database encryption working
+- [ ] Biometric authentication functional
+
+**Same Agent Consecutive Tasks**: Skip validation, just start building
+
+### **If Validation Fails**
+- Update task status to `Blocked`
+- Add comment: "Validation failed: [specific issue]"
+- Don't proceed until resolved
+
+---
+
+## 🚨 **When Things Go Wrong**
+
+### **Stuck After 3 Attempts**
+
+**Simple Escalation**:
+1. **Linear Comment**:
+   ```markdown
+   ## BLOCKED - Need Help
+   **Problem**: [What you're trying to do]
+   **Tried**: [3 things you attempted]
+   **Need**: [Specific question or decision]
+   ```
+
+2. **Update Status**: Change to `Blocked`
+3. **Preserve Work**: Commit what you have with clear message
+
+### **Can't Validate Previous Work**
+
+1. **Add Linear Comment**: "Can't validate: [specific issue]"
+2. **Set Status**: `Blocked` 
+3. **Wait**: Don't proceed until resolved
+
+---
+
+## 📝 **Quick Reference: Agent Workflow**
+
+### **Starting a Task** (2 minutes)
+- [ ] Read Linear task description
+- [ ] Check handoff notes from previous agent
+- [ ] Quick validation **only if** cross-domain handoff (AWS ↔ Flutter)
+- [ ] Update status to `In Progress`
+
+### **During Implementation**
+- [ ] Build according to acceptance criteria
+- [ ] Commit working increments
+- [ ] Document **only deviations** from spec
+
+### **Completing Task** (5 minutes)
+- [ ] Verify acceptance criteria met
+- [ ] Test implementation works
+- [ ] Add handoff comment with essential info for next agent
+- [ ] Update status to `Done`
+
+---
+
+## 🎯 **Success = Speed + Clarity**
+
+**Fast handoffs with essential information only**
+- Tasks completed according to detailed specs
+- Clear Linear comments for next agent
+- Working code/infrastructure ready for next phase
+- Minimal documentation overhead
+
+**Focus**: Build healthcare platform efficiently with clear agent communication.

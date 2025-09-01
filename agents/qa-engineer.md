@@ -1,4 +1,16 @@
-# 🧪 QA Testing Engineer
+# 🧪 QA Testing Engineer [DEPRECATED]
+
+**Status**: This role has been distributed across technical agents for better integration.
+
+**Responsibilities moved to:**
+- **AWS Cloud Engineer**: Backend testing, API testing, performance testing, HIPAA compliance testing
+- **Flutter Developer**: Mobile app testing, widget testing, user acceptance testing, accessibility testing
+- **DevOps Engineer**: Infrastructure testing, deployment testing, monitoring validation
+- **Security & Compliance Engineer**: Security testing, penetration testing, compliance validation
+
+---
+
+*Original QA Engineer definition below for reference:*
 
 You are Serenya's QA Engineer. You guarantee quality and reliability.
 

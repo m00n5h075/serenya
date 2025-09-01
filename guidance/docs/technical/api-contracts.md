@@ -19,17 +19,22 @@
 ### **Design Philosophy**
 - **RESTful Design**: Standard HTTP methods and status codes
 - **Security First**: Every endpoint requires authentication and audit logging
-- **Performance Optimized**: Single round-trip workflows, minimal data over wire
-- **Error Transparency**: Clear, actionable error messages for mobile client
-- **Privacy Compliant**: No sensitive data in URLs, comprehensive request logging
+- **Medical Data Protection**: Application-layer encryption for all medical content in transit
+- **Performance Optimized**: Single round-trip workflows, selective encryption for optimal speed
+- **Error Transparency**: Clear, actionable error messages for mobile client (no crypto details exposed)
+- **Privacy Compliant**: No sensitive data in URLs, encrypted medical data, comprehensive audit logging
+- **Graceful Degradation**: Fallback to standard TLS when application-layer encryption fails
 
 ### **Core Technical Stack**
 - **Runtime**: AWS Lambda with Node.js 18.x
 - **Database**: PostgreSQL with connection pooling
-- **Authentication**: JWT tokens with Google OAuth integration
-- **Encryption**: AWS KMS for server-side field encryption
+- **Authentication**: JWT tokens with Google OAuth integration + biometric key material exchange
+- **Encryption**: 
+  - **Server-side**: AWS KMS for field encryption
+  - **Client-server**: AES-256-GCM application-layer encryption for medical data
+  - **Key Management**: HKDF-derived table keys with biometric protection
 - **Rate Limiting**: AWS API Gateway throttling (100 requests/minute per user)
-- **Monitoring**: CloudWatch with custom metrics and alerts
+- **Monitoring**: CloudWatch with custom metrics and alerts + encryption performance tracking
 
 ### **API Base Configuration**
 ```
@@ -62,6 +67,11 @@ Timeout: 30 seconds per request
     "platform": "ios|android",
     "device_id": "string", // Unique device identifier
     "app_version": "string"
+  },
+  "encryption_context": {
+    "encrypted_key_material": "string", // User's derived key material, encrypted with server's public key
+    "key_derivation_version": "v1", // Version for future updates
+    "supported_tables": ["serenya_content", "chat_messages"] // Tables that support encryption
   }
 }
 ```
@@ -84,6 +94,11 @@ Timeout: 30 seconds per request
       "session_id": "uuid",
       "expires_at": "iso8601",
       "biometric_required": "boolean"
+    },
+    "encryption_support": {
+      "supported_algorithms": ["AES-256-GCM"],
+      "supported_tables": ["serenya_content", "chat_messages"],
+      "server_encryption_version": "v1"
     }
   },
   "audit_logged": true
@@ -168,7 +183,37 @@ Timeout: 30 seconds per request
 **Processing Time**: 30 seconds - 3 minutes  
 **Database Operations**: INSERT into serenya_content, lab_results, vitals tables
 
-#### **Request**
+#### **Request (Encrypted Format - Recommended)**
+```json
+{
+  "encrypted_payload": "string", // Base64 encrypted JSON of original document data
+  "encryption_metadata": {
+    "version": "v1", // Encryption version for future updates
+    "algorithm": "AES-256-GCM", // Encryption algorithm used
+    "table_key_id": "serenya_content", // Which table key was used
+    "checksum": "string" // SHA-256 of original payload for integrity
+  },
+  // Unencrypted metadata for server routing/validation
+  "file_type": "image/jpeg|image/png|application/pdf",
+  "file_size_bytes": "number",
+  "document_type": "lab_results|imaging|prescription|other"
+}
+```
+
+#### **Original Payload (Encrypted within encrypted_payload)**
+```json
+{
+  "file": "base64_encoded_document", // Max 10MB
+  "file_name": "string",
+  "upload_context": {
+    "user_notes": "string", // Optional user description
+    "document_date": "iso8601", // When document was created
+    "provider_name": "string" // Optional healthcare provider
+  }
+}
+```
+
+#### **Request (Fallback Unencrypted Format)**
 ```json
 {
   "file": "base64_encoded_document", // Max 10MB
@@ -253,55 +298,71 @@ Timeout: 30 seconds per request
 }
 ```
 
-#### **Response - Complete (200)**
+#### **Response - Complete (200) - Encrypted Format**
 ```json
 {
   "success": true,
-  "data": {
+  "encrypted_data": "string", // Base64 encrypted JSON of sensitive medical results
+  "encryption_metadata": {
+    "version": "v1",
+    "algorithm": "AES-256-GCM",
+    "table_key_id": "serenya_content",
+    "checksum": "string"
+  },
+  // Unencrypted metadata
+  "metadata": {
     "job_id": "uuid",
     "status": "completed",
-    "results": {
-      "content_id": "uuid",
-      "analysis": {
-        "summary": "string", // AI-generated summary
-        "key_findings": ["string"], // Important findings array
-        "medical_data_extracted": "boolean",
-        "confidence_score": "number", // 0.0-1.0
-        "flags": {
-          "critical_values": "boolean",
-          "incomplete_data": "boolean", 
-          "processing_errors": "boolean"
-        }
-      },
-      "structured_data": {
-        "lab_results": [
-          {
-            "test_name": "string",
-            "value": "number",
-            "unit": "string", 
-            "reference_range": "string",
-            "status": "normal|abnormal|critical"
-          }
-        ],
-        "vitals": [
-          {
-            "vital_type": "blood_pressure|heart_rate|temperature|weight|height",
-            "value": "string",
-            "unit": "string",
-            "measurement_date": "iso8601"
-          }
-        ]
-      },
-      "chat_prompts": [
-        {
-          "id": "uuid",
-          "question": "string",
-          "category": "clarification|explanation|next_steps"
-        }
-      ]
-    }
+    "content_id": "uuid",
+    "timestamp": "iso8601",
+    "response_size_bytes": "number"
   },
   "audit_logged": true
+}
+```
+
+#### **Encrypted Data Content (Within encrypted_data field)**
+```json
+{
+  "results": {
+    "analysis": {
+      "summary": "string", // AI-generated summary
+      "key_findings": ["string"], // Important findings array
+      "medical_data_extracted": "boolean",
+      "confidence_score": "number", // 0.0-1.0
+      "flags": {
+        "critical_values": "boolean",
+        "incomplete_data": "boolean", 
+        "processing_errors": "boolean"
+      }
+    },
+    "structured_data": {
+      "lab_results": [
+        {
+          "test_name": "string",
+          "value": "number",
+          "unit": "string", 
+          "reference_range": "string",
+          "status": "normal|abnormal|critical"
+        }
+      ],
+      "vitals": [
+        {
+          "vital_type": "blood_pressure|heart_rate|temperature|weight|height",
+          "value": "string",
+          "unit": "string",
+          "measurement_date": "iso8601"
+        }
+      ]
+    },
+    "chat_prompts": [
+      {
+        "id": "uuid",
+        "question": "string",
+        "category": "clarification|explanation|next_steps"
+      }
+    ]
+  }
 }
 ```
 
@@ -354,31 +415,45 @@ Timeout: 30 seconds per request
 }
 ```
 
-#### **Response Success (200)**
+#### **Response Success (200) - Encrypted Format**
 ```json
 {
   "success": true,
-  "data": {
+  "encrypted_data": "string", // Base64 encrypted JSON of AI response and medical content
+  "encryption_metadata": {
+    "version": "v1",
+    "algorithm": "AES-256-GCM",
+    "table_key_id": "chat_messages",
+    "checksum": "string"
+  },
+  // Unencrypted metadata
+  "metadata": {
     "message_id": "uuid",
-    "response": {
-      "content": "string", // AI response in markdown format
-      "confidence_score": "number",
-      "sources_referenced": ["lab_results", "previous_conversation"],
-      "medical_disclaimers": "boolean" // If medical advice disclaimer needed
-    },
-    "conversation": {
-      "message_count": "number",
-      "conversation_id": "uuid"
-    },
-    "suggested_follow_ups": [
-      {
-        "id": "uuid",
-        "question": "string",
-        "category": "explanation|next_steps|comparison"
-      }
-    ]
+    "conversation_id": "uuid",
+    "message_count": "number",
+    "timestamp": "iso8601",
+    "response_size_bytes": "number"
   },
   "audit_logged": true
+}
+```
+
+#### **Encrypted Data Content (Within encrypted_data field)**
+```json
+{
+  "response": {
+    "content": "string", // AI response in markdown format (ENCRYPTED - contains medical advice)
+    "confidence_score": "number",
+    "sources_referenced": ["lab_results", "previous_conversation"],
+    "medical_disclaimers": "boolean" // If medical advice disclaimer needed
+  },
+  "suggested_follow_ups": [
+    {
+      "id": "uuid",
+      "question": "string",
+      "category": "explanation|next_steps|comparison"
+    }
+  ]
 }
 ```
 
@@ -417,28 +492,43 @@ Timeout: 30 seconds per request
 **User Flow**: Returning to previous conversations  
 **Database Operations**: SELECT from chat_messages with decryption
 
-#### **Response Success (200)**
+#### **Response Success (200) - Encrypted Format**
 ```json
 {
   "success": true,
-  "data": {
+  "encrypted_data": "string", // Base64 encrypted JSON of conversation messages
+  "encryption_metadata": {
+    "version": "v1",
+    "algorithm": "AES-256-GCM",
+    "table_key_id": "chat_messages",
+    "checksum": "string"
+  },
+  // Unencrypted metadata
+  "metadata": {
     "content_id": "uuid",
     "conversation_id": "uuid",
-    "messages": [
-      {
-        "id": "uuid",
-        "message_type": "question|response",
-        "content": "string",
-        "timestamp": "iso8601",
-        "metadata": {
-          "confidence_score": "number", // For AI responses
-          "processing_time_ms": "number"
-        }
-      }
-    ],
     "message_count": "number",
-    "last_activity": "iso8601"
+    "last_activity": "iso8601",
+    "response_size_bytes": "number"
   }
+}
+```
+
+#### **Encrypted Data Content (Within encrypted_data field)**
+```json
+{
+  "messages": [
+    {
+      "id": "uuid",
+      "message_type": "question|response",
+      "content": "string", // ENCRYPTED - User questions and AI medical responses
+      "timestamp": "iso8601",
+      "metadata": {
+        "confidence_score": "number", // For AI responses
+        "processing_time_ms": "number"
+      }
+    }
+  ]
 }
 ```
 
@@ -582,45 +672,62 @@ Timeout: 30 seconds per request
 &include_premium=boolean
 ```
 
-#### **Response Success (200)**
+#### **Response Success (200) - Encrypted Format**
 ```json
 {
   "success": true,
-  "data": {
-    "timeline_items": [
-      {
-        "id": "uuid",
-        "content_type": "lab_results|vitals|general",
-        "title": "string", // AI-generated title
-        "summary": "string", // Brief description
-        "analysis_date": "iso8601",
-        "document_date": "iso8601",
-        "confidence_score": "number",
-        "has_conversations": "boolean",
-        "conversation_count": "number",
-        "premium_content": "boolean",
-        "key_metrics": {
-          "lab_results_count": "number",
-          "vitals_count": "number", 
-          "critical_flags": "number"
-        },
-        "preview": {
-          "key_findings": ["string"], // First 2-3 findings
-          "data_points": "number"
-        }
-      }
-    ],
+  "encrypted_data": "string", // Base64 encrypted JSON of timeline items with medical content
+  "encryption_metadata": {
+    "version": "v1",
+    "algorithm": "AES-256-GCM",
+    "table_key_id": "serenya_content",
+    "checksum": "string"
+  },
+  // Unencrypted metadata
+  "metadata": {
+    "total_items": "number",
     "pagination": {
       "total_count": "number",
       "current_page": "number",
       "has_next_page": "boolean",
       "next_offset": "number"
     },
-    "summary_stats": {
-      "total_documents": "number",
-      "this_month": "number",
-      "premium_content_available": "number"
+    "timestamp": "iso8601",
+    "response_size_bytes": "number"
+  }
+}
+```
+
+#### **Encrypted Data Content (Within encrypted_data field)**
+```json
+{
+  "timeline_items": [
+    {
+      "id": "uuid",
+      "content_type": "lab_results|vitals|general",
+      "title": "string", // AI-generated title (ENCRYPTED - contains medical summary)
+      "summary": "string", // Brief description (ENCRYPTED - medical content)
+      "analysis_date": "iso8601",
+      "document_date": "iso8601",
+      "confidence_score": "number",
+      "has_conversations": "boolean",
+      "conversation_count": "number",
+      "premium_content": "boolean",
+      "key_metrics": {
+        "lab_results_count": "number",
+        "vitals_count": "number", 
+        "critical_flags": "number"
+      },
+      "preview": {
+        "key_findings": ["string"], // First 2-3 findings (ENCRYPTED - medical findings)
+        "data_points": "number"
+      }
     }
+  ],
+  "summary_stats": {
+    "total_documents": "number",
+    "this_month": "number",
+    "premium_content_available": "number"
   }
 }
 ```
@@ -645,67 +752,81 @@ Timeout: 30 seconds per request
 **User Flow**: Viewing analysis results (**→ user-flows.md** Flow 1A, Step 5)  
 **Database Operations**: SELECT with field decryption for sensitive medical data
 
-#### **Response Success (200)**
+#### **Response Success (200) - Encrypted Format**
 ```json
 {
   "success": true,
-  "data": {
+  "encrypted_data": "string", // Base64 encrypted JSON of complete medical analysis
+  "encryption_metadata": {
+    "version": "v1",
+    "algorithm": "AES-256-GCM",
+    "table_key_id": "serenya_content",
+    "checksum": "string"
+  },
+  // Unencrypted metadata
+  "metadata": {
     "content_id": "uuid",
-    "metadata": {
-      "title": "string",
-      "analysis_date": "iso8601",
-      "document_date": "iso8601", 
-      "document_type": "lab_results|vitals|general",
-      "confidence_score": "number",
-      "processing_time_seconds": "number"
-    },
-    "analysis": {
-      "summary": "string", // Full AI analysis in markdown
-      "key_findings": ["string"],
-      "recommendations": ["string"],
-      "medical_disclaimers": "string",
-      "flags": {
-        "critical_values": "boolean",
-        "follow_up_recommended": "boolean",
-        "incomplete_data": "boolean"
-      }
-    },
-    "structured_data": {
-      "lab_results": [
-        {
-          "id": "uuid",
-          "test_name": "string",
-          "value": "number",
-          "unit": "string",
-          "reference_range": "string", 
-          "status": "normal|abnormal|critical",
-          "trend": "improving|stable|declining|unknown",
-          "previous_value": "number", // If available
-          "change_percentage": "number"
-        }
-      ],
-      "vitals": [
-        {
-          "id": "uuid",
-          "vital_type": "blood_pressure|heart_rate|temperature|weight|height",
-          "value": "string",
-          "unit": "string",
-          "status": "normal|abnormal|critical",
-          "measurement_date": "iso8601"
-        }
-      ]
-    },
-    "premium_content": {
-      "available": "boolean",
-      "professional_report": "string", // Premium users only
-      "trend_analysis": "object", // Premium users only 
-      "doctor_conversation_prep": "object" // Premium users only
-    },
-    "conversation_summary": {
-      "has_conversations": "boolean",
-      "message_count": "number",
-      "last_activity": "iso8601"
+    "analysis_date": "iso8601",
+    "document_date": "iso8601",
+    "document_type": "lab_results|vitals|general",
+    "has_conversations": "boolean",
+    "message_count": "number",
+    "timestamp": "iso8601",
+    "response_size_bytes": "number"
+  }
+}
+```
+
+#### **Encrypted Data Content (Within encrypted_data field)**
+```json
+{
+  "analysis": {
+    "title": "string", // ENCRYPTED - Medical document title
+    "summary": "string", // ENCRYPTED - Full AI analysis in markdown
+    "key_findings": ["string"], // ENCRYPTED - Medical findings
+    "recommendations": ["string"], // ENCRYPTED - Medical recommendations
+    "medical_disclaimers": "string",
+    "confidence_score": "number",
+    "processing_time_seconds": "number",
+    "flags": {
+      "critical_values": "boolean",
+      "follow_up_recommended": "boolean",
+      "incomplete_data": "boolean"
     }
+  },
+  "structured_data": {
+    "lab_results": [
+      {
+        "id": "uuid",
+        "test_name": "string", // ENCRYPTED - Lab test names
+        "value": "number", // ENCRYPTED - Medical values
+        "unit": "string",
+        "reference_range": "string", 
+        "status": "normal|abnormal|critical",
+        "trend": "improving|stable|declining|unknown",
+        "previous_value": "number",
+        "change_percentage": "number"
+      }
+    ],
+    "vitals": [
+      {
+        "id": "uuid",
+        "vital_type": "blood_pressure|heart_rate|temperature|weight|height",
+        "value": "string", // ENCRYPTED - Vital sign values
+        "unit": "string",
+        "status": "normal|abnormal|critical",
+        "measurement_date": "iso8601"
+      }
+    ]
+  },
+  "premium_content": {
+    "available": "boolean",
+    "professional_report": "string", // ENCRYPTED - Premium medical reports
+    "trend_analysis": "object", // ENCRYPTED - Premium trend data
+    "doctor_conversation_prep": "object" // ENCRYPTED - Premium consultation prep
+  },
+  "conversation_summary": {
+    "last_activity": "iso8601"
   }
 }
 ```
@@ -772,19 +893,40 @@ SUBSCRIPTION_EXPIRED = "Premium subscription has expired"
 DATABASE_ERROR = "Database operation failed"
 EXTERNAL_SERVICE_ERROR = "External service integration failed"
 INTERNAL_SERVER_ERROR = "Internal server error occurred"
+
+// Encryption & Security Errors (New)
+KEY_DERIVATION_FAILED = "Unable to derive encryption keys for user"
+ENCRYPTION_FAILED = "Data encryption failed during processing"
+DECRYPTION_FAILED = "Unable to decrypt request payload"
+DATA_INTEGRITY_ERROR = "Data integrity verification failed - possible tampering"
+ENCRYPTION_SYSTEM_ERROR = "Encryption system temporarily unavailable"
+INVALID_ENCRYPTION_METADATA = "Encryption metadata format invalid"
+UNSUPPORTED_ENCRYPTION_VERSION = "Encryption version not supported"
+CORRUPTED_ENCRYPTED_PAYLOAD = "Encrypted payload appears corrupted"
+ENCRYPTED_PAYLOAD_TOO_LARGE = "Encrypted payload exceeds size limit after encryption"
+KEY_MATERIAL_NOT_FOUND = "User encryption key material not available"
+BIOMETRIC_REQUIRED_FOR_KEYS = "Biometric authentication required to access encryption keys"
+ENCRYPTION_FALLBACK_USED = "Operation completed with reduced security (unencrypted fallback)"
 ```
 
 ---
 
 ## 📈 **Performance & Monitoring**
 
-### **API Performance Targets**
-- **Authentication**: < 200ms average response time
-- **File Upload**: < 2 seconds for 5MB file
-- **Document Processing**: < 3 minutes end-to-end
-- **Chat Response**: < 15 seconds average
-- **Timeline Loading**: < 500ms for 50 items
-- **Content Details**: < 300ms with encryption overhead
+### **API Performance Targets (With Application-Layer Encryption)**
+- **Authentication**: < 200ms average response time (+ key material exchange)
+- **File Upload (Encrypted)**: < 3 seconds for 5MB file (includes encryption overhead)
+- **File Upload (Fallback)**: < 2 seconds for 5MB file (unencrypted fallback)
+- **Document Processing**: < 3 minutes end-to-end (encryption/decryption included)
+- **Chat Response (Encrypted)**: < 17 seconds average (includes encryption of response)
+- **Timeline Loading (Encrypted)**: < 600ms for 50 items (includes decryption)
+- **Content Details (Encrypted)**: < 400ms (includes field-level decryption)
+
+### **Encryption Performance Considerations**
+- **Payload Size Increase**: 15-20% increase due to encryption metadata and padding
+- **Processing Overhead**: 50-100ms additional latency for encrypt/decrypt operations
+- **Memory Usage**: Additional memory for key caching and crypto operations
+- **Fallback Thresholds**: Switch to unencrypted mode if encryption adds >2x latency
 
 ### **Rate Limiting Configuration**
 ```typescript

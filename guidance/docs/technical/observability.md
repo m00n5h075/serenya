@@ -51,7 +51,7 @@ CREATE TABLE metrics_snapshots (
     metadata JSONB -- Additional context (plan_type, error_code, etc.)
 );
 
--- API performance tracking
+-- API performance tracking (ENHANCED with encryption support)
 CREATE TABLE api_performance_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     endpoint VARCHAR(255) NOT NULL,
@@ -61,6 +61,12 @@ CREATE TABLE api_performance_logs (
     user_id UUID REFERENCES users(id),
     request_size_bytes INTEGER,
     response_size_bytes INTEGER,
+    -- NEW: Encryption tracking fields
+    is_encrypted BOOLEAN DEFAULT FALSE, -- Whether request/response used encryption
+    encryption_overhead_ms INTEGER, -- Additional latency from encryption
+    encryption_success BOOLEAN, -- Whether encryption operations succeeded
+    fallback_used BOOLEAN DEFAULT FALSE, -- Whether unencrypted fallback was used
+    encryption_version VARCHAR(10), -- 'v1' for application-layer encryption
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     error_details TEXT
 );
@@ -101,6 +107,55 @@ CREATE TABLE ai_processing_metrics (
     recorded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Encryption performance metrics (NEW)
+CREATE TABLE encryption_performance_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    operation_type VARCHAR(50) NOT NULL, -- 'encrypt_request', 'decrypt_response', 'key_derivation', 'biometric_auth'
+    table_key_id VARCHAR(50) NOT NULL, -- 'serenya_content', 'chat_messages', 'device_root'
+    operation_time_ms INTEGER NOT NULL,
+    payload_size_bytes INTEGER,
+    encrypted_size_bytes INTEGER, -- NULL for decryption operations
+    size_overhead_percent NUMERIC(5,2), -- Calculated encryption overhead
+    success BOOLEAN NOT NULL,
+    error_type VARCHAR(100), -- 'key_derivation_failed', 'aes_encryption_failed', 'biometric_auth_failed'
+    user_id_hash VARCHAR(64), -- sha256(user_id) for privacy
+    endpoint VARCHAR(255), -- API endpoint for context
+    encryption_algorithm VARCHAR(50) DEFAULT 'AES-256-GCM',
+    key_derivation_version VARCHAR(10) DEFAULT 'v1',
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Security audit metrics (NEW)
+CREATE TABLE security_metrics (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_type VARCHAR(50) NOT NULL, -- 'biometric_auth', 'key_access', 'tampering_detected', 'fallback_used'
+    security_level VARCHAR(20) NOT NULL, -- 'high', 'medium', 'low', 'fallback'
+    success BOOLEAN NOT NULL,
+    threat_level VARCHAR(20) DEFAULT 'low', -- 'low', 'medium', 'high', 'critical'
+    threat_detected BOOLEAN DEFAULT false,
+    user_id_hash VARCHAR(64), -- sha256(user_id) for privacy
+    device_info JSONB, -- Platform, version, biometric type
+    recovery_action VARCHAR(100), -- 'retry_auth', 'fallback_used', 'request_blocked'
+    endpoint VARCHAR(255),
+    session_id VARCHAR(100),
+    consecutive_failures INTEGER DEFAULT 0,
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Network encryption audit (NEW)
+CREATE TABLE network_encryption_audit (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    request_id VARCHAR(100) NOT NULL, -- Unique request identifier
+    user_id_hash VARCHAR(64), -- sha256(user_id) for privacy
+    endpoint VARCHAR(255) NOT NULL,
+    encryption_used BOOLEAN NOT NULL, -- Whether encryption was applied
+    encryption_success BOOLEAN, -- NULL if no encryption attempted
+    fallback_reason VARCHAR(100), -- Why fallback was used (if any)
+    data_classification VARCHAR(50), -- 'medical_data', 'metadata', 'authentication'
+    payload_hash VARCHAR(64), -- sha256 of payload for integrity tracking
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Hourly/daily aggregates for dashboard performance
 CREATE TABLE metrics_aggregates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -112,6 +167,8 @@ CREATE TABLE metrics_aggregates (
     min_value NUMERIC(10,2),
     max_value NUMERIC(10,2),
     unique_users INTEGER,
+    success_rate NUMERIC(5,2), -- For encryption success rates
+    security_incidents INTEGER DEFAULT 0, -- Count of security events
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ```
@@ -147,32 +204,64 @@ CREATE INDEX idx_metrics_aggregates_lookup ON metrics_aggregates(metric_name, bu
 CREATE INDEX idx_users_plan_created ON users(subscription_plan, created_at);
 CREATE INDEX idx_diagnostic_reports_user_date ON diagnostic_reports(user_id, report_date DESC);
 CREATE INDEX idx_ai_processing_time ON ai_processing_metrics(recorded_at DESC, success);
+
+-- NEW: Encryption performance indexes
+CREATE INDEX idx_encryption_performance_operation_time ON encryption_performance_logs(operation_type, timestamp DESC);
+CREATE INDEX idx_encryption_performance_success ON encryption_performance_logs(success, timestamp DESC);
+CREATE INDEX idx_security_metrics_event_time ON security_metrics(event_type, timestamp DESC);
+CREATE INDEX idx_security_metrics_threat ON security_metrics(threat_detected, threat_level, timestamp DESC);
+CREATE INDEX idx_network_encryption_endpoint ON network_encryption_audit(endpoint, encryption_used, timestamp DESC);
+CREATE INDEX idx_api_performance_encryption ON api_performance_logs(is_encrypted, timestamp DESC);
+CREATE INDEX idx_api_performance_fallback ON api_performance_logs(fallback_used, timestamp DESC);
 ```
 
 ---
 
 ## 💻 Data Collection Implementation
 
-### **Express Middleware for API Metrics**
+### **Enhanced Express Middleware for API Metrics (with Encryption Tracking)**
 ```javascript
 // middleware/metrics-collector.js
 const collectAPIMetrics = (req, res, next) => {
   const startTime = Date.now();
   const originalSend = res.send;
   
+  // Track encryption context
+  const isEncryptedRequest = req.headers['x-serenya-encryption'] === 'v1' || req.body?.encrypted_payload;
+  const encryptionVersion = req.headers['x-serenya-encryption'] || null;
+  let encryptionOverhead = 0;
+  let encryptionSuccess = null;
+  let fallbackUsed = false;
+  
+  // Hook into encryption timing if available
+  if (req.encryptionMetrics) {
+    encryptionOverhead = req.encryptionMetrics.totalOverheadMs || 0;
+    encryptionSuccess = req.encryptionMetrics.success;
+    fallbackUsed = req.encryptionMetrics.fallbackUsed || false;
+  }
+  
   res.send = function(data) {
     const responseTime = Date.now() - startTime;
     const requestSize = req.get('content-length') || 0;
     const responseSize = Buffer.byteLength(data || '', 'utf8');
     
+    // Check if response is encrypted
+    const isEncryptedResponse = res.get('X-Serenya-Encryption-Status') === 'encrypted' ||
+                                (typeof data === 'string' && data.includes('encrypted_data'));
+    
+    const isEncrypted = isEncryptedRequest || isEncryptedResponse;
+    
     // Async insert to avoid blocking response
     setImmediate(() => {
       db.query(`
         INSERT INTO api_performance_logs 
-        (endpoint, method, response_time_ms, status_code, user_id, request_size_bytes, response_size_bytes)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        (endpoint, method, response_time_ms, status_code, user_id, request_size_bytes, 
+         response_size_bytes, is_encrypted, encryption_overhead_ms, encryption_success, 
+         fallback_used, encryption_version)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       `, [req.route?.path || req.path, req.method, responseTime, res.statusCode, 
-          req.user?.id, requestSize, responseSize]);
+          req.user?.id, requestSize, responseSize, isEncrypted, encryptionOverhead,
+          encryptionSuccess, fallbackUsed, encryptionVersion]);
     });
     
     originalSend.call(this, data);
@@ -249,6 +338,186 @@ class MetricsService {
     `, [metricName, value, JSON.stringify(metadata)]);
   }
 }
+```
+
+### **Encryption Metrics Service (NEW)**
+```javascript
+// services/encryption-metrics-service.js
+class EncryptionMetricsService {
+  // Record encryption performance for client-server operations
+  static async recordEncryptionOperation(
+    operationType, 
+    tableKeyId, 
+    operationTimeMs, 
+    payloadSize, 
+    encryptedSize, 
+    success, 
+    errorType = null,
+    userIdHash = null,
+    endpoint = null
+  ) {
+    const sizeOverheadPercent = payloadSize && encryptedSize ? 
+      ((encryptedSize - payloadSize) / payloadSize * 100).toFixed(2) : null;
+    
+    await db.query(`
+      INSERT INTO encryption_performance_logs 
+      (operation_type, table_key_id, operation_time_ms, payload_size_bytes, 
+       encrypted_size_bytes, size_overhead_percent, success, error_type, 
+       user_id_hash, endpoint)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `, [operationType, tableKeyId, operationTimeMs, payloadSize, encryptedSize,
+        sizeOverheadPercent, success, errorType, userIdHash, endpoint]);
+    
+    // Update hourly aggregates
+    await this.updateEncryptionAggregates(operationType, success, operationTimeMs);
+  }
+  
+  // Record security events
+  static async recordSecurityEvent(
+    eventType, 
+    securityLevel, 
+    success, 
+    threatLevel = 'low',
+    threatDetected = false,
+    userIdHash = null,
+    deviceInfo = null,
+    recoveryAction = null,
+    endpoint = null
+  ) {
+    await db.query(`
+      INSERT INTO security_metrics 
+      (event_type, security_level, success, threat_level, threat_detected, 
+       user_id_hash, device_info, recovery_action, endpoint)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [eventType, securityLevel, success, threatLevel, threatDetected,
+        userIdHash, deviceInfo ? JSON.stringify(deviceInfo) : null, 
+        recoveryAction, endpoint]);
+        
+    // Alert on high-threat events
+    if (threatLevel === 'high' || threatLevel === 'critical') {
+      await this.triggerSecurityAlert(eventType, threatLevel, userIdHash);
+    }
+  }
+  
+  // Track biometric authentication performance
+  static async recordBiometricAuth(
+    success, 
+    authMethod, 
+    responseTimeMs, 
+    userIdHash, 
+    deviceInfo,
+    consecutiveFailures = 0
+  ) {
+    const securityLevel = consecutiveFailures > 3 ? 'low' : 'high';
+    const threatLevel = consecutiveFailures > 5 ? 'medium' : 'low';
+    
+    await Promise.all([
+      this.recordSecurityEvent(
+        'biometric_auth', 
+        securityLevel, 
+        success, 
+        threatLevel,
+        consecutiveFailures > 5, // Threat detected if too many failures
+        userIdHash, 
+        deviceInfo, 
+        success ? 'authenticated' : 'auth_retry',
+        '/auth/biometric'
+      ),
+      
+      this.recordEncryptionOperation(
+        'biometric_auth',
+        'device_root',
+        responseTimeMs,
+        null, // No payload size for auth
+        null,
+        success,
+        success ? null : 'biometric_auth_failed',
+        userIdHash,
+        '/auth/biometric'
+      )
+    ]);
+  }
+  
+  // Track key derivation performance
+  static async recordKeyDerivation(
+    tableKeyId, 
+    derivationTimeMs, 
+    success, 
+    userIdHash,
+    errorType = null
+  ) {
+    await this.recordEncryptionOperation(
+      'key_derivation',
+      tableKeyId,
+      derivationTimeMs,
+      null, // No payload for key derivation
+      null,
+      success,
+      errorType,
+      userIdHash
+    );
+  }
+  
+  // Track encryption fallback usage
+  static async recordEncryptionFallback(
+    endpoint, 
+    reason, 
+    userIdHash,
+    originalError
+  ) {
+    await Promise.all([
+      this.recordSecurityEvent(
+        'fallback_used',
+        'fallback', // Reduced security level
+        true, // Fallback succeeded
+        'medium', // Medium threat level for reduced security
+        false,
+        userIdHash,
+        { fallback_reason: reason, original_error: originalError },
+        'fallback_to_tls',
+        endpoint
+      ),
+      
+      // Record business metric for fallback usage
+      db.query(`
+        INSERT INTO business_events (event_type, event_details)
+        VALUES ('encryption_fallback_used', $1)
+      `, [JSON.stringify({ 
+        endpoint, 
+        reason, 
+        user_id_hash: userIdHash,
+        timestamp: new Date().toISOString() 
+      })])
+    ]);
+  }
+  
+  // Helper: Update encryption aggregates
+  static async updateEncryptionAggregates(operationType, success, operationTimeMs) {
+    const currentHour = new Date();
+    currentHour.setMinutes(0, 0, 0);
+    
+    await db.query(`
+      INSERT INTO metrics_aggregates 
+      (metric_name, time_bucket, bucket_type, total_count, average_value, success_rate)
+      VALUES ($1, $2, 'hour', 1, $3, $4)
+      ON CONFLICT (metric_name, time_bucket, bucket_type) 
+      DO UPDATE SET 
+        total_count = metrics_aggregates.total_count + 1,
+        average_value = (metrics_aggregates.average_value * metrics_aggregates.total_count + $3) / 
+                       (metrics_aggregates.total_count + 1),
+        success_rate = (metrics_aggregates.success_rate * metrics_aggregates.total_count + 
+                       (CASE WHEN $4 THEN 100 ELSE 0 END)) / (metrics_aggregates.total_count + 1)
+    `, [`encryption_${operationType}`, currentHour, operationTimeMs, success]);
+  }
+  
+  // Helper: Trigger security alerts
+  static async triggerSecurityAlert(eventType, threatLevel, userIdHash) {
+    console.warn(`SECURITY ALERT: ${eventType} - Threat Level: ${threatLevel} - User: ${userIdHash}`);
+    // TODO: Integrate with alerting system (Sentry, email, Slack, etc.)
+  }
+}
+
+module.exports = EncryptionMetricsService;
 ```
 
 ### **Database Performance Wrapper**
@@ -505,7 +774,7 @@ LIMIT 20;
 
 ## 📊 Dashboard Architecture
 
-### **Executive Dashboard (Business Metrics)**
+### **Executive Dashboard (Enhanced Business Metrics)**
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ SERENYA BUSINESS DASHBOARD                              │
@@ -514,15 +783,17 @@ LIMIT 20;
 │ • Files Uploaded: 47          • Reports Generated: 23   │
 │ • AI Analyses: 45             • New Users: 8            │
 │ • Premium Users: 127 (18%)    • Success Rate: 94.5%     │
+│ • Encrypted Uploads: 37 (79%) • Security Level: HIGH    │
 ├─────────────────────────────────────────────────────────┤
-│ [7-Day Trend Chart: Files & Reports]                   │
+│ [7-Day Trend Chart: Files & Reports + Encryption Usage] │
 │ [30-Day User Growth Chart]                              │
 │ [AI Confidence Score Distribution]                      │
-│ [Cost per Analysis Trend]                               │
+│ [Cost per Analysis Trend + Security Overhead]          │
+│ [Encryption Adoption Rate]                              │
 └─────────────────────────────────────────────────────────┘
 ```
 
-### **Technical Dashboard (Engineering Metrics)**
+### **Technical Dashboard (Enhanced Engineering Metrics)**
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ SERENYA TECHNICAL DASHBOARD                             │
@@ -530,6 +801,7 @@ LIMIT 20;
 │ API Performance (24h):                                 │
 │ • Avg Response Time: 245ms    • P95: 890ms             │
 │ • Error Rate: 2.1%            • Total Requests: 1,247  │
+│ • Encrypted Requests: 978     • Encryption Overhead: +67ms │
 ├─────────────────────────────────────────────────────────┤
 │ Database Performance:                                   │
 │ • Slow Queries (>100ms): 12  • Avg Query Time: 45ms    │
@@ -538,6 +810,61 @@ LIMIT 20;
 │ AI Processing:                                          │
 │ • Avg Processing Time: 34s    • Queue Depth: 3         │
 │ • Success Rate: 97.2%         • Daily Capacity: 89%    │
+└─────────────────────────────────────────────────────────┘
+```
+
+### **Security & Encryption Dashboard (NEW)**
+```
+┌─────────────────────────────────────────────────────────┐
+│ SERENYA SECURITY & ENCRYPTION DASHBOARD                │
+├─────────────────────────────────────────────────────────┤
+│ Encryption Performance (24h):                          │
+│ • Encrypted API Calls: 1,247 (78% of total)           │
+│ • Avg Encryption Overhead: +67ms (Target: <100ms)     │
+│ • Encryption Success Rate: 99.2% (Target: >99%)       │
+│ • Fallback Usage: 0.8% (10 requests)                  │
+├─────────────────────────────────────────────────────────┤
+│ Security Events & Authentication:                       │
+│ • Biometric Auth Success: 98.5% (Target: >95%)        │
+│ • Key Derivation Failures: 3 (Target: <10/day)       │
+│ • Potential Tampering: 0 detected                     │
+│ • Security Fallbacks: 2 instances                     │
+├─────────────────────────────────────────────────────────┤
+│ Medical Data Protection:                                │
+│ • Medical Content Encrypted: 100% (HIPAA Compliant)   │
+│ • Avg Payload Size Increase: +18% (encryption overhead) │
+│ • Data Integrity Checks: 1,247 passed, 0 failed      │
+│ • Audit Events Logged: 2,456 (all security actions)  │
+├─────────────────────────────────────────────────────────┤
+│ [24h Encryption Performance Trend]                     │
+│ [Security Event Timeline]                              │
+│ [Biometric Auth Failure Patterns]                     │
+│ [Encryption vs Standard Performance Comparison]        │
+└─────────────────────────────────────────────────────────┘
+```
+
+### **Executive Security Summary (NEW)**
+```
+┌─────────────────────────────────────────────────────────┐
+│ SERENYA SECURITY EXECUTIVE SUMMARY                     │
+├─────────────────────────────────────────────────────────┤
+│ Security Posture: EXCELLENT ✅                         │
+│ • Medical Data Protection: 100% Encrypted             │
+│ • HIPAA Compliance: FULL                               │
+│ • Security Incidents: 0 critical, 0 high, 2 medium   │
+│ • User Trust Score: 98.5% (biometric auth success)    │
+├─────────────────────────────────────────────────────────┤
+│ Performance Impact:                                     │
+│ • Encryption Overhead: +67ms avg (within target)      │
+│ • User Experience: No degradation detected            │
+│ • System Reliability: 99.9% uptime maintained         │
+│ • Cost Impact: +€15/month (monitoring + overhead)     │
+├─────────────────────────────────────────────────────────┤
+│ Key Metrics (Last 30 Days):                           │
+│ • Total Encrypted Operations: 47,856                   │
+│ • Security Events Handled: 127                        │
+│ • Fallback Usage Rate: 0.3% (acceptable)             │
+│ • Zero Data Breaches: ✅                              │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -590,23 +917,24 @@ LIMIT 20;
 Grafana Cloud (Starter):        €50/month
 Sentry (Team plan):            €26/month  
 AWS CloudWatch (free tier):     €0/month
-Custom metrics storage:        ~€5/month (database)
-Additional infrastructure:     ~€20/month (5-10% overhead)
+Custom metrics storage:        ~€10/month (database + encryption metrics)
+Additional infrastructure:     ~€25/month (5-10% overhead + encryption monitoring)
 ────────────────────────────────────────
-Total Monthly Cost:            €101/month
+Total Monthly Cost:            €111/month
 ```
 
 ### **Infrastructure Impact**
-- **Database storage**: +~500MB/month for metrics tables
-- **CPU overhead**: ~5% additional load for metrics collection
-- **Memory usage**: +~100MB for metrics service caching
-- **Network usage**: Negligible additional bandwidth
+- **Database storage**: +~750MB/month for metrics tables (including encryption performance logs)
+- **CPU overhead**: ~8% additional load for metrics collection and encryption monitoring
+- **Memory usage**: +~150MB for metrics service caching and encryption tracking
+- **Network usage**: +~5% bandwidth for encrypted metrics transmission
 
 ### **ROI Analysis**
-- **Cost percentage**: €101/month = 1.7% of total infrastructure budget
-- **Business value**: Complete visibility into user behavior and system performance
-- **Decision support**: Data-driven insights for product development
-- **Risk mitigation**: Early detection of technical and business issues
+- **Cost percentage**: €111/month = 1.9% of total infrastructure budget
+- **Business value**: Complete visibility into user behavior, system performance, and security posture
+- **Decision support**: Data-driven insights for product development and security optimization
+- **Risk mitigation**: Early detection of technical, business, and security issues
+- **Compliance value**: HIPAA audit trail and encryption performance validation
 
 ---
 
@@ -640,6 +968,208 @@ Total Monthly Cost:            €101/month
 - **Decision impact**: 3+ product decisions per month informed by metrics
 - **Problem detection**: Technical issues detected before user reports
 - **Trend identification**: Weekly business insights delivered to leadership
+
+---
+
+## 🔍 Encryption Monitoring Queries & Examples
+
+### **Performance Analysis Queries**
+
+```sql
+-- Encryption operation performance by type
+SELECT 
+    operation_type,
+    table_key_id,
+    AVG(operation_time_ms) as avg_time_ms,
+    PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY operation_time_ms) as p95_time_ms,
+    COUNT(*) as operation_count,
+    (COUNT(*) FILTER (WHERE success = false))::float / COUNT(*) * 100 as failure_rate_pct
+FROM encryption_performance_logs 
+WHERE timestamp >= NOW() - INTERVAL '24 hours'
+GROUP BY operation_type, table_key_id
+ORDER BY avg_time_ms DESC;
+
+-- Daily encryption overhead impact
+SELECT 
+    DATE_TRUNC('day', timestamp) as date,
+    COUNT(*) as total_operations,
+    AVG(operation_time_ms) as avg_encryption_time_ms,
+    SUM(payload_size_bytes) / 1024 / 1024 as total_data_mb,
+    AVG(encrypted_size_bytes::float / payload_size_bytes) as avg_size_overhead_ratio
+FROM encryption_performance_logs 
+WHERE timestamp >= NOW() - INTERVAL '30 days'
+    AND payload_size_bytes > 0 
+    AND encrypted_size_bytes > 0
+GROUP BY DATE_TRUNC('day', timestamp)
+ORDER BY date DESC;
+
+-- Encryption failures by error type
+SELECT 
+    error_type,
+    endpoint,
+    COUNT(*) as failure_count,
+    COUNT(*) * 100.0 / SUM(COUNT(*)) OVER () as failure_percentage
+FROM encryption_performance_logs 
+WHERE success = false 
+    AND timestamp >= NOW() - INTERVAL '7 days'
+GROUP BY error_type, endpoint
+ORDER BY failure_count DESC;
+```
+
+### **Security Analysis Queries**
+
+```sql
+-- Suspicious encryption patterns (potential tampering)
+SELECT 
+    user_id_hash,
+    endpoint,
+    operation_type,
+    COUNT(*) as attempt_count,
+    COUNT(*) FILTER (WHERE success = false) as failure_count,
+    ARRAY_AGG(DISTINCT error_type) FILTER (WHERE error_type IS NOT NULL) as error_types
+FROM encryption_performance_logs 
+WHERE timestamp >= NOW() - INTERVAL '1 hour'
+GROUP BY user_id_hash, endpoint, operation_type
+HAVING COUNT(*) FILTER (WHERE success = false) > 5  -- Multiple failures indicate issues
+ORDER BY failure_count DESC;
+
+-- Key derivation performance monitoring
+SELECT 
+    table_key_id,
+    DATE_TRUNC('hour', timestamp) as hour,
+    COUNT(*) as derivation_count,
+    AVG(operation_time_ms) as avg_derivation_time_ms,
+    MAX(operation_time_ms) as max_derivation_time_ms
+FROM encryption_performance_logs 
+WHERE operation_type = 'key_derivation'
+    AND timestamp >= NOW() - INTERVAL '24 hours'
+GROUP BY table_key_id, DATE_TRUNC('hour', timestamp)
+ORDER BY hour DESC, avg_derivation_time_ms DESC;
+
+-- Biometric authentication success rates
+SELECT 
+    DATE_TRUNC('day', timestamp) as date,
+    COUNT(*) as total_auth_attempts,
+    COUNT(*) FILTER (WHERE success = true) as successful_attempts,
+    COUNT(*) FILTER (WHERE success = true) * 100.0 / COUNT(*) as success_rate_pct,
+    ARRAY_AGG(DISTINCT error_type) FILTER (WHERE error_type IS NOT NULL) as error_patterns
+FROM encryption_performance_logs 
+WHERE operation_type = 'biometric_auth'
+    AND timestamp >= NOW() - INTERVAL '30 days'
+GROUP BY DATE_TRUNC('day', timestamp)
+ORDER BY date DESC;
+```
+
+### **Business Impact Queries**
+
+```sql
+-- API response time correlation with encryption
+SELECT 
+    apl.endpoint,
+    apl.method,
+    COUNT(*) as total_requests,
+    AVG(apl.response_time_ms) as avg_response_time_ms,
+    AVG(CASE WHEN apl.has_encryption = true 
+             THEN apl.response_time_ms END) as avg_encrypted_response_ms,
+    AVG(CASE WHEN apl.has_encryption = false 
+             THEN apl.response_time_ms END) as avg_unencrypted_response_ms,
+    AVG(epl.operation_time_ms) as avg_encryption_overhead_ms
+FROM api_performance_logs apl
+LEFT JOIN encryption_performance_logs epl 
+    ON apl.request_id = epl.user_id_hash  -- Simplified join example
+    AND apl.timestamp BETWEEN epl.timestamp - INTERVAL '1 second' 
+                          AND epl.timestamp + INTERVAL '1 second'
+WHERE apl.timestamp >= NOW() - INTERVAL '24 hours'
+GROUP BY apl.endpoint, apl.method
+HAVING COUNT(*) > 100  -- Only endpoints with significant traffic
+ORDER BY avg_encrypted_response_ms DESC;
+
+-- User experience impact of encryption
+SELECT 
+    DATE_TRUNC('hour', apl.timestamp) as hour,
+    COUNT(*) as total_requests,
+    AVG(apl.response_time_ms) as avg_response_time,
+    PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY apl.response_time_ms) as p95_response_time,
+    COUNT(*) FILTER (WHERE apl.response_time_ms > 2000) as slow_requests_count,
+    COUNT(*) FILTER (WHERE apl.has_encryption = true) as encrypted_requests
+FROM api_performance_logs apl
+WHERE apl.timestamp >= NOW() - INTERVAL '48 hours'
+GROUP BY DATE_TRUNC('hour', apl.timestamp)
+ORDER BY hour DESC;
+```
+
+### **Alerting Query Examples**
+
+```sql
+-- Critical: High encryption failure rate (>5% in last 10 minutes)
+SELECT 
+    operation_type,
+    COUNT(*) as total_operations,
+    COUNT(*) FILTER (WHERE success = false) as failures,
+    COUNT(*) FILTER (WHERE success = false) * 100.0 / COUNT(*) as failure_rate_pct
+FROM encryption_performance_logs 
+WHERE timestamp >= NOW() - INTERVAL '10 minutes'
+GROUP BY operation_type
+HAVING COUNT(*) FILTER (WHERE success = false) * 100.0 / COUNT(*) > 5;
+
+-- Warning: Encryption operations taking too long (>100ms average)
+SELECT 
+    table_key_id,
+    operation_type,
+    COUNT(*) as operation_count,
+    AVG(operation_time_ms) as avg_time_ms,
+    MAX(operation_time_ms) as max_time_ms
+FROM encryption_performance_logs 
+WHERE timestamp >= NOW() - INTERVAL '15 minutes'
+GROUP BY table_key_id, operation_type
+HAVING AVG(operation_time_ms) > 100
+ORDER BY avg_time_ms DESC;
+
+-- Critical: Potential security breach (multiple failed auth attempts)
+SELECT 
+    user_id_hash,
+    COUNT(*) as failed_attempts,
+    ARRAY_AGG(DISTINCT endpoint) as affected_endpoints,
+    MIN(timestamp) as first_failure,
+    MAX(timestamp) as last_failure
+FROM encryption_performance_logs 
+WHERE operation_type = 'biometric_auth'
+    AND success = false
+    AND timestamp >= NOW() - INTERVAL '5 minutes'
+GROUP BY user_id_hash
+HAVING COUNT(*) >= 3
+ORDER BY failed_attempts DESC;
+```
+
+### **Dashboard Query Examples**
+
+```sql
+-- Executive Summary: Daily encryption health
+SELECT 
+    'Today' as period,
+    COUNT(DISTINCT user_id_hash) as active_users,
+    COUNT(*) as total_crypto_operations,
+    COUNT(*) FILTER (WHERE success = true) * 100.0 / COUNT(*) as success_rate_pct,
+    AVG(operation_time_ms) as avg_performance_ms,
+    SUM(payload_size_bytes) / 1024 / 1024 as data_processed_mb
+FROM encryption_performance_logs 
+WHERE timestamp >= CURRENT_DATE;
+
+-- Technical Dashboard: Performance breakdown
+SELECT 
+    operation_type,
+    table_key_id,
+    COUNT(*) as operations,
+    AVG(operation_time_ms) as avg_ms,
+    PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY operation_time_ms) as median_ms,
+    PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY operation_time_ms) as p95_ms,
+    MAX(operation_time_ms) as max_ms,
+    COUNT(*) FILTER (WHERE success = false) as failures
+FROM encryption_performance_logs 
+WHERE timestamp >= NOW() - INTERVAL '1 hour'
+GROUP BY operation_type, table_key_id
+ORDER BY avg_ms DESC;
+```
 
 ---
 

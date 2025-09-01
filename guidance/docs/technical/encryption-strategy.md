@@ -797,6 +797,625 @@ class ServerSideEncryption {
 
 ---
 
+## 🌐 **Client-Server Communication Encryption (Application-Layer)**
+
+### **Network Encryption Strategy**
+
+**Agent Handoff Context**: Network encryption integrates with **→ api-contracts.md** endpoint specifications and **→ mobile-architecture.md** HTTP client implementation.
+
+**Design Philosophy**: 
+- **Selective Encryption**: Only medical data encrypted, metadata remains clear for routing
+- **Performance Optimized**: Targeted encryption to minimize latency impact
+- **Backwards Compatible**: Fallback to TLS-only when application-layer encryption fails
+- **User-Centric**: Leverage existing biometric authentication and table keys
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              CLIENT-SERVER ENCRYPTION FLOW                 │
+├─────────────────────────────────────────────────────────────┤
+│  📱 CLIENT (Flutter)         🔄 NETWORK          🖥️ SERVER   │
+│                                                             │
+│  🔒 ENCRYPT MEDICAL DATA                                   │
+│  ├── Document uploads        ─────🔐───→                   │
+│  ├── Uses serenya_content key                              │
+│  └── AES-256-GCM + metadata                                │
+│                                                             │
+│  🔐 DECRYPT MEDICAL RESPONSES                               │
+│                              ←────🔐─────                   │
+│  ├── Analysis results                   ├── ENCRYPT DATA   │
+│  ├── Chat responses                     ├── Uses user keys │
+│  ├── Timeline content                   └── Same algorithms│
+│  └── Content details                                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### **Key Sharing & Server-Side Key Derivation**
+
+**Authentication Integration**: Key material exchange during **→ api-contracts.md** `/auth/google` flow
+
+```typescript
+// Server-side key derivation matching client implementation
+class ServerSideKeyDerivation {
+    // Derive user's encryption keys using same HKDF process as client
+    static async deriveUserEncryptionKey(
+        userId: string, 
+        tableName: 'serenya_content' | 'chat_messages'
+    ): Promise<Buffer> {
+        
+        // Get user's encrypted key material (shared during authentication)
+        const encryptedKeyMaterial = await this.getUserKeyMaterial(userId);
+        const userKeyMaterial = await this.decryptWithServerPrivateKey(encryptedKeyMaterial);
+        
+        // Same table contexts as mobile client
+        const tableContexts = {
+            'serenya_content': 'serenya_content_v1',
+            'chat_messages': 'serenya_chat_v1'
+        };
+        
+        const context = tableContexts[tableName];
+        
+        // Identical HKDF derivation process as client (RFC 5869)
+        const hkdf = new HKDF('sha256', userKeyMaterial);
+        
+        return hkdf.derive(
+            32, // 256-bit key
+            Buffer.from(context, 'utf8'), // Same context as client
+            Buffer.from('serenya_key_derivation_salt_v1', 'utf8') // Same salt
+        );
+    }
+    
+    // Store user key material during authentication (encrypted at rest)
+    static async storeUserKeyMaterial(userId: string, encryptedKeyMaterial: string) {
+        await this.kmsEncrypt({
+            userId,
+            keyMaterial: encryptedKeyMaterial,
+            timestamp: new Date(),
+            keyVersion: 'v1'
+        });
+        
+        // Log key material storage for audit
+        await AuditLogger.logSecurityEvent('user_key_material_stored', {
+            userId: sha256(userId), // Hash for privacy
+            keyVersion: 'v1',
+            encryptionAlgorithm: 'AES-256-GCM'
+        });
+    }
+}
+```
+
+### **Client-Side API Request Encryption**
+
+**Mobile Integration**: Extends existing **TableKeyManager** for network operations
+
+```dart
+// Enhanced API client with encryption support
+class EncryptedApiClient {
+    static Future<http.Response> uploadDocumentEncrypted(
+        File document, 
+        String documentType
+    ) async {
+        try {
+            // 1. Get table key for serenya_content (triggers biometric auth if needed)
+            final tableKey = await TableKeyManager.getTableKeyForEncryption('serenya_content');
+            
+            // 2. Prepare original request payload
+            final originalPayload = {
+                'file': base64.encode(await document.readAsBytes()),
+                'file_name': document.path.split('/').last,
+                'upload_context': {
+                    'document_date': DateTime.now().toIso8601String(),
+                    'user_notes': null
+                }
+            };
+            
+            // 3. Encrypt payload with table key
+            final encryptedData = await FieldLevelEncryption.encryptField(
+                jsonEncode(originalPayload), 
+                'serenya_content'
+            );
+            
+            // 4. Create encrypted request
+            final encryptedRequest = {
+                'encrypted_payload': encryptedData,
+                'encryption_metadata': {
+                    'version': 'v1',
+                    'algorithm': 'AES-256-GCM',
+                    'table_key_id': 'serenya_content',
+                    'checksum': _generateChecksum(jsonEncode(originalPayload))
+                },
+                // Unencrypted routing metadata
+                'file_type': _getMimeType(document),
+                'file_size_bytes': await document.length(),
+                'document_type': documentType
+            };
+            
+            // 5. Send encrypted request
+            final response = await http.post(
+                Uri.parse('${ApiConfig.baseUrl}/documents/upload'),
+                headers: {
+                    'Authorization': 'Bearer ${await AuthManager.getAccessToken()}',
+                    'Content-Type': 'application/json',
+                    'X-Serenya-Encryption': 'v1' // Indicate encrypted payload
+                },
+                body: jsonEncode(encryptedRequest)
+            );
+            
+            // 6. Log successful encrypted upload
+            await AuditLogger.logSecurityEvent('encrypted_upload_sent', {
+                'documentType': documentType,
+                'encryptionVersion': 'v1',
+                'payloadSize': encryptedRequest.toString().length
+            });
+            
+            return response;
+            
+        } catch (e) {
+            await AuditLogger.logSecurityEvent('encrypted_upload_failed', {
+                'error': e.toString(),
+                'documentType': documentType
+            });
+            rethrow;
+        }
+    }
+    
+    // Decrypt medical responses from server
+    static Future<Map<String, dynamic>> decryptApiResponse(
+        http.Response response,
+        String expectedTableKey
+    ) async {
+        try {
+            final responseData = jsonDecode(response.body);
+            
+            // Check if response is encrypted
+            if (responseData['encrypted_data'] != null) {
+                final encryptedData = responseData['encrypted_data'];
+                final metadata = responseData['encryption_metadata'];
+                
+                // Verify encryption metadata
+                if (metadata['table_key_id'] != expectedTableKey) {
+                    throw EncryptionException('Table key mismatch');
+                }
+                
+                // Decrypt with appropriate table key
+                final decryptedJson = await FieldLevelEncryption.decryptField(
+                    encryptedData, 
+                    expectedTableKey
+                );
+                
+                final decryptedData = jsonDecode(decryptedJson);
+                
+                // Verify checksum if provided
+                if (metadata['checksum'] != null) {
+                    final expectedChecksum = _generateChecksum(decryptedJson);
+                    if (metadata['checksum'] != expectedChecksum) {
+                        throw DataIntegrityException('Response checksum mismatch');
+                    }
+                }
+                
+                // Log successful decryption
+                await AuditLogger.logSecurityEvent('encrypted_response_decrypted', {
+                    'tableKeyId': expectedTableKey,
+                    'encryptionVersion': metadata['version']
+                });
+                
+                return {
+                    'success': responseData['success'],
+                    'data': decryptedData,
+                    'metadata': responseData['metadata'],
+                    'encrypted': true
+                };
+            } else {
+                // Handle unencrypted response (fallback or non-medical data)
+                return {
+                    'success': responseData['success'],
+                    'data': responseData['data'],
+                    'encrypted': false
+                };
+            }
+        } catch (e) {
+            await AuditLogger.logSecurityEvent('response_decryption_failed', {
+                'error': e.toString(),
+                'tableKey': expectedTableKey
+            });
+            rethrow;
+        }
+    }
+}
+```
+
+### **Server-Side API Response Encryption**
+
+**Backend Integration**: Encrypts medical data before transmission
+
+```typescript
+// Server-side response encryption for medical data
+class EncryptedApiServer {
+    // Encrypt job completion results containing medical analysis
+    static async sendJobResultsEncrypted(
+        userId: string, 
+        jobResults: JobResults
+    ): Promise<EncryptedApiResponse> {
+        try {
+            // 1. Derive user's encryption key for serenya_content
+            const tableKey = await ServerSideKeyDerivation.deriveUserEncryptionKey(
+                userId, 
+                'serenya_content'
+            );
+            
+            // 2. Extract sensitive medical data for encryption
+            const sensitiveData = {
+                results: {
+                    analysis: jobResults.analysis,           // Medical findings, summary
+                    structured_data: jobResults.structuredData, // Lab values, vitals
+                    chat_prompts: jobResults.chatPrompts      // Suggested questions
+                }
+            };
+            
+            // 3. Encrypt medical data
+            const encryptedData = await this.encryptWithKey(
+                JSON.stringify(sensitiveData),
+                tableKey
+            );
+            
+            // 4. Create encrypted response
+            const response = {
+                success: true,
+                encrypted_data: encryptedData.ciphertext,
+                encryption_metadata: {
+                    version: 'v1',
+                    algorithm: 'AES-256-GCM',
+                    table_key_id: 'serenya_content',
+                    checksum: this.generateChecksum(JSON.stringify(sensitiveData))
+                },
+                // Unencrypted metadata for client routing
+                metadata: {
+                    job_id: jobResults.jobId,
+                    status: 'completed',
+                    content_id: jobResults.contentId,
+                    timestamp: new Date().toISOString(),
+                    response_size_bytes: encryptedData.ciphertext.length
+                },
+                audit_logged: true
+            };
+            
+            // 5. Log encrypted response sent
+            await auditLogger.logSecurityEvent('encrypted_response_sent', {
+                userId: sha256(userId), // Hash for privacy
+                contentId: jobResults.contentId,
+                encryptionVersion: 'v1',
+                dataSize: JSON.stringify(sensitiveData).length
+            });
+            
+            return response;
+            
+        } catch (error) {
+            await auditLogger.logSecurityEvent('response_encryption_failed', {
+                userId: sha256(userId),
+                error: error.message,
+                contentId: jobResults.contentId
+            });
+            
+            // For critical medical data, fail rather than send unencrypted
+            throw new EncryptionError('Failed to encrypt medical response', error);
+        }
+    }
+    
+    // Encrypt chat responses containing medical advice
+    static async sendChatResponseEncrypted(
+        userId: string,
+        chatResponse: ChatResponse
+    ): Promise<EncryptedApiResponse> {
+        try {
+            const tableKey = await ServerSideKeyDerivation.deriveUserEncryptionKey(
+                userId, 
+                'chat_messages'
+            );
+            
+            // Encrypt AI response and follow-up suggestions
+            const sensitiveData = {
+                response: {
+                    content: chatResponse.content, // Medical advice content
+                    confidence_score: chatResponse.confidenceScore,
+                    sources_referenced: chatResponse.sourcesReferenced,
+                    medical_disclaimers: chatResponse.medicalDisclaimers
+                },
+                suggested_follow_ups: chatResponse.suggestedFollowUps
+            };
+            
+            const encryptedData = await this.encryptWithKey(
+                JSON.stringify(sensitiveData),
+                tableKey
+            );
+            
+            return {
+                success: true,
+                encrypted_data: encryptedData.ciphertext,
+                encryption_metadata: {
+                    version: 'v1',
+                    algorithm: 'AES-256-GCM',
+                    table_key_id: 'chat_messages',
+                    checksum: this.generateChecksum(JSON.stringify(sensitiveData))
+                },
+                metadata: {
+                    message_id: chatResponse.messageId,
+                    conversation_id: chatResponse.conversationId,
+                    message_count: chatResponse.messageCount,
+                    timestamp: new Date().toISOString(),
+                    response_size_bytes: encryptedData.ciphertext.length
+                },
+                audit_logged: true
+            };
+        } catch (error) {
+            await auditLogger.logSecurityEvent('chat_encryption_failed', {
+                userId: sha256(userId),
+                error: error.message
+            });
+            throw new EncryptionError('Failed to encrypt chat response', error);
+        }
+    }
+}
+```
+
+### **Network Encryption Error Handling**
+
+**Graceful Degradation**: Enhanced error recovery with fallback options
+
+```typescript
+// Comprehensive error handling for network encryption
+class NetworkEncryptionErrorHandler {
+    static async handleClientEncryptionFailure(
+        operation: string,
+        error: EncryptionError,
+        fallbackAllowed: boolean
+    ): Promise<ErrorRecoveryResult> {
+        
+        await AuditLogger.logSecurityEvent('client_encryption_failure', {
+            operation,
+            errorType: error.type,
+            fallbackAllowed,
+            timestamp: new Date().toISOString()
+        });
+        
+        switch (error.type) {
+            case 'BIOMETRIC_AUTH_FAILED':
+                return {
+                    recoverable: true,
+                    action: 'retry_with_biometric',
+                    userMessage: 'Please authenticate to secure your data',
+                    technicalDetails: 'Biometric authentication required for encryption keys'
+                };
+                
+            case 'KEY_DERIVATION_FAILED':
+                return {
+                    recoverable: true,
+                    action: 'reauthenticate',
+                    userMessage: 'Please sign in again to continue',
+                    technicalDetails: 'User key material not available or corrupted'
+                };
+                
+            case 'AES_ENCRYPTION_FAILED':
+                if (fallbackAllowed && operation !== 'premium_content') {
+                    await this.showFallbackWarning();
+                    return {
+                        recoverable: true,
+                        action: 'use_fallback',
+                        userMessage: 'Continuing with standard security',
+                        technicalDetails: 'Application-layer encryption failed, using TLS fallback'
+                    };
+                } else {
+                    return {
+                        recoverable: false,
+                        action: 'contact_support',
+                        userMessage: 'Unable to secure your medical data. Please try again or contact support.',
+                        technicalDetails: 'Encryption required for medical data, no fallback allowed'
+                    };
+                }
+                
+            default:
+                return {
+                    recoverable: false,
+                    action: 'contact_support',
+                    userMessage: 'An unexpected security error occurred',
+                    technicalDetails: error.message
+                };
+        }
+    }
+    
+    static async handleServerDecryptionFailure(
+        userId: string,
+        error: DecryptionError,
+        request: ExpressRequest
+    ): Promise<ErrorResponse> {
+        
+        await auditLogger.logSecurityEvent('server_decryption_failure', {
+            userId: sha256(userId),
+            endpoint: request.path,
+            errorType: error.type,
+            requestSize: request.headers['content-length']
+        });
+        
+        switch (error.type) {
+            case 'INVALID_KEY_MATERIAL':
+                return {
+                    statusCode: 401,
+                    error: {
+                        code: 'KEY_DERIVATION_FAILED',
+                        message: 'Unable to derive user encryption keys',
+                        user_message: 'Please sign in again to continue',
+                        recovery_action: 'reauthenticate'
+                    }
+                };
+                
+            case 'CORRUPTED_PAYLOAD':
+                return {
+                    statusCode: 400,
+                    error: {
+                        code: 'CORRUPTED_ENCRYPTED_PAYLOAD',
+                        message: 'Encrypted request payload appears corrupted',
+                        user_message: 'Request failed due to data corruption. Please try again.',
+                        recovery_action: 'retry_request'
+                    }
+                };
+                
+            case 'AUTHENTICATION_TAG_INVALID':
+                // Possible tampering - high severity
+                await auditLogger.logSecurityEvent('potential_tampering_detected', {
+                    userId: sha256(userId),
+                    endpoint: request.path,
+                    severity: 'high',
+                    action: 'request_rejected'
+                });
+                
+                return {
+                    statusCode: 400,
+                    error: {
+                        code: 'DATA_INTEGRITY_ERROR',
+                        message: 'Data integrity verification failed',
+                        user_message: 'Security verification failed. Please try again or contact support.',
+                        recovery_action: 'contact_support',
+                        support_reference: generateSupportReference()
+                    }
+                };
+                
+            default:
+                return {
+                    statusCode: 500,
+                    error: {
+                        code: 'ENCRYPTION_SYSTEM_ERROR',
+                        message: 'Server-side encryption system error',
+                        user_message: 'Temporary service issue. Please try again later.',
+                        recovery_action: 'retry_later'
+                    }
+                };
+        }
+    }
+}
+```
+
+### **Performance Impact & Optimization**
+
+**Network Encryption Overhead**: Balanced approach for medical data protection
+
+```dart
+// Performance monitoring for encrypted API calls
+class EncryptionPerformanceMonitor {
+    static final Map<String, PerformanceMetrics> _metrics = {};
+    
+    static Future<T> measureEncryptedOperation<T>(
+        String operationName,
+        Future<T> Function() operation
+    ) async {
+        final stopwatch = Stopwatch()..start();
+        
+        try {
+            final result = await operation();
+            stopwatch.stop();
+            
+            _recordMetric(operationName, stopwatch.elapsedMilliseconds, true);
+            
+            // Alert if encryption adds significant overhead
+            if (stopwatch.elapsedMilliseconds > _getThreshold(operationName)) {
+                await AuditLogger.logSecurityEvent('encryption_performance_degradation', {
+                    'operation': operationName,
+                    'latency_ms': stopwatch.elapsedMilliseconds,
+                    'threshold_ms': _getThreshold(operationName)
+                });
+            }
+            
+            return result;
+        } catch (e) {
+            stopwatch.stop();
+            _recordMetric(operationName, stopwatch.elapsedMilliseconds, false);
+            rethrow;
+        }
+    }
+    
+    static void _recordMetric(String operation, int latencyMs, bool success) {
+        final metrics = _metrics[operation] ?? PerformanceMetrics();
+        metrics.addSample(latencyMs, success);
+        _metrics[operation] = metrics;
+    }
+    
+    static int _getThreshold(String operationName) {
+        // Performance thresholds (encryption should add no more than this)
+        const thresholds = {
+            'document_upload': 1000,  // 1 second max additional
+            'chat_response': 200,     // 200ms max additional 
+            'timeline_load': 150,     // 150ms max additional
+            'content_details': 100,   // 100ms max additional
+        };
+        
+        return thresholds[operationName] ?? 500; // Default 500ms
+    }
+}
+```
+
+### **Audit Integration & Security Monitoring**
+
+**Enhanced Audit Events**: Network encryption events integrated with existing framework
+
+```dart
+// Network encryption audit events
+class NetworkEncryptionAuditEvents {
+    // Category 5: Security Events - Network encryption operations
+    static Future<void> logEncryptionEvent(
+        String eventType,
+        Map<String, dynamic> details
+    ) async {
+        await AuditLogger.logEvent({
+            'event_type': 'security_event',
+            'event_subtype': eventType,
+            'timestamp': DateTime.now().toIso8601String(),
+            'security_details': {
+                'encryption_layer': 'application_layer',
+                'transport_layer': 'tls_1_3',
+                'threat_level': _assessThreatLevel(eventType, details),
+                'detection_method': 'automated',
+                'action_taken': _getActionTaken(eventType),
+                'resolution_status': _getResolutionStatus(eventType, details),
+                ...details
+            }
+        });
+    }
+    
+    // Specific audit events for network encryption
+    static Future<void> logSuccessfulEncryption(String operation, String tableKey) {
+        return logEncryptionEvent('network_encryption_success', {
+            'operation': operation,
+            'table_key_id': tableKey,
+            'encryption_algorithm': 'AES-256-GCM'
+        });
+    }
+    
+    static Future<void> logEncryptionFailure(String operation, String error) {
+        return logEncryptionEvent('network_encryption_failure', {
+            'operation': operation,
+            'failure_reason': error,
+            'fallback_available': _isFallbackAllowed(operation)
+        });
+    }
+    
+    static Future<void> logFallbackUsed(String operation, String reason) {
+        return logEncryptionEvent('encryption_fallback_used', {
+            'operation': operation,
+            'fallback_reason': reason,
+            'security_level': 'reduced'
+        });
+    }
+    
+    static Future<void> logPotentialTampering(String userId, String endpoint) {
+        return logEncryptionEvent('potential_data_tampering', {
+            'user_id_hash': sha256(userId),
+            'endpoint': endpoint,
+            'threat_level': 'high',
+            'immediate_action': 'request_blocked'
+        });
+    }
+}
+```
+
+---
+
 ## 📊 **Performance Optimization Strategies**
 
 ### **Key Caching & Memory Management**
@@ -957,17 +1576,30 @@ class SecurityAuditIntegration {
 - [ ] Cross-system encryption consistency validation
 - [ ] Performance benchmarking and optimization
 
+### **Phase 5: Client-Server Communication Encryption**
+- [ ] Authentication endpoint enhancement with key material exchange
+- [ ] Client-side encrypted API request implementation (document upload)
+- [ ] Server-side encrypted API response implementation (medical data)
+- [ ] Network encryption error handling and fallback mechanisms
+- [ ] Performance monitoring for encrypted API operations
+- [ ] Security audit integration for network encryption events
+- [ ] End-to-end encryption testing and validation
+
 ---
 
 ## 🔗 **Agent Handoff Requirements**
 
 ### **For Mobile Architecture Agent (→ mobile-architecture.md)**
-**Required Implementation**:
+**Device & Network Encryption Implementation**:
 - Platform-specific secure key storage (iOS Keychain, Android Keystore)
 - SQLCipher database configuration and optimization
 - Biometric authentication UI integration per **→ ui-specifications.md**
-- Memory management for sensitive key material
-- Error handling and recovery procedures
+- **NEW: HTTP client encryption integration with existing table keys**
+- **NEW: Encrypted API request/response handling for medical data**
+- **NEW: Network encryption error recovery and fallback UI**
+- **NEW: Performance monitoring for encrypted network operations**
+- Memory management for sensitive key material (device + network)
+- Comprehensive error handling and recovery procedures
 
 ### **For Audit Logging Agent (→ audit-logging.md)**
 **Security Events Integration**:
@@ -984,15 +1616,18 @@ class SecurityAuditIntegration {
 - Performance monitoring and alerting
 
 ### **For API Contracts Agent (→ api-contracts.md)**
-**Data Security Requirements**:
-- Encrypted field handling in API requests/responses
-- Authentication token integration with session management
+**Network Encryption Integration**:
+- Encrypted payload format implementation for medical data endpoints
+- Authentication enhancement with key material exchange
 - Error response security (no encryption details leaked)
-- Performance considerations for encrypted data operations
+- Performance considerations for encrypted request/response operations
+- Fallback mechanisms when application-layer encryption fails
+- Comprehensive error codes for encryption failure scenarios
 
 ---
 
-**Document Status**: ✅ Complete - Ready for mobile and server implementation  
-**Security Architecture**: Multi-layered defense with platform-specific optimizations  
-**Compliance Status**: HIPAA, GDPR, PCI DSS requirements addressed  
-**Next Steps**: Mobile platform implementation + AWS KMS integration
+**Document Status**: ✅ Complete - Ready for comprehensive encryption implementation  
+**Security Architecture**: End-to-end multi-layered defense (device + network + server)  
+**Encryption Coverage**: Local storage + Client-server communication + Server-side fields  
+**Compliance Status**: HIPAA, GDPR, PCI DSS requirements fully addressed  
+**Next Steps**: Phase 1-5 implementation with mobile, network, and server encryption
