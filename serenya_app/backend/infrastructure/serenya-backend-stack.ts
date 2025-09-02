@@ -2,12 +2,12 @@ import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as kms from 'aws-cdk-lib/aws-kms';
-import * as s3Notifications from 'aws-cdk-lib/aws-s3-notifications';
 import * as path from 'path';
 import { Construct } from 'constructs';
 
@@ -24,8 +24,9 @@ interface SerenyaBackendStackProps extends cdk.StackProps {
 export class SerenyaBackendStack extends cdk.Stack {
   public readonly api: apigateway.RestApi;
   public readonly tempFilesBucket: s3.Bucket;
-  public readonly jobsTable: dynamodb.Table;
-  public readonly usersTable: dynamodb.Table;
+  public readonly vpc: ec2.Vpc;
+  public readonly database: rds.DatabaseInstance;
+  public readonly dbSecret: secretsmanager.Secret;
 
   constructor(scope: Construct, id: string, props: SerenyaBackendStackProps) {
     super(scope, id, props);
@@ -37,6 +38,93 @@ export class SerenyaBackendStack extends cdk.Stack {
       description: `Serenya ${environment} encryption key for PHI data`,
       enableKeyRotation: true,
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // VPC for healthcare-compliant network isolation
+    this.vpc = new ec2.Vpc(this, 'SerenyaVpc', {
+      maxAzs: 2, // Multi-AZ for high availability
+      natGateways: 1, // Cost optimization - single NAT gateway
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: 'Public',
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+        {
+          cidrMask: 24,
+          name: 'Private',
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+        {
+          cidrMask: 24,
+          name: 'Database',
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+        },
+      ],
+    });
+
+    // Database credentials secret
+    this.dbSecret = new secretsmanager.Secret(this, 'DatabaseSecret', {
+      description: `Serenya ${environment} database credentials`,
+      secretName: `serenya/${environment}/database`,
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({
+          username: 'serenya_admin',
+        }),
+        generateStringKey: 'password',
+        excludeCharacters: '"@/\\',
+        passwordLength: 32,
+      },
+      encryptionKey,
+    });
+
+    // Security group for database
+    const dbSecurityGroup = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
+      vpc: this.vpc,
+      description: 'Security group for PostgreSQL database',
+      allowAllOutbound: false,
+    });
+
+    // Security group for Lambda functions
+    const lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSecurityGroup', {
+      vpc: this.vpc,
+      description: 'Security group for Lambda functions',
+      allowAllOutbound: true,
+    });
+
+    // Allow Lambda to access database on port 5432
+    dbSecurityGroup.addIngressRule(
+      lambdaSecurityGroup,
+      ec2.Port.tcp(5432),
+      'Allow Lambda access to PostgreSQL'
+    );
+
+    // PostgreSQL RDS Instance
+    this.database = new rds.DatabaseInstance(this, 'SerenyaDatabase', {
+      engine: rds.DatabaseInstanceEngine.postgres({
+        version: rds.PostgresEngineVersion.VER_15_4,
+      }),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        environment === 'prod' ? ec2.InstanceSize.SMALL : ec2.InstanceSize.MICRO
+      ),
+      credentials: rds.Credentials.fromSecret(this.dbSecret),
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+      },
+      securityGroups: [dbSecurityGroup],
+      databaseName: 'serenya',
+      storageEncrypted: true,
+      storageEncryptionKey: encryptionKey,
+      backupRetention: environment === 'prod' ? cdk.Duration.days(7) : cdk.Duration.days(1),
+      deleteAutomatedBackups: environment !== 'prod',
+      deletionProtection: environment === 'prod',
+      multiAz: environment === 'prod',
+      allocatedStorage: 20,
+      maxAllocatedStorage: environment === 'prod' ? 100 : 50,
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.SNAPSHOT : cdk.RemovalPolicy.DESTROY,
     });
 
     // Secrets Manager for API keys
@@ -89,36 +177,6 @@ export class SerenyaBackendStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // DynamoDB table for job tracking
-    this.jobsTable = new dynamodb.Table(this, 'ProcessingJobsTable', {
-      tableName: `serenya-jobs-${environment}`,
-      partitionKey: { name: 'jobId', type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
-      encryptionKey,
-      pointInTimeRecovery: environment === 'prod',
-      timeToLiveAttribute: 'ttl',
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
-    // Add GSI for user-based queries
-    this.jobsTable.addGlobalSecondaryIndex({
-      indexName: 'UserJobsIndex',
-      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.NUMBER },
-    });
-
-    // DynamoDB table for user profiles (temporary)
-    this.usersTable = new dynamodb.Table(this, 'UsersTable', {
-      tableName: `serenya-users-${environment}`,
-      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
-      encryptionKey,
-      pointInTimeRecovery: environment === 'prod',
-      timeToLiveAttribute: 'ttl',
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
 
     // Lambda execution role with least privilege
     const lambdaExecutionRole = new iam.Role(this, 'LambdaExecutionRole', {
@@ -129,22 +187,14 @@ export class SerenyaBackendStack extends cdk.Stack {
       inlinePolicies: {
         SerenyaLambdaPolicy: new iam.PolicyDocument({
           statements: [
-            // DynamoDB permissions
+            // RDS permissions for PostgreSQL access
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: [
-                'dynamodb:GetItem',
-                'dynamodb:PutItem', 
-                'dynamodb:UpdateItem',
-                'dynamodb:DeleteItem',
-                'dynamodb:Query',
-                'dynamodb:Scan',
+                'rds-db:connect',
               ],
               resources: [
-                this.jobsTable.tableArn,
-                this.usersTable.tableArn,
-                `${this.jobsTable.tableArn}/index/*`,
-                `${this.usersTable.tableArn}/index/*`,
+                `arn:aws:rds-db:${config.region}:${this.account}:dbuser:${this.database.instanceResourceId}/serenya_app`,
               ],
             }),
             // S3 permissions
@@ -163,8 +213,10 @@ export class SerenyaBackendStack extends cdk.Stack {
               effect: iam.Effect.ALLOW,
               actions: [
                 'secretsmanager:GetSecretValue',
+                'secretsmanager:CreateSecret',
+                'secretsmanager:UpdateSecret',
               ],
-              resources: [apiSecrets.secretArn],
+              resources: [apiSecrets.secretArn, this.dbSecret.secretArn, `arn:aws:secretsmanager:${config.region}:${this.account}:secret:serenya/${environment}/app-database*`],
             }),
             // KMS permissions
             new iam.PolicyStatement({
@@ -184,21 +236,28 @@ export class SerenyaBackendStack extends cdk.Stack {
     const commonLambdaEnvironment = {
       REGION: config.region,
       ENVIRONMENT: environment,
-      JOBS_TABLE_NAME: this.jobsTable.tableName,
-      USERS_TABLE_NAME: this.usersTable.tableName,
+      DB_HOST: this.database.instanceEndpoint.hostname,
+      DB_PORT: this.database.instanceEndpoint.port.toString(),
+      DB_NAME: 'serenya',
+      DB_SECRET_ARN: this.dbSecret.secretArn,
       TEMP_BUCKET_NAME: this.tempFilesBucket.bucketName,
       API_SECRETS_ARN: apiSecrets.secretArn,
       KMS_KEY_ID: encryptionKey.keyId,
       ENABLE_DETAILED_LOGGING: config.enableDetailedLogging.toString(),
     };
 
-    // Lambda functions
+    // Lambda functions with VPC configuration
     const authFunction = new lambda.Function(this, 'AuthFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'auth.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/auth')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
       logRetention: logs.RetentionDays.ONE_MONTH,
@@ -211,6 +270,11 @@ export class SerenyaBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/user')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.seconds(15),
       memorySize: 256,
       logRetention: logs.RetentionDays.ONE_MONTH,
@@ -223,6 +287,11 @@ export class SerenyaBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/upload')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.seconds(60),
       memorySize: 512,
       logRetention: logs.RetentionDays.ONE_MONTH,
@@ -235,6 +304,11 @@ export class SerenyaBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/process')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.minutes(3),
       memorySize: 1024,
       logRetention: logs.RetentionDays.ONE_MONTH,
@@ -247,6 +321,11 @@ export class SerenyaBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/status')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.seconds(15),
       memorySize: 256,
       logRetention: logs.RetentionDays.ONE_MONTH,
@@ -259,6 +338,11 @@ export class SerenyaBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/result')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
       logRetention: logs.RetentionDays.ONE_MONTH,
@@ -271,6 +355,11 @@ export class SerenyaBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/retry')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
       logRetention: logs.RetentionDays.ONE_MONTH,
@@ -283,13 +372,18 @@ export class SerenyaBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/doctor-report')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.minutes(2),
       memorySize: 512,
       logRetention: logs.RetentionDays.ONE_MONTH,
       description: 'Premium doctor report generation',
     });
 
-    // JWT Authorizer Lambda
+    // JWT Authorizer Lambda  
     const authorizerFunction = new lambda.Function(this, 'AuthorizerFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'authorizer.handler',
@@ -300,10 +394,33 @@ export class SerenyaBackendStack extends cdk.Stack {
         TOKEN_ISSUER: 'serenya.health',
         TOKEN_AUDIENCE: 'serenya-mobile-app',
       },
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.seconds(15),
       memorySize: 256,
       logRetention: logs.RetentionDays.ONE_MONTH,
       description: 'JWT token authorization',
+    });
+
+    // Database initialization Lambda (for manual schema setup)
+    const dbInitFunction = new lambda.Function(this, 'DatabaseInitFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/db-init')),
+      role: lambdaExecutionRole,
+      environment: commonLambdaEnvironment,
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [lambdaSecurityGroup],
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 512,
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      description: 'Database schema initialization and migrations',
     });
 
     // Custom authorizer
@@ -365,12 +482,7 @@ export class SerenyaBackendStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // S3 bucket notifications to trigger processing
-    this.tempFilesBucket.addEventNotification(
-      s3.EventType.OBJECT_CREATED,
-      new s3Notifications.LambdaDestination(processFunction),
-      { prefix: 'uploads/' }
-    );
+    // Note: Removed S3 event notification - processing now triggered directly via API
 
     // Outputs
     new cdk.CfnOutput(this, 'ApiUrl', {
@@ -395,6 +507,30 @@ export class SerenyaBackendStack extends cdk.Stack {
       value: encryptionKey.keyId,
       description: 'KMS encryption key ID',
       exportName: `serenya-kms-key-${environment}`,
+    });
+
+    new cdk.CfnOutput(this, 'DatabaseHost', {
+      value: this.database.instanceEndpoint.hostname,
+      description: 'PostgreSQL database hostname',
+      exportName: `serenya-db-host-${environment}`,
+    });
+
+    new cdk.CfnOutput(this, 'DatabasePort', {
+      value: this.database.instanceEndpoint.port.toString(),
+      description: 'PostgreSQL database port',
+      exportName: `serenya-db-port-${environment}`,
+    });
+
+    new cdk.CfnOutput(this, 'DatabaseSecretArn', {
+      value: this.dbSecret.secretArn,
+      description: 'Database credentials secret ARN',
+      exportName: `serenya-db-secret-${environment}`,
+    });
+
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: this.vpc.vpcId,
+      description: 'VPC ID for healthcare compliance',
+      exportName: `serenya-vpc-${environment}`,
     });
   }
 

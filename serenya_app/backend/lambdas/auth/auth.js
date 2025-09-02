@@ -3,11 +3,11 @@ const {
   createResponse, 
   createErrorResponse, 
   generateJWT, 
-  storeUserProfile,
   auditLog,
   sanitizeError,
   getSecrets
 } = require('./utils');
+const { UserService } = require('../shared/database');
 
 /**
  * Google OAuth verification and JWT generation
@@ -42,23 +42,33 @@ exports.handler = async (event) => {
       return createErrorResponse(401, 'Invalid Google credentials');
     }
 
-    // Create user data object
-    const userData = {
-      userId: generateUserId(googleUserData.email),
-      email: googleUserData.email,
-      name: googleUserData.name,
-      profilePicture: googleUserData.picture,
-      deviceId: device_id,
-      googleId: googleUserData.sub,
-    };
+    // Check if user exists in database
+    let user = await UserService.findByExternalId(googleUserData.sub, 'google');
+    
+    if (!user) {
+      // Create new user
+      user = await UserService.create({
+        externalId: googleUserData.sub,
+        authProvider: 'google',
+        email: googleUserData.email,
+        emailVerified: googleUserData.email_verified === 'true',
+        name: googleUserData.name,
+        givenName: googleUserData.given_name,
+        familyName: googleUserData.family_name,
+      });
+    } else {
+      // Update last login
+      await UserService.updateLastLogin(user.id);
+    }
 
-    // Store/update user profile
-    await storeUserProfile(userData);
+    // Generate JWT token with user data
+    const jwtToken = await generateJWT({
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+    });
 
-    // Generate JWT token
-    const jwtToken = await generateJWT(userData);
-
-    auditLog('auth_success', userData.userId, { 
+    auditLog('auth_success', user.id, { 
       hasDeviceId: !!device_id,
       provider: 'google' 
     });
@@ -67,10 +77,10 @@ exports.handler = async (event) => {
       success: true,
       token: jwtToken,
       user: {
-        id: userData.userId,
-        email: userData.email,
-        name: userData.name,
-        profile_picture: userData.profilePicture,
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        profile_picture: googleUserData.picture,
       },
       expires_in: 3600, // 1 hour
     });
@@ -140,18 +150,6 @@ async function verifyGoogleToken(idToken) {
 }
 
 /**
- * Generate consistent user ID from email
- */
-function generateUserId(email) {
-  const crypto = require('crypto');
-  return crypto
-    .createHash('sha256')
-    .update(email.toLowerCase())
-    .digest('hex')
-    .substring(0, 16);
-}
-
-/**
  * Validate device ID format
  */
 function isValidDeviceId(deviceId) {
@@ -169,41 +167,4 @@ function isAllowedEmailDomain(email) {
   // For now, allow all domains
   // In enterprise version, this could check against approved domains
   return true;
-}
-
-/**
- * Rate limiting check (basic implementation)
- */
-async function checkRateLimit(sourceIp) {
-  // For production, implement Redis-based rate limiting
-  // For now, basic IP-based checking with DynamoDB
-  
-  const rateLimitKey = `rate_limit_${sourceIp}`;
-  const ttl = Math.floor(Date.now() / 1000) + 300; // 5 minutes
-  
-  try {
-    await dynamodb.update({
-      TableName: process.env.JOBS_TABLE_NAME,
-      Key: { jobId: rateLimitKey },
-      UpdateExpression: 'ADD attemptCount :inc SET #ttl = :ttl',
-      ExpressionAttributeNames: { '#ttl': 'ttl' },
-      ExpressionAttributeValues: {
-        ':inc': 1,
-        ':ttl': ttl,
-      },
-      ConditionExpression: 'attribute_not_exists(jobId) OR attemptCount < :limit',
-      ExpressionAttributeValues: {
-        ':inc': 1,
-        ':ttl': ttl,
-        ':limit': 10, // Max 10 attempts per IP per 5 minutes
-      },
-    }).promise();
-    
-    return true;
-  } catch (error) {
-    if (error.code === 'ConditionalCheckFailedException') {
-      return false; // Rate limit exceeded
-    }
-    throw error;
-  }
 }

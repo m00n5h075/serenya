@@ -232,6 +232,35 @@ test_rate_limiting() {
     fi
 }
 
+# Function to test database connectivity via Lambda
+test_database_connectivity() {
+    print_status "Testing database connectivity..."
+    
+    # Invoke the database initialization function to test connectivity
+    FUNCTION_NAME="serenya-backend-${ENVIRONMENT}-DatabaseInitFunction"
+    
+    result=$(aws lambda invoke \
+        --function-name "$FUNCTION_NAME" \
+        --payload '{}' \
+        --region eu-west-1 \
+        /tmp/db_test_result.json 2>/dev/null || echo "failed")
+    
+    if [ "$result" != "failed" ]; then
+        response=$(cat /tmp/db_test_result.json 2>/dev/null || echo "{}")
+        
+        if echo "$response" | grep -q '"statusCode": 200'; then
+            print_success "Database connectivity test passed"
+        else
+            print_warning "Database connectivity test returned non-200 status"
+        fi
+    else
+        print_warning "Database connectivity test could not be executed"
+    fi
+    
+    # Clean up
+    rm -f /tmp/db_test_result.json
+}
+
 # Function to run comprehensive tests
 run_comprehensive_tests() {
     print_status "Running comprehensive API tests..."
@@ -250,6 +279,9 @@ run_comprehensive_tests() {
     
     # Security tests
     test_rate_limiting
+    
+    # Database connectivity test
+    test_database_connectivity
     
     echo ""
     print_success "Test suite completed!"

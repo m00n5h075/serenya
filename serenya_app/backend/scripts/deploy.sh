@@ -145,6 +145,20 @@ deploy_environment() {
     
     print_success "Deployment to $environment completed!"
     
+    # Initialize database
+    print_status "Initializing database schema..."
+    if [ -f "scripts/init-database.sh" ]; then
+        bash scripts/init-database.sh $environment
+        if [ $? -eq 0 ]; then
+            print_success "Database initialization completed."
+        else
+            print_warning "Database initialization failed. You may need to run it manually."
+            print_warning "Run: bash scripts/init-database.sh $environment"
+        fi
+    else
+        print_warning "Database initialization script not found."
+    fi
+    
     # Output important information
     print_status "Retrieving deployment information..."
     
@@ -160,6 +174,28 @@ deploy_environment() {
         print_warning "Update your Flutter app's AppConstants.baseApiUrl to: $api_url"
     fi
     
+    # Get database information
+    db_host=$(aws cloudformation describe-stacks \
+        --stack-name "SerenyaBackend-$environment" \
+        --region $REGION \
+        --query 'Stacks[0].Outputs[?OutputKey==`DatabaseHost`].OutputValue' \
+        --output text 2>/dev/null || echo "Not found")
+    
+    if [ "$db_host" != "Not found" ]; then
+        print_success "PostgreSQL Database Host: $db_host"
+    fi
+    
+    # Get VPC information
+    vpc_id=$(aws cloudformation describe-stacks \
+        --stack-name "SerenyaBackend-$environment" \
+        --region $REGION \
+        --query 'Stacks[0].Outputs[?OutputKey==`VpcId`].OutputValue' \
+        --output text 2>/dev/null || echo "Not found")
+    
+    if [ "$vpc_id" != "Not found" ]; then
+        print_success "VPC ID: $vpc_id"
+    fi
+    
     # Remind about secrets configuration
     print_warning "Don't forget to configure the following secrets in AWS Secrets Manager:"
     echo "  Secret Name: serenya/$environment/api-secrets"
@@ -168,6 +204,10 @@ deploy_environment() {
     echo "    - googleClientSecret: Your Google OAuth client secret"
     echo "    - anthropicApiKey: Your Anthropic API key"
     echo "    - jwtSecret: Will be auto-generated"
+    echo ""
+    echo "  Database credentials are automatically managed in:"
+    echo "  Secret Name: serenya/$environment/database"
+    echo "  Secret Name: serenya/$environment/app-database"
 }
 
 # Function to show help
