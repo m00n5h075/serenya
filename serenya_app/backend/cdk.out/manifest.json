@@ -27,7 +27,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-eu-west-1",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-eu-west-1",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1/cc3532ef8dfc38d27af8731763ded71b6849c49268a68e7f6cdf3e15d0e94382.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1/3ab16f030ceb00dd1333b3260a7604671fa488d6600e1b93eb15da744370694f.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -85,6 +85,234 @@
             "data": "SerenyaEncryptionKey30AB90B6"
           }
         ],
+        "/SerenyaBackend-dev/SerenyaVpc/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcD4692594"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/PublicSubnet1/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcPublicSubnet1SubnetF87D5348"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/PublicSubnet1/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcPublicSubnet1RouteTable106C458A"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/PublicSubnet1/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcPublicSubnet1RouteTableAssociation36035CC6"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/PublicSubnet1/DefaultRoute": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcPublicSubnet1DefaultRoute47ACA6A8"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/PublicSubnet1/EIP": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcPublicSubnet1EIPAA478EBC"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/PublicSubnet1/NATGateway": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcPublicSubnet1NATGatewayC096DC8D"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/PublicSubnet2/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcPublicSubnet2SubnetA76F987B"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/PublicSubnet2/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcPublicSubnet2RouteTable41C6D820"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/PublicSubnet2/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcPublicSubnet2RouteTableAssociation9A30520B"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/PublicSubnet2/DefaultRoute": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcPublicSubnet2DefaultRoute1C653722"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/PrivateSubnet1/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcPrivateSubnet1Subnet2E20D858"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/PrivateSubnet1/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcPrivateSubnet1RouteTableE7AD75E2"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/PrivateSubnet1/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/PrivateSubnet1/DefaultRoute": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/PrivateSubnet2/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcPrivateSubnet2SubnetD7BD4087"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/PrivateSubnet2/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcPrivateSubnet2RouteTable2474897C"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/PrivateSubnet2/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/PrivateSubnet2/DefaultRoute": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/DatabaseSubnet1/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcDatabaseSubnet1Subnet7E7692B7"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/DatabaseSubnet1/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcDatabaseSubnet1RouteTableE1B7D741"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/DatabaseSubnet1/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcDatabaseSubnet1RouteTableAssociation39B8EE4B"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/DatabaseSubnet2/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcDatabaseSubnet2SubnetABEADD14"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/DatabaseSubnet2/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcDatabaseSubnet2RouteTable0800FF4F"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/DatabaseSubnet2/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcDatabaseSubnet2RouteTableAssociation15F27ACA"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/IGW": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcIGW6F2ACAD3"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/VPCGW": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcVPCGWD9461E63"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaVpc/RestrictDefaultSecurityGroupCustomResource/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaVpcRestrictDefaultSecurityGroupCustomResource0A1AE9E3"
+          }
+        ],
+        "/SerenyaBackend-dev/Custom::VpcRestrictDefaultSGCustomResourceProvider": [
+          {
+            "type": "aws:cdk:is-custom-resource-handler-customResourceProvider",
+            "data": true
+          }
+        ],
+        "/SerenyaBackend-dev/Custom::VpcRestrictDefaultSGCustomResourceProvider/Role": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0"
+          }
+        ],
+        "/SerenyaBackend-dev/Custom::VpcRestrictDefaultSGCustomResourceProvider/Handler": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E"
+          }
+        ],
+        "/SerenyaBackend-dev/DatabaseSecret/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DatabaseSecret86DBB7B3"
+          }
+        ],
+        "/SerenyaBackend-dev/DatabaseSecret/Attachment/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DatabaseSecretAttachment9A63A3D4"
+          }
+        ],
+        "/SerenyaBackend-dev/DatabaseSecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DatabaseSecurityGroup7319C0F6"
+          }
+        ],
+        "/SerenyaBackend-dev/DatabaseSecurityGroup/from SerenyaBackenddevLambdaSecurityGroupC486A3BA:5432": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DatabaseSecurityGroupfromSerenyaBackenddevLambdaSecurityGroupC486A3BA543291013DF3"
+          }
+        ],
+        "/SerenyaBackend-dev/LambdaSecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "LambdaSecurityGroup0BD9FC99"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaDatabase/SubnetGroup/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaDatabaseSubnetGroup50CA9027"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaDatabase/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaDatabase21D84656"
+          }
+        ],
         "/SerenyaBackend-dev/SerenyaApiSecrets/Resource": [
           {
             "type": "aws:cdk:logicalId",
@@ -109,18 +337,6 @@
             "data": "TempFilesBucketAutoDeleteObjectsCustomResource197835EE"
           }
         ],
-        "/SerenyaBackend-dev/TempFilesBucket/Notifications/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "TempFilesBucketNotifications6FCB54EC"
-          }
-        ],
-        "/SerenyaBackend-dev/TempFilesBucket/AllowBucketNotificationsToSerenyaBackenddevProcessFunction341714C2": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "TempFilesBucketAllowBucketNotificationsToSerenyaBackenddevProcessFunction341714C2E7FDACD9"
-          }
-        ],
         "/SerenyaBackend-dev/Custom::S3AutoDeleteObjectsCustomResourceProvider": [
           {
             "type": "aws:cdk:is-custom-resource-handler-customResourceProvider",
@@ -137,34 +353,6 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F"
-          }
-        ],
-        "/SerenyaBackend-dev/ProcessingJobsTable": [
-          {
-            "type": "aws:cdk:hasPhysicalName",
-            "data": {
-              "Ref": "ProcessingJobsTable00D8CF66"
-            }
-          }
-        ],
-        "/SerenyaBackend-dev/ProcessingJobsTable/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "ProcessingJobsTable00D8CF66"
-          }
-        ],
-        "/SerenyaBackend-dev/UsersTable": [
-          {
-            "type": "aws:cdk:hasPhysicalName",
-            "data": {
-              "Ref": "UsersTable9725E9C8"
-            }
-          }
-        ],
-        "/SerenyaBackend-dev/UsersTable/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "UsersTable9725E9C8"
           }
         ],
         "/SerenyaBackend-dev/LambdaExecutionRole/Resource": [
@@ -303,6 +491,18 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "AuthorizerFunctionSerenyaBackenddevJWTAuthorizer6D9C8E7EPermissions9F0806F8"
+          }
+        ],
+        "/SerenyaBackend-dev/DatabaseInitFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DatabaseInitFunction432692BE"
+          }
+        ],
+        "/SerenyaBackend-dev/DatabaseInitFunction/LogRetention/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DatabaseInitFunctionLogRetention1C9B6487"
           }
         ],
         "/SerenyaBackend-dev/JWTAuthorizer/Resource": [
@@ -665,24 +865,6 @@
             "data": "ApiGatewayLogGroupA9770429"
           }
         ],
-        "/SerenyaBackend-dev/BucketNotificationsHandler050a0587b7544547bf325f094a3db834/Role/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleB6FB88EC"
-          }
-        ],
-        "/SerenyaBackend-dev/BucketNotificationsHandler050a0587b7544547bf325f094a3db834/Role/DefaultPolicy/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleDefaultPolicy2CF63D36"
-          }
-        ],
-        "/SerenyaBackend-dev/BucketNotificationsHandler050a0587b7544547bf325f094a3db834/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "BucketNotificationsHandler050a0587b7544547bf325f094a3db8347ECC3691"
-          }
-        ],
         "/SerenyaBackend-dev/ApiUrl": [
           {
             "type": "aws:cdk:logicalId",
@@ -705,6 +887,30 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "KmsKeyId"
+          }
+        ],
+        "/SerenyaBackend-dev/DatabaseHost": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DatabaseHost"
+          }
+        ],
+        "/SerenyaBackend-dev/DatabasePort": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DatabasePort"
+          }
+        ],
+        "/SerenyaBackend-dev/DatabaseSecretArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DatabaseSecretArn"
+          }
+        ],
+        "/SerenyaBackend-dev/VpcId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VpcId"
           }
         ],
         "/SerenyaBackend-dev/CDKMetadata/Default": [

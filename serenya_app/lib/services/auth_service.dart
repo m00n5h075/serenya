@@ -29,7 +29,7 @@ class AuthService {
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       
       // Prepare request body
-      final requestBody = {
+      final Map<String, dynamic> requestBody = {
         'google_token': googleAuth.accessToken,
         'id_token': googleAuth.idToken,
         'device_id': await _getDeviceId(),
@@ -37,7 +37,7 @@ class AuthService {
       
       // Include consent data if provided
       if (consentData != null) {
-        requestBody['consent_data'] = consentData;
+        requestBody['consent_acknowledgments'] = consentData;
       }
       
       // Send Google token to our backend for verification and JWT creation

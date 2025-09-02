@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../../services/auth_service.dart';
-import '../../../services/consent_service.dart';
-import '../widgets/onboarding_button.dart';
 
 class ConsentSlide extends StatefulWidget {
   final Function(bool agreedToTerms, bool understoodDisclaimer, bool authSuccess) onAgree;
@@ -20,7 +18,6 @@ class _ConsentSlideState extends State<ConsentSlide> {
   bool _agreedToTerms = false;
   bool _isLoading = false;
   final AuthService _authService = AuthService();
-  final ConsentService _consentService = ConsentService();
 
   bool get _canProceed => _understoodDisclaimer && _agreedToTerms;
 

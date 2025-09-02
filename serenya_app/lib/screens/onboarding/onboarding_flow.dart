@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/consent_service.dart';
-import '../../services/auth_service.dart';
 import 'slides/welcome_slide.dart';
 import 'slides/privacy_slide.dart';
 import 'slides/disclaimer_slide.dart';

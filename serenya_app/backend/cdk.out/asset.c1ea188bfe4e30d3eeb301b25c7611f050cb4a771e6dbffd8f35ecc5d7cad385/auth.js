@@ -8,7 +8,7 @@ const {
   sanitizeError,
   getSecrets
 } = require('./utils');
-const { UserService, ConsentService } = require('./database');
+const { UserService, ConsentService } = require('../shared/database');
 
 /**
  * Google OAuth verification and JWT generation

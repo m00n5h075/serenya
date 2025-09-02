@@ -8,7 +8,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ConsentSlide(
-            onAgree: (terms, disclaimer) {},
+            onAgree: (terms, disclaimer, authSuccess) {},
           ),
         ),
       );
@@ -23,7 +23,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ConsentSlide(
-            onAgree: (terms, disclaimer) {},
+            onAgree: (terms, disclaimer, authSuccess) {},
           ),
         ),
       );
@@ -38,7 +38,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ConsentSlide(
-            onAgree: (terms, disclaimer) {},
+            onAgree: (terms, disclaimer, authSuccess) {},
           ),
         ),
       );
@@ -59,7 +59,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ConsentSlide(
-            onAgree: (terms, disclaimer) {},
+            onAgree: (terms, disclaimer, authSuccess) {},
           ),
         ),
       );
@@ -78,7 +78,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ConsentSlide(
-            onAgree: (terms, disclaimer) {},
+            onAgree: (terms, disclaimer, authSuccess) {},
           ),
         ),
       );
@@ -110,7 +110,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ConsentSlide(
-            onAgree: (terms, disclaimer) {
+            onAgree: (terms, disclaimer, authSuccess) {
               agreedToTerms = terms;
               understoodDisclaimer = disclaimer;
             },
@@ -140,7 +140,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ConsentSlide(
-            onAgree: (terms, disclaimer) async {
+            onAgree: (terms, disclaimer, authSuccess) async {
               // Simulate async operation
               await Future.delayed(Duration(seconds: 1));
             },
@@ -167,7 +167,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ConsentSlide(
-            onAgree: (terms, disclaimer) {},
+            onAgree: (terms, disclaimer, authSuccess) {},
           ),
         ),
       );

@@ -1,6 +1,21 @@
 {
   "version": "48.0.0",
   "files": {
+    "7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200": {
+      "displayName": "SerenyaBackend-dev/Custom::VpcRestrictDefaultSGCustomResourceProvider Code",
+      "source": {
+        "path": "asset.7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "current_account-eu-west-1-494a66b1": {
+          "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1",
+          "objectKey": "7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200.zip",
+          "region": "eu-west-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-eu-west-1"
+        }
+      }
+    },
     "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6": {
       "displayName": "SerenyaBackend-dev/Custom::S3AutoDeleteObjectsCustomResourceProvider Code",
       "source": {
@@ -16,16 +31,16 @@
         }
       }
     },
-    "c4bd0b2f13daf417449158fe46027abda42adf451cc8cddc6f5987d3b4b74919": {
+    "026de93ddc5f0053279e44e9babf223ed04cc40796e390cb023bae822ba5cdb3": {
       "displayName": "AuthFunction/Code",
       "source": {
-        "path": "asset.c4bd0b2f13daf417449158fe46027abda42adf451cc8cddc6f5987d3b4b74919",
+        "path": "asset.026de93ddc5f0053279e44e9babf223ed04cc40796e390cb023bae822ba5cdb3",
         "packaging": "zip"
       },
       "destinations": {
-        "current_account-eu-west-1-f3725c8e": {
+        "current_account-eu-west-1-5c9abe6f": {
           "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1",
-          "objectKey": "c4bd0b2f13daf417449158fe46027abda42adf451cc8cddc6f5987d3b4b74919.zip",
+          "objectKey": "026de93ddc5f0053279e44e9babf223ed04cc40796e390cb023bae822ba5cdb3.zip",
           "region": "eu-west-1",
           "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-eu-west-1"
         }
@@ -46,16 +61,16 @@
         }
       }
     },
-    "36876df275e463541b41e2c407dc919aace28fc766fc97a00224f5d403aee4f7": {
+    "c24bdd784ab6d712a995be83557dead7d59491f43c715627bc0fd6a347f7ed86": {
       "displayName": "UserProfileFunction/Code",
       "source": {
-        "path": "asset.36876df275e463541b41e2c407dc919aace28fc766fc97a00224f5d403aee4f7",
+        "path": "asset.c24bdd784ab6d712a995be83557dead7d59491f43c715627bc0fd6a347f7ed86",
         "packaging": "zip"
       },
       "destinations": {
-        "current_account-eu-west-1-c9a399e4": {
+        "current_account-eu-west-1-1b0c3daf": {
           "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1",
-          "objectKey": "36876df275e463541b41e2c407dc919aace28fc766fc97a00224f5d403aee4f7.zip",
+          "objectKey": "c24bdd784ab6d712a995be83557dead7d59491f43c715627bc0fd6a347f7ed86.zip",
           "region": "eu-west-1",
           "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-eu-west-1"
         }
@@ -166,16 +181,31 @@
         }
       }
     },
-    "cc3532ef8dfc38d27af8731763ded71b6849c49268a68e7f6cdf3e15d0e94382": {
+    "3198b5a1cc31ff781337e263f353b573677900c8878e5b24faa0c5ef8b57d497": {
+      "displayName": "DatabaseInitFunction/Code",
+      "source": {
+        "path": "asset.3198b5a1cc31ff781337e263f353b573677900c8878e5b24faa0c5ef8b57d497",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "current_account-eu-west-1-ac6dd249": {
+          "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1",
+          "objectKey": "3198b5a1cc31ff781337e263f353b573677900c8878e5b24faa0c5ef8b57d497.zip",
+          "region": "eu-west-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-eu-west-1"
+        }
+      }
+    },
+    "3ab16f030ceb00dd1333b3260a7604671fa488d6600e1b93eb15da744370694f": {
       "displayName": "serenya-backend-dev Template",
       "source": {
         "path": "SerenyaBackend-dev.template.json",
         "packaging": "file"
       },
       "destinations": {
-        "current_account-eu-west-1-245fe0e1": {
+        "current_account-eu-west-1-82b8bad0": {
           "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1",
-          "objectKey": "cc3532ef8dfc38d27af8731763ded71b6849c49268a68e7f6cdf3e15d0e94382.json",
+          "objectKey": "3ab16f030ceb00dd1333b3260a7604671fa488d6600e1b93eb15da744370694f.json",
           "region": "eu-west-1",
           "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-eu-west-1"
         }

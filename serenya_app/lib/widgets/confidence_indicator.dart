@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/health_document.dart';
 import '../core/constants/app_constants.dart';
+import '../core/constants/design_tokens.dart';
+import '../core/theme/healthcare_theme.dart';
 
 class ConfidenceIndicator extends StatelessWidget {
   final double confidenceScore;
@@ -14,19 +16,20 @@ class ConfidenceIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final confidenceTheme = Theme.of(context).extension<ConfidenceTheme>()!;
     final level = confidenceScore.confidenceLevel;
-    final color = _getConfidenceColor(level);
+    final color = confidenceTheme.getConfidenceColor(confidenceScore);
     final icon = _getConfidenceIcon(level);
-    final label = _getConfidenceLabel(level);
+    final label = confidenceTheme.getConfidenceDescription(confidenceScore);
 
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppConstants.smallPadding,
-        vertical: AppConstants.smallPadding / 2,
+      padding: const EdgeInsets.symmetric(
+        horizontal: HealthcareSpacing.sm,
+        vertical: HealthcareSpacing.xs,
       ),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(AppConstants.borderRadius / 2),
+        borderRadius: BorderRadius.circular(HealthcareBorderRadius.confidenceIndicator),
         border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Row(
@@ -38,20 +41,15 @@ class ConfidenceIndicator extends StatelessWidget {
             color: color,
           ),
           if (showDetails) ...[
-            SizedBox(width: 6),
+            const SizedBox(width: HealthcareSpacing.xs),
             Text(
               label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: color,
-              ),
+              style: confidenceTheme.confidenceTextStyle.copyWith(color: color),
             ),
-            SizedBox(width: 4),
+            const SizedBox(width: HealthcareSpacing.xs / 2),
             Text(
               '(${confidenceScore.toStringAsFixed(1)}/10)',
-              style: TextStyle(
-                fontSize: 11,
+              style: HealthcareTypography.labelSmall.copyWith(
                 color: color.withOpacity(0.8),
               ),
             ),
@@ -59,17 +57,6 @@ class ConfidenceIndicator extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  Color _getConfidenceColor(ConfidenceLevel level) {
-    switch (level) {
-      case ConfidenceLevel.low:
-        return Colors.red[600]!;
-      case ConfidenceLevel.moderate:
-        return Colors.orange[600]!;
-      case ConfidenceLevel.high:
-        return Colors.green[600]!;
-    }
   }
 
   IconData _getConfidenceIcon(ConfidenceLevel level) {
@@ -80,17 +67,6 @@ class ConfidenceIndicator extends StatelessWidget {
         return Icons.info;
       case ConfidenceLevel.high:
         return Icons.check_circle;
-    }
-  }
-
-  String _getConfidenceLabel(ConfidenceLevel level) {
-    switch (level) {
-      case ConfidenceLevel.low:
-        return 'Low Confidence';
-      case ConfidenceLevel.moderate:
-        return 'Moderate Confidence';
-      case ConfidenceLevel.high:
-        return 'High Confidence';
     }
   }
 }
@@ -120,7 +96,7 @@ class ConfidenceCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppConstants.borderRadius),
       ),
       child: Padding(
-        padding: EdgeInsets.all(AppConstants.defaultPadding),
+        padding: const EdgeInsets.all(HealthcareSpacing.cardPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -128,48 +104,41 @@ class ConfidenceCard extends StatelessWidget {
               children: [
                 Text(
                   'AI Confidence',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
-                  ),
+                  style: HealthcareTypography.headingH4,
                 ),
-                Spacer(),
+                const Spacer(),
                 ConfidenceIndicator(confidenceScore: confidenceScore),
               ],
             ),
-            SizedBox(height: AppConstants.smallPadding),
+            const SizedBox(height: HealthcareSpacing.sm),
             Text(
               message,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[700],
-                height: 1.4,
-              ),
+              style: HealthcareTypography.bodyMedium,
             ),
             if (needsConsultation) ...[
-              SizedBox(height: AppConstants.defaultPadding),
+              const SizedBox(height: HealthcareSpacing.medicalContentSpacing),
               Container(
-                padding: EdgeInsets.all(AppConstants.smallPadding),
+                padding: const EdgeInsets.all(HealthcareSpacing.sm),
                 decoration: BoxDecoration(
-                  color: Colors.orange[50],
-                  borderRadius: BorderRadius.circular(AppConstants.borderRadius / 2),
-                  border: Border.all(color: Colors.orange[200]!),
+                  color: HealthcareColors.cautionOrange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(HealthcareBorderRadius.sm),
+                  border: Border.all(
+                    color: HealthcareColors.cautionOrange.withOpacity(0.3),
+                  ),
                 ),
                 child: Row(
                   children: [
                     Icon(
                       Icons.medical_services,
-                      color: Colors.orange[600],
+                      color: HealthcareColors.cautionOrange,
                       size: 20,
                     ),
-                    SizedBox(width: 8),
+                    const SizedBox(width: HealthcareSpacing.sm),
                     Expanded(
                       child: Text(
                         'Consider consulting your healthcare provider for these results.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.orange[800],
+                        style: HealthcareTypography.bodySmall.copyWith(
+                          color: HealthcareColors.cautionOrange,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -178,16 +147,16 @@ class ConfidenceCard extends StatelessWidget {
                 ),
               ),
               if (onConsultDoctor != null) ...[
-                SizedBox(height: AppConstants.smallPadding),
+                const SizedBox(height: HealthcareSpacing.sm),
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: onConsultDoctor,
-                    icon: Icon(Icons.medical_services, size: 16),
-                    label: Text('Find Healthcare Provider'),
+                    icon: const Icon(Icons.medical_services, size: 16),
+                    label: const Text('Find Healthcare Provider'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.orange[600],
-                      side: BorderSide(color: Colors.orange[600]!),
+                      foregroundColor: HealthcareColors.cautionOrange,
+                      side: const BorderSide(color: HealthcareColors.cautionOrange),
                     ),
                   ),
                 ),

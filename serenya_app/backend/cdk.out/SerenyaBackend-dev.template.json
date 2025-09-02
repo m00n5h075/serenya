@@ -68,6 +68,860 @@
     "aws:cdk:path": "SerenyaBackend-dev/SerenyaEncryptionKey/Resource"
    }
   },
+  "SerenyaVpcD4692594": {
+   "Type": "AWS::EC2::VPC",
+   "Properties": {
+    "CidrBlock": "10.0.0.0/16",
+    "EnableDnsHostnames": true,
+    "EnableDnsSupport": true,
+    "InstanceTenancy": "default",
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "SerenyaBackend-dev/SerenyaVpc"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/Resource"
+   }
+  },
+  "SerenyaVpcPublicSubnet1SubnetF87D5348": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": {
+     "Fn::Select": [
+      0,
+      {
+       "Fn::GetAZs": ""
+      }
+     ]
+    },
+    "CidrBlock": "10.0.0.0/24",
+    "MapPublicIpOnLaunch": true,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Public"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Public"
+     },
+     {
+      "Key": "Name",
+      "Value": "SerenyaBackend-dev/SerenyaVpc/PublicSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SerenyaVpcD4692594"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/PublicSubnet1/Subnet"
+   }
+  },
+  "SerenyaVpcPublicSubnet1RouteTable106C458A": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "SerenyaBackend-dev/SerenyaVpc/PublicSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SerenyaVpcD4692594"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/PublicSubnet1/RouteTable"
+   }
+  },
+  "SerenyaVpcPublicSubnet1RouteTableAssociation36035CC6": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "SerenyaVpcPublicSubnet1RouteTable106C458A"
+    },
+    "SubnetId": {
+     "Ref": "SerenyaVpcPublicSubnet1SubnetF87D5348"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/PublicSubnet1/RouteTableAssociation"
+   }
+  },
+  "SerenyaVpcPublicSubnet1DefaultRoute47ACA6A8": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "GatewayId": {
+     "Ref": "SerenyaVpcIGW6F2ACAD3"
+    },
+    "RouteTableId": {
+     "Ref": "SerenyaVpcPublicSubnet1RouteTable106C458A"
+    }
+   },
+   "DependsOn": [
+    "SerenyaVpcVPCGWD9461E63"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/PublicSubnet1/DefaultRoute"
+   }
+  },
+  "SerenyaVpcPublicSubnet1EIPAA478EBC": {
+   "Type": "AWS::EC2::EIP",
+   "Properties": {
+    "Domain": "vpc",
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "SerenyaBackend-dev/SerenyaVpc/PublicSubnet1"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/PublicSubnet1/EIP"
+   }
+  },
+  "SerenyaVpcPublicSubnet1NATGatewayC096DC8D": {
+   "Type": "AWS::EC2::NatGateway",
+   "Properties": {
+    "AllocationId": {
+     "Fn::GetAtt": [
+      "SerenyaVpcPublicSubnet1EIPAA478EBC",
+      "AllocationId"
+     ]
+    },
+    "SubnetId": {
+     "Ref": "SerenyaVpcPublicSubnet1SubnetF87D5348"
+    },
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "SerenyaBackend-dev/SerenyaVpc/PublicSubnet1"
+     }
+    ]
+   },
+   "DependsOn": [
+    "SerenyaVpcPublicSubnet1DefaultRoute47ACA6A8",
+    "SerenyaVpcPublicSubnet1RouteTableAssociation36035CC6"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/PublicSubnet1/NATGateway"
+   }
+  },
+  "SerenyaVpcPublicSubnet2SubnetA76F987B": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": {
+     "Fn::Select": [
+      1,
+      {
+       "Fn::GetAZs": ""
+      }
+     ]
+    },
+    "CidrBlock": "10.0.1.0/24",
+    "MapPublicIpOnLaunch": true,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Public"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Public"
+     },
+     {
+      "Key": "Name",
+      "Value": "SerenyaBackend-dev/SerenyaVpc/PublicSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SerenyaVpcD4692594"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/PublicSubnet2/Subnet"
+   }
+  },
+  "SerenyaVpcPublicSubnet2RouteTable41C6D820": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "SerenyaBackend-dev/SerenyaVpc/PublicSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SerenyaVpcD4692594"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/PublicSubnet2/RouteTable"
+   }
+  },
+  "SerenyaVpcPublicSubnet2RouteTableAssociation9A30520B": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "SerenyaVpcPublicSubnet2RouteTable41C6D820"
+    },
+    "SubnetId": {
+     "Ref": "SerenyaVpcPublicSubnet2SubnetA76F987B"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/PublicSubnet2/RouteTableAssociation"
+   }
+  },
+  "SerenyaVpcPublicSubnet2DefaultRoute1C653722": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "GatewayId": {
+     "Ref": "SerenyaVpcIGW6F2ACAD3"
+    },
+    "RouteTableId": {
+     "Ref": "SerenyaVpcPublicSubnet2RouteTable41C6D820"
+    }
+   },
+   "DependsOn": [
+    "SerenyaVpcVPCGWD9461E63"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/PublicSubnet2/DefaultRoute"
+   }
+  },
+  "SerenyaVpcPrivateSubnet1Subnet2E20D858": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": {
+     "Fn::Select": [
+      0,
+      {
+       "Fn::GetAZs": ""
+      }
+     ]
+    },
+    "CidrBlock": "10.0.2.0/24",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Private"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Private"
+     },
+     {
+      "Key": "Name",
+      "Value": "SerenyaBackend-dev/SerenyaVpc/PrivateSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SerenyaVpcD4692594"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/PrivateSubnet1/Subnet"
+   }
+  },
+  "SerenyaVpcPrivateSubnet1RouteTableE7AD75E2": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "SerenyaBackend-dev/SerenyaVpc/PrivateSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SerenyaVpcD4692594"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/PrivateSubnet1/RouteTable"
+   }
+  },
+  "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "SerenyaVpcPrivateSubnet1RouteTableE7AD75E2"
+    },
+    "SubnetId": {
+     "Ref": "SerenyaVpcPrivateSubnet1Subnet2E20D858"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/PrivateSubnet1/RouteTableAssociation"
+   }
+  },
+  "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "NatGatewayId": {
+     "Ref": "SerenyaVpcPublicSubnet1NATGatewayC096DC8D"
+    },
+    "RouteTableId": {
+     "Ref": "SerenyaVpcPrivateSubnet1RouteTableE7AD75E2"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/PrivateSubnet1/DefaultRoute"
+   }
+  },
+  "SerenyaVpcPrivateSubnet2SubnetD7BD4087": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": {
+     "Fn::Select": [
+      1,
+      {
+       "Fn::GetAZs": ""
+      }
+     ]
+    },
+    "CidrBlock": "10.0.3.0/24",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Private"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Private"
+     },
+     {
+      "Key": "Name",
+      "Value": "SerenyaBackend-dev/SerenyaVpc/PrivateSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SerenyaVpcD4692594"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/PrivateSubnet2/Subnet"
+   }
+  },
+  "SerenyaVpcPrivateSubnet2RouteTable2474897C": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "SerenyaBackend-dev/SerenyaVpc/PrivateSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SerenyaVpcD4692594"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/PrivateSubnet2/RouteTable"
+   }
+  },
+  "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "SerenyaVpcPrivateSubnet2RouteTable2474897C"
+    },
+    "SubnetId": {
+     "Ref": "SerenyaVpcPrivateSubnet2SubnetD7BD4087"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/PrivateSubnet2/RouteTableAssociation"
+   }
+  },
+  "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "NatGatewayId": {
+     "Ref": "SerenyaVpcPublicSubnet1NATGatewayC096DC8D"
+    },
+    "RouteTableId": {
+     "Ref": "SerenyaVpcPrivateSubnet2RouteTable2474897C"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/PrivateSubnet2/DefaultRoute"
+   }
+  },
+  "SerenyaVpcDatabaseSubnet1Subnet7E7692B7": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": {
+     "Fn::Select": [
+      0,
+      {
+       "Fn::GetAZs": ""
+      }
+     ]
+    },
+    "CidrBlock": "10.0.4.0/24",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Database"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Isolated"
+     },
+     {
+      "Key": "Name",
+      "Value": "SerenyaBackend-dev/SerenyaVpc/DatabaseSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SerenyaVpcD4692594"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/DatabaseSubnet1/Subnet"
+   }
+  },
+  "SerenyaVpcDatabaseSubnet1RouteTableE1B7D741": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "SerenyaBackend-dev/SerenyaVpc/DatabaseSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SerenyaVpcD4692594"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/DatabaseSubnet1/RouteTable"
+   }
+  },
+  "SerenyaVpcDatabaseSubnet1RouteTableAssociation39B8EE4B": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "SerenyaVpcDatabaseSubnet1RouteTableE1B7D741"
+    },
+    "SubnetId": {
+     "Ref": "SerenyaVpcDatabaseSubnet1Subnet7E7692B7"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/DatabaseSubnet1/RouteTableAssociation"
+   }
+  },
+  "SerenyaVpcDatabaseSubnet2SubnetABEADD14": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": {
+     "Fn::Select": [
+      1,
+      {
+       "Fn::GetAZs": ""
+      }
+     ]
+    },
+    "CidrBlock": "10.0.5.0/24",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Database"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Isolated"
+     },
+     {
+      "Key": "Name",
+      "Value": "SerenyaBackend-dev/SerenyaVpc/DatabaseSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SerenyaVpcD4692594"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/DatabaseSubnet2/Subnet"
+   }
+  },
+  "SerenyaVpcDatabaseSubnet2RouteTable0800FF4F": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "SerenyaBackend-dev/SerenyaVpc/DatabaseSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SerenyaVpcD4692594"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/DatabaseSubnet2/RouteTable"
+   }
+  },
+  "SerenyaVpcDatabaseSubnet2RouteTableAssociation15F27ACA": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "SerenyaVpcDatabaseSubnet2RouteTable0800FF4F"
+    },
+    "SubnetId": {
+     "Ref": "SerenyaVpcDatabaseSubnet2SubnetABEADD14"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/DatabaseSubnet2/RouteTableAssociation"
+   }
+  },
+  "SerenyaVpcIGW6F2ACAD3": {
+   "Type": "AWS::EC2::InternetGateway",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "SerenyaBackend-dev/SerenyaVpc"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/IGW"
+   }
+  },
+  "SerenyaVpcVPCGWD9461E63": {
+   "Type": "AWS::EC2::VPCGatewayAttachment",
+   "Properties": {
+    "InternetGatewayId": {
+     "Ref": "SerenyaVpcIGW6F2ACAD3"
+    },
+    "VpcId": {
+     "Ref": "SerenyaVpcD4692594"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/VPCGW"
+   }
+  },
+  "SerenyaVpcRestrictDefaultSecurityGroupCustomResource0A1AE9E3": {
+   "Type": "Custom::VpcRestrictDefaultSG",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E",
+      "Arn"
+     ]
+    },
+    "DefaultSecurityGroupId": {
+     "Fn::GetAtt": [
+      "SerenyaVpcD4692594",
+      "DefaultSecurityGroup"
+     ]
+    },
+    "Account": {
+     "Ref": "AWS::AccountId"
+    }
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaVpc/RestrictDefaultSecurityGroupCustomResource/Default"
+   }
+  },
+  "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Version": "2012-10-17",
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ]
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+     }
+    ],
+    "Policies": [
+     {
+      "PolicyName": "Inline",
+      "PolicyDocument": {
+       "Version": "2012-10-17",
+       "Statement": [
+        {
+         "Effect": "Allow",
+         "Action": [
+          "ec2:AuthorizeSecurityGroupIngress",
+          "ec2:AuthorizeSecurityGroupEgress",
+          "ec2:RevokeSecurityGroupIngress",
+          "ec2:RevokeSecurityGroupEgress"
+         ],
+         "Resource": [
+          {
+           "Fn::Join": [
+            "",
+            [
+             "arn:aws:ec2:eu-west-1:",
+             {
+              "Ref": "AWS::AccountId"
+             },
+             ":security-group/",
+             {
+              "Fn::GetAtt": [
+               "SerenyaVpcD4692594",
+               "DefaultSecurityGroup"
+              ]
+             }
+            ]
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/Custom::VpcRestrictDefaultSGCustomResourceProvider/Role"
+   }
+  },
+  "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1"
+     },
+     "S3Key": "7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200.zip"
+    },
+    "Timeout": 900,
+    "MemorySize": 128,
+    "Handler": "__entrypoint__.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs22.x",
+    "Description": "Lambda function for removing all inbound/outbound rules from the VPC default security group"
+   },
+   "DependsOn": [
+    "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/Custom::VpcRestrictDefaultSGCustomResourceProvider/Handler",
+    "aws:asset:path": "asset.7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200",
+    "aws:asset:property": "Code"
+   }
+  },
+  "DatabaseSecret86DBB7B3": {
+   "Type": "AWS::SecretsManager::Secret",
+   "Properties": {
+    "Description": "Serenya dev database credentials",
+    "GenerateSecretString": {
+     "ExcludeCharacters": "\"@/\\",
+     "GenerateStringKey": "password",
+     "PasswordLength": 32,
+     "SecretStringTemplate": "{\"username\":\"serenya_admin\"}"
+    },
+    "KmsKeyId": {
+     "Fn::GetAtt": [
+      "SerenyaEncryptionKey30AB90B6",
+      "Arn"
+     ]
+    },
+    "Name": "serenya/dev/database"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/DatabaseSecret/Resource"
+   }
+  },
+  "DatabaseSecretAttachment9A63A3D4": {
+   "Type": "AWS::SecretsManager::SecretTargetAttachment",
+   "Properties": {
+    "SecretId": {
+     "Ref": "DatabaseSecret86DBB7B3"
+    },
+    "TargetId": {
+     "Ref": "SerenyaDatabase21D84656"
+    },
+    "TargetType": "AWS::RDS::DBInstance"
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/DatabaseSecret/Attachment/Resource"
+   }
+  },
+  "DatabaseSecurityGroup7319C0F6": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Security group for PostgreSQL database",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "255.255.255.255/32",
+      "Description": "Disallow all traffic",
+      "FromPort": 252,
+      "IpProtocol": "icmp",
+      "ToPort": 86
+     }
+    ],
+    "VpcId": {
+     "Ref": "SerenyaVpcD4692594"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/DatabaseSecurityGroup/Resource"
+   }
+  },
+  "DatabaseSecurityGroupfromSerenyaBackenddevLambdaSecurityGroupC486A3BA543291013DF3": {
+   "Type": "AWS::EC2::SecurityGroupIngress",
+   "Properties": {
+    "Description": "Allow Lambda access to PostgreSQL",
+    "FromPort": 5432,
+    "GroupId": {
+     "Fn::GetAtt": [
+      "DatabaseSecurityGroup7319C0F6",
+      "GroupId"
+     ]
+    },
+    "IpProtocol": "tcp",
+    "SourceSecurityGroupId": {
+     "Fn::GetAtt": [
+      "LambdaSecurityGroup0BD9FC99",
+      "GroupId"
+     ]
+    },
+    "ToPort": 5432
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/DatabaseSecurityGroup/from SerenyaBackenddevLambdaSecurityGroupC486A3BA:5432"
+   }
+  },
+  "LambdaSecurityGroup0BD9FC99": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Security group for Lambda functions",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SerenyaVpcD4692594"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/LambdaSecurityGroup/Resource"
+   }
+  },
+  "SerenyaDatabaseSubnetGroup50CA9027": {
+   "Type": "AWS::RDS::DBSubnetGroup",
+   "Properties": {
+    "DBSubnetGroupDescription": "Subnet group for SerenyaDatabase database",
+    "SubnetIds": [
+     {
+      "Ref": "SerenyaVpcDatabaseSubnet1Subnet7E7692B7"
+     },
+     {
+      "Ref": "SerenyaVpcDatabaseSubnet2SubnetABEADD14"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaDatabase/SubnetGroup/Default"
+   }
+  },
+  "SerenyaDatabase21D84656": {
+   "Type": "AWS::RDS::DBInstance",
+   "Properties": {
+    "AllocatedStorage": "20",
+    "BackupRetentionPeriod": 1,
+    "CopyTagsToSnapshot": true,
+    "DBInstanceClass": "db.t3.micro",
+    "DBName": "serenya",
+    "DBSubnetGroupName": {
+     "Ref": "SerenyaDatabaseSubnetGroup50CA9027"
+    },
+    "DeleteAutomatedBackups": true,
+    "DeletionProtection": false,
+    "Engine": "postgres",
+    "EngineVersion": "15.8",
+    "KmsKeyId": {
+     "Fn::GetAtt": [
+      "SerenyaEncryptionKey30AB90B6",
+      "Arn"
+     ]
+    },
+    "MasterUserPassword": {
+     "Fn::Join": [
+      "",
+      [
+       "{{resolve:secretsmanager:",
+       {
+        "Ref": "DatabaseSecret86DBB7B3"
+       },
+       ":SecretString:password::}}"
+      ]
+     ]
+    },
+    "MasterUsername": {
+     "Fn::Join": [
+      "",
+      [
+       "{{resolve:secretsmanager:",
+       {
+        "Ref": "DatabaseSecret86DBB7B3"
+       },
+       ":SecretString:username::}}"
+      ]
+     ]
+    },
+    "MaxAllocatedStorage": 50,
+    "MultiAZ": false,
+    "PubliclyAccessible": false,
+    "StorageEncrypted": true,
+    "StorageType": "gp2",
+    "VPCSecurityGroups": [
+     {
+      "Fn::GetAtt": [
+       "DatabaseSecurityGroup7319C0F6",
+       "GroupId"
+      ]
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/SerenyaDatabase/Resource"
+   }
+  },
   "SerenyaApiSecretsA24BF8CE": {
    "Type": "AWS::SecretsManager::Secret",
    "Properties": {
@@ -284,79 +1138,6 @@
     "aws:cdk:path": "SerenyaBackend-dev/TempFilesBucket/AutoDeleteObjectsCustomResource/Default"
    }
   },
-  "TempFilesBucketNotifications6FCB54EC": {
-   "Type": "Custom::S3BucketNotifications",
-   "Properties": {
-    "ServiceToken": {
-     "Fn::GetAtt": [
-      "BucketNotificationsHandler050a0587b7544547bf325f094a3db8347ECC3691",
-      "Arn"
-     ]
-    },
-    "BucketName": {
-     "Ref": "TempFilesBucketC6626CD1"
-    },
-    "NotificationConfiguration": {
-     "LambdaFunctionConfigurations": [
-      {
-       "Events": [
-        "s3:ObjectCreated:*"
-       ],
-       "Filter": {
-        "Key": {
-         "FilterRules": [
-          {
-           "Name": "prefix",
-           "Value": "uploads/"
-          }
-         ]
-        }
-       },
-       "LambdaFunctionArn": {
-        "Fn::GetAtt": [
-         "ProcessFunction7E4ECD78",
-         "Arn"
-        ]
-       }
-      }
-     ]
-    },
-    "Managed": true,
-    "SkipDestinationValidation": false
-   },
-   "DependsOn": [
-    "TempFilesBucketAllowBucketNotificationsToSerenyaBackenddevProcessFunction341714C2E7FDACD9",
-    "TempFilesBucketPolicy4E1F091D"
-   ],
-   "Metadata": {
-    "aws:cdk:path": "SerenyaBackend-dev/TempFilesBucket/Notifications/Resource"
-   }
-  },
-  "TempFilesBucketAllowBucketNotificationsToSerenyaBackenddevProcessFunction341714C2E7FDACD9": {
-   "Type": "AWS::Lambda::Permission",
-   "Properties": {
-    "Action": "lambda:InvokeFunction",
-    "FunctionName": {
-     "Fn::GetAtt": [
-      "ProcessFunction7E4ECD78",
-      "Arn"
-     ]
-    },
-    "Principal": "s3.amazonaws.com",
-    "SourceAccount": {
-     "Ref": "AWS::AccountId"
-    },
-    "SourceArn": {
-     "Fn::GetAtt": [
-      "TempFilesBucketC6626CD1",
-      "Arn"
-     ]
-    }
-   },
-   "Metadata": {
-    "aws:cdk:path": "SerenyaBackend-dev/TempFilesBucket/AllowBucketNotificationsToSerenyaBackenddevProcessFunction341714C2"
-   }
-  },
   "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092": {
    "Type": "AWS::IAM::Role",
    "Properties": {
@@ -423,114 +1204,6 @@
     "aws:asset:property": "Code"
    }
   },
-  "ProcessingJobsTable00D8CF66": {
-   "Type": "AWS::DynamoDB::Table",
-   "Properties": {
-    "AttributeDefinitions": [
-     {
-      "AttributeName": "jobId",
-      "AttributeType": "S"
-     },
-     {
-      "AttributeName": "userId",
-      "AttributeType": "S"
-     },
-     {
-      "AttributeName": "createdAt",
-      "AttributeType": "N"
-     }
-    ],
-    "BillingMode": "PAY_PER_REQUEST",
-    "GlobalSecondaryIndexes": [
-     {
-      "IndexName": "UserJobsIndex",
-      "KeySchema": [
-       {
-        "AttributeName": "userId",
-        "KeyType": "HASH"
-       },
-       {
-        "AttributeName": "createdAt",
-        "KeyType": "RANGE"
-       }
-      ],
-      "Projection": {
-       "ProjectionType": "ALL"
-      }
-     }
-    ],
-    "KeySchema": [
-     {
-      "AttributeName": "jobId",
-      "KeyType": "HASH"
-     }
-    ],
-    "PointInTimeRecoverySpecification": {
-     "PointInTimeRecoveryEnabled": false
-    },
-    "SSESpecification": {
-     "KMSMasterKeyId": {
-      "Fn::GetAtt": [
-       "SerenyaEncryptionKey30AB90B6",
-       "Arn"
-      ]
-     },
-     "SSEEnabled": true,
-     "SSEType": "KMS"
-    },
-    "TableName": "serenya-jobs-dev",
-    "TimeToLiveSpecification": {
-     "AttributeName": "ttl",
-     "Enabled": true
-    }
-   },
-   "UpdateReplacePolicy": "Delete",
-   "DeletionPolicy": "Delete",
-   "Metadata": {
-    "aws:cdk:path": "SerenyaBackend-dev/ProcessingJobsTable/Resource"
-   }
-  },
-  "UsersTable9725E9C8": {
-   "Type": "AWS::DynamoDB::Table",
-   "Properties": {
-    "AttributeDefinitions": [
-     {
-      "AttributeName": "userId",
-      "AttributeType": "S"
-     }
-    ],
-    "BillingMode": "PAY_PER_REQUEST",
-    "KeySchema": [
-     {
-      "AttributeName": "userId",
-      "KeyType": "HASH"
-     }
-    ],
-    "PointInTimeRecoverySpecification": {
-     "PointInTimeRecoveryEnabled": false
-    },
-    "SSESpecification": {
-     "KMSMasterKeyId": {
-      "Fn::GetAtt": [
-       "SerenyaEncryptionKey30AB90B6",
-       "Arn"
-      ]
-     },
-     "SSEEnabled": true,
-     "SSEType": "KMS"
-    },
-    "TableName": "serenya-users-dev",
-    "TimeToLiveSpecification": {
-     "AttributeName": "ttl",
-     "Enabled": true
-    }
-   },
-   "UpdateReplacePolicy": "Delete",
-   "DeletionPolicy": "Delete",
-   "Metadata": {
-    "aws:cdk:path": "SerenyaBackend-dev/UsersTable/Resource"
-   }
-  },
   "LambdaExecutionRoleD5C26073": {
    "Type": "AWS::IAM::Role",
    "Properties": {
@@ -558,6 +1231,18 @@
         ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
        ]
       ]
+     },
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+       ]
+      ]
      }
     ],
     "Policies": [
@@ -565,57 +1250,27 @@
       "PolicyDocument": {
        "Statement": [
         {
-         "Action": [
-          "dynamodb:DeleteItem",
-          "dynamodb:GetItem",
-          "dynamodb:PutItem",
-          "dynamodb:Query",
-          "dynamodb:Scan",
-          "dynamodb:UpdateItem"
-         ],
+         "Action": "rds-db:connect",
          "Effect": "Allow",
-         "Resource": [
-          {
-           "Fn::GetAtt": [
-            "ProcessingJobsTable00D8CF66",
-            "Arn"
+         "Resource": {
+          "Fn::Join": [
+           "",
+           [
+            "arn:aws:rds-db:eu-west-1:",
+            {
+             "Ref": "AWS::AccountId"
+            },
+            ":dbuser:",
+            {
+             "Fn::GetAtt": [
+              "SerenyaDatabase21D84656",
+              "DbiResourceId"
+             ]
+            },
+            "/serenya_app"
            ]
-          },
-          {
-           "Fn::GetAtt": [
-            "UsersTable9725E9C8",
-            "Arn"
-           ]
-          },
-          {
-           "Fn::Join": [
-            "",
-            [
-             {
-              "Fn::GetAtt": [
-               "ProcessingJobsTable00D8CF66",
-               "Arn"
-              ]
-             },
-             "/index/*"
-            ]
-           ]
-          },
-          {
-           "Fn::Join": [
-            "",
-            [
-             {
-              "Fn::GetAtt": [
-               "UsersTable9725E9C8",
-               "Arn"
-              ]
-             },
-             "/index/*"
-            ]
-           ]
-          }
-         ]
+          ]
+         }
         },
         {
          "Action": [
@@ -641,11 +1296,32 @@
          }
         },
         {
-         "Action": "secretsmanager:GetSecretValue",
+         "Action": [
+          "secretsmanager:CreateSecret",
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:UpdateSecret"
+         ],
          "Effect": "Allow",
-         "Resource": {
-          "Ref": "SerenyaApiSecretsA24BF8CE"
-         }
+         "Resource": [
+          {
+           "Fn::Join": [
+            "",
+            [
+             "arn:aws:secretsmanager:eu-west-1:",
+             {
+              "Ref": "AWS::AccountId"
+             },
+             ":secret:serenya/dev/app-database*"
+            ]
+           ]
+          },
+          {
+           "Ref": "DatabaseSecret86DBB7B3"
+          },
+          {
+           "Ref": "SerenyaApiSecretsA24BF8CE"
+          }
+         ]
         },
         {
          "Action": [
@@ -678,18 +1354,28 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1"
      },
-     "S3Key": "c4bd0b2f13daf417449158fe46027abda42adf451cc8cddc6f5987d3b4b74919.zip"
+     "S3Key": "026de93ddc5f0053279e44e9babf223ed04cc40796e390cb023bae822ba5cdb3.zip"
     },
     "Description": "Google OAuth verification and JWT generation",
     "Environment": {
      "Variables": {
       "REGION": "eu-west-1",
       "ENVIRONMENT": "dev",
-      "JOBS_TABLE_NAME": {
-       "Ref": "ProcessingJobsTable00D8CF66"
+      "DB_HOST": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Address"
+       ]
       },
-      "USERS_TABLE_NAME": {
-       "Ref": "UsersTable9725E9C8"
+      "DB_PORT": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Port"
+       ]
+      },
+      "DB_NAME": "serenya",
+      "DB_SECRET_ARN": {
+       "Ref": "DatabaseSecret86DBB7B3"
       },
       "TEMP_BUCKET_NAME": {
        "Ref": "TempFilesBucketC6626CD1"
@@ -712,14 +1398,36 @@
      ]
     },
     "Runtime": "nodejs18.x",
-    "Timeout": 30
+    "Timeout": 30,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "LambdaSecurityGroup0BD9FC99",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Ref": "SerenyaVpcPrivateSubnet1Subnet2E20D858"
+      },
+      {
+       "Ref": "SerenyaVpcPrivateSubnet2SubnetD7BD4087"
+      }
+     ]
+    }
    },
    "DependsOn": [
-    "LambdaExecutionRoleD5C26073"
+    "LambdaExecutionRoleD5C26073",
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
    ],
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/AuthFunction/Resource",
-    "aws:asset:path": "asset.c4bd0b2f13daf417449158fe46027abda42adf451cc8cddc6f5987d3b4b74919",
+    "aws:asset:path": "asset.026de93ddc5f0053279e44e9babf223ed04cc40796e390cb023bae822ba5cdb3",
     "aws:asset:is-bundled": false,
     "aws:asset:property": "Code"
    }
@@ -746,6 +1454,12 @@
     },
     "RetentionInDays": 30
    },
+   "DependsOn": [
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
+   ],
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/AuthFunction/LogRetention/Resource"
    }
@@ -848,18 +1562,28 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1"
      },
-     "S3Key": "36876df275e463541b41e2c407dc919aace28fc766fc97a00224f5d403aee4f7.zip"
+     "S3Key": "c24bdd784ab6d712a995be83557dead7d59491f43c715627bc0fd6a347f7ed86.zip"
     },
     "Description": "User profile management",
     "Environment": {
      "Variables": {
       "REGION": "eu-west-1",
       "ENVIRONMENT": "dev",
-      "JOBS_TABLE_NAME": {
-       "Ref": "ProcessingJobsTable00D8CF66"
+      "DB_HOST": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Address"
+       ]
       },
-      "USERS_TABLE_NAME": {
-       "Ref": "UsersTable9725E9C8"
+      "DB_PORT": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Port"
+       ]
+      },
+      "DB_NAME": "serenya",
+      "DB_SECRET_ARN": {
+       "Ref": "DatabaseSecret86DBB7B3"
       },
       "TEMP_BUCKET_NAME": {
        "Ref": "TempFilesBucketC6626CD1"
@@ -882,14 +1606,36 @@
      ]
     },
     "Runtime": "nodejs18.x",
-    "Timeout": 15
+    "Timeout": 15,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "LambdaSecurityGroup0BD9FC99",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Ref": "SerenyaVpcPrivateSubnet1Subnet2E20D858"
+      },
+      {
+       "Ref": "SerenyaVpcPrivateSubnet2SubnetD7BD4087"
+      }
+     ]
+    }
    },
    "DependsOn": [
-    "LambdaExecutionRoleD5C26073"
+    "LambdaExecutionRoleD5C26073",
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
    ],
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/UserProfileFunction/Resource",
-    "aws:asset:path": "asset.36876df275e463541b41e2c407dc919aace28fc766fc97a00224f5d403aee4f7",
+    "aws:asset:path": "asset.c24bdd784ab6d712a995be83557dead7d59491f43c715627bc0fd6a347f7ed86",
     "aws:asset:is-bundled": false,
     "aws:asset:property": "Code"
    }
@@ -916,6 +1662,12 @@
     },
     "RetentionInDays": 30
    },
+   "DependsOn": [
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
+   ],
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/UserProfileFunction/LogRetention/Resource"
    }
@@ -934,11 +1686,21 @@
      "Variables": {
       "REGION": "eu-west-1",
       "ENVIRONMENT": "dev",
-      "JOBS_TABLE_NAME": {
-       "Ref": "ProcessingJobsTable00D8CF66"
+      "DB_HOST": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Address"
+       ]
       },
-      "USERS_TABLE_NAME": {
-       "Ref": "UsersTable9725E9C8"
+      "DB_PORT": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Port"
+       ]
+      },
+      "DB_NAME": "serenya",
+      "DB_SECRET_ARN": {
+       "Ref": "DatabaseSecret86DBB7B3"
       },
       "TEMP_BUCKET_NAME": {
        "Ref": "TempFilesBucketC6626CD1"
@@ -961,10 +1723,32 @@
      ]
     },
     "Runtime": "nodejs18.x",
-    "Timeout": 60
+    "Timeout": 60,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "LambdaSecurityGroup0BD9FC99",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Ref": "SerenyaVpcPrivateSubnet1Subnet2E20D858"
+      },
+      {
+       "Ref": "SerenyaVpcPrivateSubnet2SubnetD7BD4087"
+      }
+     ]
+    }
    },
    "DependsOn": [
-    "LambdaExecutionRoleD5C26073"
+    "LambdaExecutionRoleD5C26073",
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
    ],
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/UploadFunction/Resource",
@@ -995,6 +1779,12 @@
     },
     "RetentionInDays": 30
    },
+   "DependsOn": [
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
+   ],
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/UploadFunction/LogRetention/Resource"
    }
@@ -1013,11 +1803,21 @@
      "Variables": {
       "REGION": "eu-west-1",
       "ENVIRONMENT": "dev",
-      "JOBS_TABLE_NAME": {
-       "Ref": "ProcessingJobsTable00D8CF66"
+      "DB_HOST": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Address"
+       ]
       },
-      "USERS_TABLE_NAME": {
-       "Ref": "UsersTable9725E9C8"
+      "DB_PORT": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Port"
+       ]
+      },
+      "DB_NAME": "serenya",
+      "DB_SECRET_ARN": {
+       "Ref": "DatabaseSecret86DBB7B3"
       },
       "TEMP_BUCKET_NAME": {
        "Ref": "TempFilesBucketC6626CD1"
@@ -1040,10 +1840,32 @@
      ]
     },
     "Runtime": "nodejs18.x",
-    "Timeout": 180
+    "Timeout": 180,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "LambdaSecurityGroup0BD9FC99",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Ref": "SerenyaVpcPrivateSubnet1Subnet2E20D858"
+      },
+      {
+       "Ref": "SerenyaVpcPrivateSubnet2SubnetD7BD4087"
+      }
+     ]
+    }
    },
    "DependsOn": [
-    "LambdaExecutionRoleD5C26073"
+    "LambdaExecutionRoleD5C26073",
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
    ],
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/ProcessFunction/Resource",
@@ -1074,6 +1896,12 @@
     },
     "RetentionInDays": 30
    },
+   "DependsOn": [
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
+   ],
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/ProcessFunction/LogRetention/Resource"
    }
@@ -1092,11 +1920,21 @@
      "Variables": {
       "REGION": "eu-west-1",
       "ENVIRONMENT": "dev",
-      "JOBS_TABLE_NAME": {
-       "Ref": "ProcessingJobsTable00D8CF66"
+      "DB_HOST": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Address"
+       ]
       },
-      "USERS_TABLE_NAME": {
-       "Ref": "UsersTable9725E9C8"
+      "DB_PORT": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Port"
+       ]
+      },
+      "DB_NAME": "serenya",
+      "DB_SECRET_ARN": {
+       "Ref": "DatabaseSecret86DBB7B3"
       },
       "TEMP_BUCKET_NAME": {
        "Ref": "TempFilesBucketC6626CD1"
@@ -1119,10 +1957,32 @@
      ]
     },
     "Runtime": "nodejs18.x",
-    "Timeout": 15
+    "Timeout": 15,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "LambdaSecurityGroup0BD9FC99",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Ref": "SerenyaVpcPrivateSubnet1Subnet2E20D858"
+      },
+      {
+       "Ref": "SerenyaVpcPrivateSubnet2SubnetD7BD4087"
+      }
+     ]
+    }
    },
    "DependsOn": [
-    "LambdaExecutionRoleD5C26073"
+    "LambdaExecutionRoleD5C26073",
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
    ],
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/StatusFunction/Resource",
@@ -1153,6 +2013,12 @@
     },
     "RetentionInDays": 30
    },
+   "DependsOn": [
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
+   ],
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/StatusFunction/LogRetention/Resource"
    }
@@ -1171,11 +2037,21 @@
      "Variables": {
       "REGION": "eu-west-1",
       "ENVIRONMENT": "dev",
-      "JOBS_TABLE_NAME": {
-       "Ref": "ProcessingJobsTable00D8CF66"
+      "DB_HOST": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Address"
+       ]
       },
-      "USERS_TABLE_NAME": {
-       "Ref": "UsersTable9725E9C8"
+      "DB_PORT": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Port"
+       ]
+      },
+      "DB_NAME": "serenya",
+      "DB_SECRET_ARN": {
+       "Ref": "DatabaseSecret86DBB7B3"
       },
       "TEMP_BUCKET_NAME": {
        "Ref": "TempFilesBucketC6626CD1"
@@ -1198,10 +2074,32 @@
      ]
     },
     "Runtime": "nodejs18.x",
-    "Timeout": 30
+    "Timeout": 30,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "LambdaSecurityGroup0BD9FC99",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Ref": "SerenyaVpcPrivateSubnet1Subnet2E20D858"
+      },
+      {
+       "Ref": "SerenyaVpcPrivateSubnet2SubnetD7BD4087"
+      }
+     ]
+    }
    },
    "DependsOn": [
-    "LambdaExecutionRoleD5C26073"
+    "LambdaExecutionRoleD5C26073",
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
    ],
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/ResultFunction/Resource",
@@ -1232,6 +2130,12 @@
     },
     "RetentionInDays": 30
    },
+   "DependsOn": [
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
+   ],
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/ResultFunction/LogRetention/Resource"
    }
@@ -1250,11 +2154,21 @@
      "Variables": {
       "REGION": "eu-west-1",
       "ENVIRONMENT": "dev",
-      "JOBS_TABLE_NAME": {
-       "Ref": "ProcessingJobsTable00D8CF66"
+      "DB_HOST": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Address"
+       ]
       },
-      "USERS_TABLE_NAME": {
-       "Ref": "UsersTable9725E9C8"
+      "DB_PORT": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Port"
+       ]
+      },
+      "DB_NAME": "serenya",
+      "DB_SECRET_ARN": {
+       "Ref": "DatabaseSecret86DBB7B3"
       },
       "TEMP_BUCKET_NAME": {
        "Ref": "TempFilesBucketC6626CD1"
@@ -1277,10 +2191,32 @@
      ]
     },
     "Runtime": "nodejs18.x",
-    "Timeout": 30
+    "Timeout": 30,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "LambdaSecurityGroup0BD9FC99",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Ref": "SerenyaVpcPrivateSubnet1Subnet2E20D858"
+      },
+      {
+       "Ref": "SerenyaVpcPrivateSubnet2SubnetD7BD4087"
+      }
+     ]
+    }
    },
    "DependsOn": [
-    "LambdaExecutionRoleD5C26073"
+    "LambdaExecutionRoleD5C26073",
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
    ],
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/RetryFunction/Resource",
@@ -1311,6 +2247,12 @@
     },
     "RetentionInDays": 30
    },
+   "DependsOn": [
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
+   ],
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/RetryFunction/LogRetention/Resource"
    }
@@ -1329,11 +2271,21 @@
      "Variables": {
       "REGION": "eu-west-1",
       "ENVIRONMENT": "dev",
-      "JOBS_TABLE_NAME": {
-       "Ref": "ProcessingJobsTable00D8CF66"
+      "DB_HOST": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Address"
+       ]
       },
-      "USERS_TABLE_NAME": {
-       "Ref": "UsersTable9725E9C8"
+      "DB_PORT": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Port"
+       ]
+      },
+      "DB_NAME": "serenya",
+      "DB_SECRET_ARN": {
+       "Ref": "DatabaseSecret86DBB7B3"
       },
       "TEMP_BUCKET_NAME": {
        "Ref": "TempFilesBucketC6626CD1"
@@ -1356,10 +2308,32 @@
      ]
     },
     "Runtime": "nodejs18.x",
-    "Timeout": 120
+    "Timeout": 120,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "LambdaSecurityGroup0BD9FC99",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Ref": "SerenyaVpcPrivateSubnet1Subnet2E20D858"
+      },
+      {
+       "Ref": "SerenyaVpcPrivateSubnet2SubnetD7BD4087"
+      }
+     ]
+    }
    },
    "DependsOn": [
-    "LambdaExecutionRoleD5C26073"
+    "LambdaExecutionRoleD5C26073",
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
    ],
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/DoctorReportFunction/Resource",
@@ -1390,6 +2364,12 @@
     },
     "RetentionInDays": 30
    },
+   "DependsOn": [
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
+   ],
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/DoctorReportFunction/LogRetention/Resource"
    }
@@ -1408,11 +2388,21 @@
      "Variables": {
       "REGION": "eu-west-1",
       "ENVIRONMENT": "dev",
-      "JOBS_TABLE_NAME": {
-       "Ref": "ProcessingJobsTable00D8CF66"
+      "DB_HOST": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Address"
+       ]
       },
-      "USERS_TABLE_NAME": {
-       "Ref": "UsersTable9725E9C8"
+      "DB_PORT": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Port"
+       ]
+      },
+      "DB_NAME": "serenya",
+      "DB_SECRET_ARN": {
+       "Ref": "DatabaseSecret86DBB7B3"
       },
       "TEMP_BUCKET_NAME": {
        "Ref": "TempFilesBucketC6626CD1"
@@ -1437,10 +2427,32 @@
      ]
     },
     "Runtime": "nodejs18.x",
-    "Timeout": 15
+    "Timeout": 15,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "LambdaSecurityGroup0BD9FC99",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Ref": "SerenyaVpcPrivateSubnet1Subnet2E20D858"
+      },
+      {
+       "Ref": "SerenyaVpcPrivateSubnet2SubnetD7BD4087"
+      }
+     ]
+    }
    },
    "DependsOn": [
-    "LambdaExecutionRoleD5C26073"
+    "LambdaExecutionRoleD5C26073",
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
    ],
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/AuthorizerFunction/Resource",
@@ -1471,6 +2483,12 @@
     },
     "RetentionInDays": 30
    },
+   "DependsOn": [
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
+   ],
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/AuthorizerFunction/LogRetention/Resource"
    }
@@ -1506,8 +2524,131 @@
      ]
     }
    },
+   "DependsOn": [
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
+   ],
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/AuthorizerFunction/SerenyaBackenddevJWTAuthorizer6D9C8E7E:Permissions"
+   }
+  },
+  "DatabaseInitFunction432692BE": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1"
+     },
+     "S3Key": "3198b5a1cc31ff781337e263f353b573677900c8878e5b24faa0c5ef8b57d497.zip"
+    },
+    "Description": "Database schema initialization and migrations",
+    "Environment": {
+     "Variables": {
+      "REGION": "eu-west-1",
+      "ENVIRONMENT": "dev",
+      "DB_HOST": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Address"
+       ]
+      },
+      "DB_PORT": {
+       "Fn::GetAtt": [
+        "SerenyaDatabase21D84656",
+        "Endpoint.Port"
+       ]
+      },
+      "DB_NAME": "serenya",
+      "DB_SECRET_ARN": {
+       "Ref": "DatabaseSecret86DBB7B3"
+      },
+      "TEMP_BUCKET_NAME": {
+       "Ref": "TempFilesBucketC6626CD1"
+      },
+      "API_SECRETS_ARN": {
+       "Ref": "SerenyaApiSecretsA24BF8CE"
+      },
+      "KMS_KEY_ID": {
+       "Ref": "SerenyaEncryptionKey30AB90B6"
+      },
+      "ENABLE_DETAILED_LOGGING": "true"
+     }
+    },
+    "Handler": "index.handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "LambdaExecutionRoleD5C26073",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Timeout": 300,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "LambdaSecurityGroup0BD9FC99",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Ref": "SerenyaVpcPrivateSubnet1Subnet2E20D858"
+      },
+      {
+       "Ref": "SerenyaVpcPrivateSubnet2SubnetD7BD4087"
+      }
+     ]
+    }
+   },
+   "DependsOn": [
+    "LambdaExecutionRoleD5C26073",
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/DatabaseInitFunction/Resource",
+    "aws:asset:path": "asset.3198b5a1cc31ff781337e263f353b573677900c8878e5b24faa0c5ef8b57d497",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "DatabaseInitFunctionLogRetention1C9B6487": {
+   "Type": "Custom::LogRetention",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aFD4BFC8A",
+      "Arn"
+     ]
+    },
+    "LogGroupName": {
+     "Fn::Join": [
+      "",
+      [
+       "/aws/lambda/",
+       {
+        "Ref": "DatabaseInitFunction432692BE"
+       }
+      ]
+     ]
+    },
+    "RetentionInDays": 30
+   },
+   "DependsOn": [
+    "SerenyaVpcPrivateSubnet1DefaultRoute9EE28854",
+    "SerenyaVpcPrivateSubnet1RouteTableAssociationBF7668BA",
+    "SerenyaVpcPrivateSubnet2DefaultRouteBBBE9AC0",
+    "SerenyaVpcPrivateSubnet2RouteTableAssociation8442D9D3"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SerenyaBackend-dev/DatabaseInitFunction/LogRetention/Resource"
    }
   },
   "JWTAuthorizerE8D8D90E": {
@@ -3499,93 +4640,10 @@
     "aws:cdk:path": "SerenyaBackend-dev/ApiGatewayLogGroup/Resource"
    }
   },
-  "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleB6FB88EC": {
-   "Type": "AWS::IAM::Role",
-   "Properties": {
-    "AssumeRolePolicyDocument": {
-     "Statement": [
-      {
-       "Action": "sts:AssumeRole",
-       "Effect": "Allow",
-       "Principal": {
-        "Service": "lambda.amazonaws.com"
-       }
-      }
-     ],
-     "Version": "2012-10-17"
-    },
-    "ManagedPolicyArns": [
-     {
-      "Fn::Join": [
-       "",
-       [
-        "arn:",
-        {
-         "Ref": "AWS::Partition"
-        },
-        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-       ]
-      ]
-     }
-    ]
-   },
-   "Metadata": {
-    "aws:cdk:path": "SerenyaBackend-dev/BucketNotificationsHandler050a0587b7544547bf325f094a3db834/Role/Resource"
-   }
-  },
-  "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleDefaultPolicy2CF63D36": {
-   "Type": "AWS::IAM::Policy",
-   "Properties": {
-    "PolicyDocument": {
-     "Statement": [
-      {
-       "Action": "s3:PutBucketNotification",
-       "Effect": "Allow",
-       "Resource": "*"
-      }
-     ],
-     "Version": "2012-10-17"
-    },
-    "PolicyName": "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleDefaultPolicy2CF63D36",
-    "Roles": [
-     {
-      "Ref": "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleB6FB88EC"
-     }
-    ]
-   },
-   "Metadata": {
-    "aws:cdk:path": "SerenyaBackend-dev/BucketNotificationsHandler050a0587b7544547bf325f094a3db834/Role/DefaultPolicy/Resource"
-   }
-  },
-  "BucketNotificationsHandler050a0587b7544547bf325f094a3db8347ECC3691": {
-   "Type": "AWS::Lambda::Function",
-   "Properties": {
-    "Description": "AWS CloudFormation handler for \"Custom::S3BucketNotifications\" resources (@aws-cdk/aws-s3)",
-    "Code": {
-     "ZipFile": "import boto3  # type: ignore\nimport json\nimport logging\nimport urllib.request\n\ns3 = boto3.client(\"s3\")\n\nEVENTBRIDGE_CONFIGURATION = 'EventBridgeConfiguration'\nCONFIGURATION_TYPES = [\"TopicConfigurations\", \"QueueConfigurations\", \"LambdaFunctionConfigurations\"]\n\ndef handler(event: dict, context):\n  response_status = \"SUCCESS\"\n  error_message = \"\"\n  try:\n    props = event[\"ResourceProperties\"]\n    notification_configuration = props[\"NotificationConfiguration\"]\n    managed = props.get('Managed', 'true').lower() == 'true'\n    skipDestinationValidation = props.get('SkipDestinationValidation', 'false').lower() == 'true'\n    stack_id = event['StackId']\n    old = event.get(\"OldResourceProperties\", {}).get(\"NotificationConfiguration\", {})\n    if managed:\n      config = handle_managed(event[\"RequestType\"], notification_configuration)\n    else:\n      config = handle_unmanaged(props[\"BucketName\"], stack_id, event[\"RequestType\"], notification_configuration, old)\n    s3.put_bucket_notification_configuration(Bucket=props[\"BucketName\"], NotificationConfiguration=config, SkipDestinationValidation=skipDestinationValidation)\n  except Exception as e:\n    logging.exception(\"Failed to put bucket notification configuration\")\n    response_status = \"FAILED\"\n    error_message = f\"Error: {str(e)}. \"\n  finally:\n    submit_response(event, context, response_status, error_message)\n\ndef handle_managed(request_type, notification_configuration):\n  if request_type == 'Delete':\n    return {}\n  return notification_configuration\n\ndef handle_unmanaged(bucket, stack_id, request_type, notification_configuration, old):\n  def get_id(n):\n    n['Id'] = ''\n    sorted_notifications = sort_filter_rules(n)\n    strToHash=json.dumps(sorted_notifications, sort_keys=True).replace('\"Name\": \"prefix\"', '\"Name\": \"Prefix\"').replace('\"Name\": \"suffix\"', '\"Name\": \"Suffix\"')\n    return f\"{stack_id}-{hash(strToHash)}\"\n  def with_id(n):\n    n['Id'] = get_id(n)\n    return n\n\n  external_notifications = {}\n  existing_notifications = s3.get_bucket_notification_configuration(Bucket=bucket)\n  for t in CONFIGURATION_TYPES:\n    if request_type == 'Update':\n        old_incoming_ids = [get_id(n) for n in old.get(t, [])]\n        external_notifications[t] = [n for n in existing_notifications.get(t, []) if not get_id(n) in old_incoming_ids]      \n    elif request_type == 'Delete':\n        external_notifications[t] = [n for n in existing_notifications.get(t, []) if not n['Id'].startswith(f\"{stack_id}-\")]\n    elif request_type == 'Create':\n        external_notifications[t] = [n for n in existing_notifications.get(t, [])]\n  if EVENTBRIDGE_CONFIGURATION in existing_notifications:\n    external_notifications[EVENTBRIDGE_CONFIGURATION] = existing_notifications[EVENTBRIDGE_CONFIGURATION]\n\n  if request_type == 'Delete':\n    return external_notifications\n\n  notifications = {}\n  for t in CONFIGURATION_TYPES:\n    external = external_notifications.get(t, [])\n    incoming = [with_id(n) for n in notification_configuration.get(t, [])]\n    notifications[t] = external + incoming\n\n  if EVENTBRIDGE_CONFIGURATION in notification_configuration:\n    notifications[EVENTBRIDGE_CONFIGURATION] = notification_configuration[EVENTBRIDGE_CONFIGURATION]\n  elif EVENTBRIDGE_CONFIGURATION in external_notifications:\n    notifications[EVENTBRIDGE_CONFIGURATION] = external_notifications[EVENTBRIDGE_CONFIGURATION]\n\n  return notifications\n\ndef submit_response(event: dict, context, response_status: str, error_message: str):\n  response_body = json.dumps(\n    {\n      \"Status\": response_status,\n      \"Reason\": f\"{error_message}See the details in CloudWatch Log Stream: {context.log_stream_name}\",\n      \"PhysicalResourceId\": event.get(\"PhysicalResourceId\") or event[\"LogicalResourceId\"],\n      \"StackId\": event[\"StackId\"],\n      \"RequestId\": event[\"RequestId\"],\n      \"LogicalResourceId\": event[\"LogicalResourceId\"],\n      \"NoEcho\": False,\n    }\n  ).encode(\"utf-8\")\n  headers = {\"content-type\": \"\", \"content-length\": str(len(response_body))}\n  try:\n    req = urllib.request.Request(url=event[\"ResponseURL\"], headers=headers, data=response_body, method=\"PUT\")\n    with urllib.request.urlopen(req) as response:\n      print(response.read().decode(\"utf-8\"))\n    print(\"Status code: \" + response.reason)\n  except Exception as e:\n      print(\"send(..) failed executing request.urlopen(..): \" + str(e))\n\ndef sort_filter_rules(json_obj):\n  if not isinstance(json_obj, dict):\n      return json_obj\n  for key, value in json_obj.items():\n      if isinstance(value, dict):\n          json_obj[key] = sort_filter_rules(value)\n      elif isinstance(value, list):\n          json_obj[key] = [sort_filter_rules(item) for item in value]\n  if \"Filter\" in json_obj and \"Key\" in json_obj[\"Filter\"] and \"FilterRules\" in json_obj[\"Filter\"][\"Key\"]:\n      filter_rules = json_obj[\"Filter\"][\"Key\"][\"FilterRules\"]\n      sorted_filter_rules = sorted(filter_rules, key=lambda x: x[\"Name\"])\n      json_obj[\"Filter\"][\"Key\"][\"FilterRules\"] = sorted_filter_rules\n  return json_obj"
-    },
-    "Handler": "index.handler",
-    "Role": {
-     "Fn::GetAtt": [
-      "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleB6FB88EC",
-      "Arn"
-     ]
-    },
-    "Runtime": "python3.11",
-    "Timeout": 300
-   },
-   "DependsOn": [
-    "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleDefaultPolicy2CF63D36",
-    "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleB6FB88EC"
-   ],
-   "Metadata": {
-    "aws:cdk:path": "SerenyaBackend-dev/BucketNotificationsHandler050a0587b7544547bf325f094a3db834/Resource"
-   }
-  },
   "CDKMetadata": {
    "Type": "AWS::CDK::Metadata",
    "Properties": {
-    "Analytics": "v2:deflate64:H4sIAAAAAAAA/22QQW/CMAyFfwv3kEG57ApM2wGmocIdhdSU0Cau4gTURfnvU1IQbNrJ3/NL/CwXvJjO+GQkrjSWVTNu1YGHrROyYeJK+9Bo4mEFPVsezQr6yAikBUdaGFGD5WGbdbIHioxmPCy8bIbujYaywVbJ/tG+6UEsBEFkrdCHSvCwPJoNWK2IFBr27o10CZZHc+fIqt4IjdWBh504tJDMDJEpoXkocejl+ogeKO25F0TgiM9TYS3WxMMa6xIcmJy2xvrDou/StztHJjpVCwdX0fOwwwbM3LsTWvUNNj18UiWQm3cqL/HAuZTojWNv0LXYazD5UE9q60SdNx+gBEJvJaQDsU9wJ6ySeaO7ewvJHCNbenKo/zP/WBuLF1WBzdPzJVKqMvWvyV/edd5FZrACfqaXS1Hw6SufjM6k1Nh645QGXg71Byn6hb5VAgAA"
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/31SwW7bMAz9lt4VrU0vvTrNVgTtOsMJei1omXPU2JIhUgk8wf8+yHLioCt24uPjo/lEeimXd/fy9gZOtFDVYdHoUoYtgzoIONF7OLQkwzP24vG3ecZ+EKiWMrx1KhJv+aPIfdlotfWlQY7cjArrGXdQNjjzM5cRWaWBtTUXcQTfN3kMr8BPwHiCXuROH4Fx/vDGMDqDF0FyMmUZM6h9i4bFFpV3mvsnZ303evgvsTG1Q6JBECqHTC0YqNHJsB3zSR9RCjtwNfLVvIvgc2UQriIZ1sBQAuHGEINRKNKTLm7Wq3+Is3QQdC/DyqtDMjKhFHLbaNXP9JSnZAWEg9DQylDYdIoxzk0JDaKBtqxAhh/eqPNZrnGOrtVE2pro5h2IkElmMYjG1iTDi60LZDRjx4utLw8540FAp+t0KBl29oAm87y3Tv9BF4VXWYHEWadHwzPMlLLesFhj19j+vParbMtQpx9uBAWS9U5hXIP4iby3VSxO6Fydhox4GK5oT2zbr1SfSrmzR12hG8eMK4njtaljzy/PnedBGFuh/KBvx+VS3j3I25sP0nrhvGHdoixS/At/m8xVkQMAAA=="
    },
    "Metadata": {
     "aws:cdk:path": "SerenyaBackend-dev/CDKMetadata/Default"
@@ -3666,6 +4724,48 @@
    },
    "Export": {
     "Name": "serenya-kms-key-dev"
+   }
+  },
+  "DatabaseHost": {
+   "Description": "PostgreSQL database hostname",
+   "Value": {
+    "Fn::GetAtt": [
+     "SerenyaDatabase21D84656",
+     "Endpoint.Address"
+    ]
+   },
+   "Export": {
+    "Name": "serenya-db-host-dev"
+   }
+  },
+  "DatabasePort": {
+   "Description": "PostgreSQL database port",
+   "Value": {
+    "Fn::GetAtt": [
+     "SerenyaDatabase21D84656",
+     "Endpoint.Port"
+    ]
+   },
+   "Export": {
+    "Name": "serenya-db-port-dev"
+   }
+  },
+  "DatabaseSecretArn": {
+   "Description": "Database credentials secret ARN",
+   "Value": {
+    "Ref": "DatabaseSecret86DBB7B3"
+   },
+   "Export": {
+    "Name": "serenya-db-secret-dev"
+   }
+  },
+  "VpcId": {
+   "Description": "VPC ID for healthcare compliance",
+   "Value": {
+    "Ref": "SerenyaVpcD4692594"
+   },
+   "Export": {
+    "Name": "serenya-vpc-dev"
    }
   }
  },

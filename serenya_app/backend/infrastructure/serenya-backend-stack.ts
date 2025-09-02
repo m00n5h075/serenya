@@ -103,7 +103,7 @@ export class SerenyaBackendStack extends cdk.Stack {
     // PostgreSQL RDS Instance
     this.database = new rds.DatabaseInstance(this, 'SerenyaDatabase', {
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_15_4,
+        version: rds.PostgresEngineVersion.VER_15_8,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
@@ -183,6 +183,7 @@ export class SerenyaBackendStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole'),
       ],
       inlinePolicies: {
         SerenyaLambdaPolicy: new iam.PolicyDocument({
