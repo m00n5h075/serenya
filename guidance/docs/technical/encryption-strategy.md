@@ -17,23 +17,30 @@
 
 ### **Strategic Approach: Hybrid Encryption Model**
 
-**Decision Rationale**: Different encryption approaches based on table usage patterns and performance requirements to optimize both security and user experience.
+**Decision Rationale**: Different encryption approaches based on data location and processing requirements to optimize both security, user experience, and regulatory compliance.
 
 **Core Architecture**:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    HYBRID ENCRYPTION STRATEGY              │
 ├─────────────────────────────────────────────────────────────┤
-│  🔒 FULL TABLE ENCRYPTION     │  🔐 FIELD-LEVEL ENCRYPTION │
-│  • Low query frequency        │  • High query frequency    │
-│  • Bulk data access          │  • Mixed sensitivity data   │
-│  • Maximum security          │  • Performance critical     │
+│  📱 DEVICE-SIDE ENCRYPTION    │  🖥️ SERVER-SIDE ENCRYPTION │
+│  • Biometric-controlled keys │  • AWS KMS managed keys     │
+│  • Local-only storage        │  • Field-level encryption   │
+│  • Maximum privacy          │  • Compliance & performance │
 │                              │                             │
-│  ✅ payments                  │  ✅ users                   │
-│  ✅ lab_results               │  ✅ subscriptions           │
-│  ✅ vitals                    │  ✅ serenya_content         │
-│                              │  ✅ chat_messages           │
+│  ✅ serenya_content          │  ✅ users                   │
+│  ✅ lab_results              │  ✅ subscriptions           │
+│  ✅ vitals                   │  ✅ payments (full table)   │
+│  ✅ chat_messages (local)    │  ✅ audit_events            │
+│                              │  ✅ chat_options            │
 └─────────────────────────────────────────────────────────────┘
+```
+
+**Medical Data Processing Workflow**:
+```
+Device (Biometric Encrypted) → S3 Temp Storage → Server Decryption → 
+AWS Bedrock (VPC PrivateLink) → Re-encryption → Device Storage → S3 Cleanup
 ```
 
 ### **Security Compliance Framework**
@@ -192,6 +199,518 @@ class BiometricKeyAccess {
             success: didAuthenticate,
             authMethod: _getAuthMethodFromBiometrics(availableBiometrics),
         );
+    }
+}
+```
+
+### **Biometric-Server Integration Flow**
+
+**Agent Handoff**: Integration connects to **→ api-contracts.md** authentication endpoints and **→ database-architecture.md** authentication tables
+
+**Design Philosophy**: 
+- **Challenge-Response Model**: Server sends challenge, device responds with biometric proof
+- **Zero-Knowledge**: Server never receives actual biometric data or device keys
+- **Session Correlation**: Link device authentication with server sessions
+- **Hardware Attestation**: Verify requests come from legitimate secure hardware
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              BIOMETRIC-SERVER INTEGRATION FLOW             │
+├─────────────────────────────────────────────────────────────┤
+│  📱 CLIENT (Flutter)         🔄 API FLOW        🖥️ SERVER   │
+│                                                             │
+│  1️⃣ DEVICE REGISTRATION                                    │
+│  ├── Generate device keys    ──────────→     ├── Store     │
+│  ├── Create device record                     │   device    │
+│  └── Biometric enrollment                     │   metadata  │
+│                                                             │
+│  2️⃣ AUTHENTICATION CHALLENGE                              │
+│                              ←──────────      ├── Generate │
+│  ├── Receive challenge                         │   challenge │
+│  ├── Biometric verification                    │   nonce     │
+│  ├── Sign challenge with                       └── Session  │
+│  │   hardware-protected key                       tracking  │
+│                                                             │
+│  3️⃣ VERIFICATION RESPONSE                                  │
+│  ├── Send signed response    ──────────→     ├── Verify   │
+│  ├── Include device                           │   signature │
+│  │   attestation                              ├── Update   │
+│  └── User session data                        │   session  │
+│                                               └── Grant     │
+│                                                   access    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### **Phase 1: Device Registration & Enrollment**
+
+**Database Integration**: Uses `user_devices` and `biometric_registrations` tables from **→ database-architecture.md**
+
+```dart
+class BiometricServerIntegration {
+    
+    // Register device during first authentication
+    static Future<DeviceRegistrationResult> registerDeviceWithServer(
+        String userId
+    ) async {
+        try {
+            // 1. Generate device-specific key pair for server communication
+            final keyPair = await _generateDeviceServerKeyPair();
+            
+            // 2. Create device attestation
+            final deviceAttestation = await _createDeviceAttestation();
+            
+            // 3. Get device fingerprint for identification
+            final deviceFingerprint = await _getDeviceFingerprint();
+            
+            // 4. Register with server via API call
+            final registrationRequest = {
+                'device_fingerprint': deviceFingerprint,
+                'public_key': base64.encode(keyPair.publicKey),
+                'device_model': await _getDeviceModel(),
+                'os_version': await _getOSVersion(),
+                'app_version': await _getAppVersion(),
+                'biometric_types': await _getAvailableBiometricTypes(),
+                'hardware_attestation': deviceAttestation,
+                'registration_timestamp': DateTime.now().toIso8601String(),
+            };
+            
+            // Call POST /auth/biometric/register from api-contracts.md
+            final response = await ApiClient.post(
+                '/auth/biometric/register',
+                body: registrationRequest
+            );
+            
+            if (response.success) {
+                final registrationData = response.data;
+                
+                // 5. Store server-provided device ID and verification keys
+                await _storeDeviceRegistration(
+                    registrationData['device_id'],
+                    keyPair.privateKey,
+                    registrationData['server_public_key']
+                );
+                
+                // 6. Log successful registration
+                await AuditLogger.logAuthenticationEvent(
+                    'device_registered',
+                    deviceId: registrationData['device_id'],
+                    userId: userId
+                );
+                
+                return DeviceRegistrationResult(
+                    success: true,
+                    deviceId: registrationData['device_id']
+                );
+            } else {
+                throw DeviceRegistrationException(response.error);
+            }
+            
+        } catch (e) {
+            await AuditLogger.logAuthenticationEvent(
+                'device_registration_failed',
+                error: e.toString(),
+                userId: userId
+            );
+            rethrow;
+        }
+    }
+    
+    static Future<DeviceKeyPair> _generateDeviceServerKeyPair() async {
+        // Generate ECDSA P-256 key pair for server authentication
+        final generator = ECKeyGenerator();
+        generator.init(ECKeyGeneratorParameters(ECCurve_secp256r1()));
+        
+        final keyPair = generator.generateKeyPair();
+        
+        return DeviceKeyPair(
+            publicKey: (keyPair.publicKey as ECPublicKey).Q!.getEncoded(false),
+            privateKey: (keyPair.privateKey as ECPrivateKey).d!.toByteArray()
+        );
+    }
+    
+    static Future<String> _createDeviceAttestation() async {
+        // Platform-specific device attestation
+        if (Platform.isIOS) {
+            // iOS: DeviceCheck attestation
+            return await _iOSDeviceCheck();
+        } else if (Platform.isAndroid) {
+            // Android: SafetyNet attestation
+            return await _androidSafetyNet();
+        } else {
+            throw UnsupportedError('Platform not supported for device attestation');
+        }
+    }
+}
+```
+
+#### **Phase 2: Challenge-Response Authentication**
+
+**Integration**: Uses `user_sessions` table and connects to existing session management
+
+```dart
+class BiometricChallengeResponse {
+    
+    // Authenticate with server using challenge-response
+    static Future<AuthenticationResult> authenticateWithServer(
+        String userId,
+        String deviceId
+    ) async {
+        try {
+            // 1. Request authentication challenge from server
+            final challengeResponse = await _requestAuthenticationChallenge(
+                userId, 
+                deviceId
+            );
+            
+            if (!challengeResponse.success) {
+                throw AuthenticationException('Failed to get challenge');
+            }
+            
+            final challenge = challengeResponse.data;
+            
+            // 2. Trigger biometric authentication locally
+            final biometricResult = await BiometricKeyAccess.getDeviceRootKeyWithBiometric();
+            
+            // 3. Generate challenge response using device private key
+            final challengeSignature = await _signChallenge(
+                challenge['nonce'],
+                challenge['timestamp'],
+                deviceId
+            );
+            
+            // 4. Create biometric verification proof
+            final biometricProof = await _createBiometricProof(
+                challenge['nonce'],
+                biometricResult
+            );
+            
+            // 5. Send verification response to server
+            final verificationRequest = {
+                'challenge_id': challenge['challenge_id'],
+                'device_id': deviceId,
+                'signature': challengeSignature,
+                'biometric_proof': biometricProof,
+                'response_timestamp': DateTime.now().toIso8601String(),
+            };
+            
+            // Call POST /auth/biometric/verify from api-contracts.md
+            final verificationResponse = await ApiClient.post(
+                '/auth/biometric/verify',
+                body: verificationRequest
+            );
+            
+            if (verificationResponse.success) {
+                final authData = verificationResponse.data;
+                
+                // 6. Store authentication tokens and session data
+                await _storeAuthenticationResult(authData);
+                
+                // 7. Log successful authentication
+                await AuditLogger.logAuthenticationEvent(
+                    'biometric_server_auth_success',
+                    deviceId: deviceId,
+                    sessionId: authData['session_id']
+                );
+                
+                return AuthenticationResult(
+                    success: true,
+                    accessToken: authData['access_token'],
+                    refreshToken: authData['refresh_token'],
+                    sessionId: authData['session_id'],
+                    expiresAt: DateTime.parse(authData['expires_at'])
+                );
+            } else {
+                await AuditLogger.logAuthenticationEvent(
+                    'biometric_server_auth_failed',
+                    deviceId: deviceId,
+                    error: verificationResponse.error
+                );
+                
+                return AuthenticationResult(
+                    success: false,
+                    error: verificationResponse.error
+                );
+            }
+            
+        } catch (e) {
+            await AuditLogger.logAuthenticationEvent(
+                'biometric_challenge_response_failed',
+                deviceId: deviceId,
+                error: e.toString()
+            );
+            rethrow;
+        }
+    }
+    
+    static Future<ApiResponse> _requestAuthenticationChallenge(
+        String userId,
+        String deviceId
+    ) async {
+        return await ApiClient.get(
+            '/auth/biometric/challenge',
+            params: {
+                'user_id': userId,
+                'device_id': deviceId,
+                'challenge_type': 'biometric_verification'
+            }
+        );
+    }
+    
+    static Future<String> _signChallenge(
+        String nonce,
+        String timestamp, 
+        String deviceId
+    ) async {
+        // Retrieve device private key from secure storage
+        final devicePrivateKey = await _getDevicePrivateKey(deviceId);
+        
+        // Create challenge payload to sign
+        final challengePayload = '$nonce|$timestamp|$deviceId';
+        final payloadBytes = utf8.encode(challengePayload);
+        
+        // Sign with ECDSA
+        final signer = ECDSASigner(SHA256Digest());
+        signer.init(true, PrivateKeyParameter(devicePrivateKey));
+        
+        final signature = signer.generateSignature(payloadBytes);
+        
+        // Return base64-encoded signature
+        return base64.encode(signature.bytes);
+    }
+    
+    static Future<String> _createBiometricProof(
+        String nonce,
+        Uint8List biometricKey
+    ) async {
+        // Create proof that biometric authentication occurred
+        // without exposing the actual biometric data or device key
+        
+        final proofPayload = {
+            'nonce': nonce,
+            'timestamp': DateTime.now().toIso8601String(),
+            'proof_type': 'biometric_key_derived',
+            'key_version': 'v1'
+        };
+        
+        // Use biometric-derived key to sign the proof payload
+        final hmac = Hmac(sha256, biometricKey);
+        final proofBytes = utf8.encode(jsonEncode(proofPayload));
+        final proofSignature = hmac.convert(proofBytes);
+        
+        return base64.encode(proofSignature.bytes);
+    }
+}
+```
+
+#### **Phase 3: Session Management & Token Correlation**
+
+**Database Integration**: Updates `user_sessions` table with biometric authentication status
+
+```typescript
+// Server-side session correlation with biometric authentication
+class BiometricSessionManager {
+    
+    // Correlate biometric authentication with user session
+    static async correlateBiometricSession(
+        userId: string,
+        deviceId: string,
+        challengeId: string,
+        signature: string,
+        biometricProof: string
+    ): Promise<SessionCorrelationResult> {
+        
+        try {
+            // 1. Verify challenge response
+            const challengeValid = await this.verifyChallengeResponse(
+                challengeId,
+                deviceId,
+                signature
+            );
+            
+            if (!challengeValid) {
+                await auditLogger.logSecurityEvent('invalid_challenge_response', {
+                    userId: sha256(userId),
+                    deviceId: sha256(deviceId),
+                    challengeId
+                });
+                
+                return { success: false, error: 'Invalid challenge response' };
+            }
+            
+            // 2. Verify biometric proof
+            const biometricValid = await this.verifyBiometricProof(
+                deviceId,
+                biometricProof,
+                challengeId
+            );
+            
+            if (!biometricValid) {
+                await auditLogger.logSecurityEvent('invalid_biometric_proof', {
+                    userId: sha256(userId),
+                    deviceId: sha256(deviceId),
+                    challengeId
+                });
+                
+                return { success: false, error: 'Invalid biometric proof' };
+            }
+            
+            // 3. Create or update user session with biometric authentication
+            const sessionData = await this.createAuthenticatedSession(
+                userId,
+                deviceId,
+                'biometric_verified'
+            );
+            
+            // 4. Update biometric_registrations table with latest auth
+            await database.query(`
+                UPDATE biometric_registrations 
+                SET 
+                    last_challenge_at = CURRENT_TIMESTAMP,
+                    challenge_count = challenge_count + 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE device_id = $1 AND user_id = $2
+            `, [deviceId, userId]);
+            
+            // 5. Update user_sessions table
+            await database.query(`
+                INSERT INTO user_sessions (
+                    session_id, user_id, device_id, access_token, refresh_token,
+                    token_expires_at, refresh_expires_at, biometric_cycle_expires_at,
+                    session_status, last_biometric_auth, created_at, updated_at
+                ) VALUES (
+                    $1, $2, $3, $4, $5, $6, $7, $8, 'active', CURRENT_TIMESTAMP, 
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                ON CONFLICT (session_id) DO UPDATE SET
+                    access_token = EXCLUDED.access_token,
+                    refresh_token = EXCLUDED.refresh_token,
+                    token_expires_at = EXCLUDED.token_expires_at,
+                    last_biometric_auth = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+            `, [
+                sessionData.sessionId,
+                userId,
+                deviceId,
+                sessionData.accessToken,
+                sessionData.refreshToken,
+                sessionData.tokenExpiresAt,
+                sessionData.refreshExpiresAt,
+                sessionData.biometricCycleExpiresAt
+            ]);
+            
+            // 6. Log successful session correlation
+            await auditLogger.logAuthenticationEvent('biometric_session_created', {
+                userId: sha256(userId),
+                deviceId: sha256(deviceId),
+                sessionId: sessionData.sessionId,
+                authMethod: 'biometric_challenge_response'
+            });
+            
+            return {
+                success: true,
+                sessionData: {
+                    sessionId: sessionData.sessionId,
+                    accessToken: sessionData.accessToken,
+                    refreshToken: sessionData.refreshToken,
+                    expiresAt: sessionData.tokenExpiresAt.toISOString()
+                }
+            };
+            
+        } catch (error) {
+            await auditLogger.logSecurityEvent('biometric_session_correlation_failed', {
+                userId: sha256(userId),
+                deviceId: sha256(deviceId),
+                error: error.message
+            });
+            
+            return { success: false, error: 'Session correlation failed' };
+        }
+    }
+    
+    // Verify challenge response signature
+    static async verifyChallengeResponse(
+        challengeId: string,
+        deviceId: string,
+        signature: string
+    ): Promise<boolean> {
+        
+        // 1. Get original challenge data
+        const challenge = await this.getChallengeData(challengeId);
+        if (!challenge || challenge.deviceId !== deviceId) {
+            return false;
+        }
+        
+        // 2. Check challenge expiration (5 minutes max)
+        const challengeAge = Date.now() - challenge.createdAt.getTime();
+        if (challengeAge > 5 * 60 * 1000) {
+            return false;
+        }
+        
+        // 3. Get device public key
+        const devicePublicKey = await this.getDevicePublicKey(deviceId);
+        if (!devicePublicKey) {
+            return false;
+        }
+        
+        // 4. Verify signature
+        const challengePayload = `${challenge.nonce}|${challenge.timestamp}|${deviceId}`;
+        const payloadBytes = Buffer.from(challengePayload, 'utf8');
+        const signatureBytes = Buffer.from(signature, 'base64');
+        
+        const verifier = crypto.createVerify('SHA256');
+        verifier.update(payloadBytes);
+        
+        return verifier.verify(devicePublicKey, signatureBytes);
+    }
+    
+    // Generate JWT tokens with biometric authentication claims
+    static async createAuthenticatedSession(
+        userId: string,
+        deviceId: string,
+        authMethod: string
+    ): Promise<SessionData> {
+        
+        const sessionId = generateUuid();
+        const now = new Date();
+        
+        // Token expiration times from database-architecture.md
+        const tokenExpiresAt = new Date(now.getTime() + 15 * 60 * 1000);  // 15 minutes
+        const refreshExpiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);  // 7 days
+        const biometricCycleExpiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);  // 7 days
+        
+        // JWT payload with biometric claims
+        const tokenPayload = {
+            sub: userId,
+            sid: sessionId,
+            did: deviceId,
+            auth_method: authMethod,
+            auth_time: Math.floor(now.getTime() / 1000),
+            biometric_verified: true,
+            iat: Math.floor(now.getTime() / 1000),
+            exp: Math.floor(tokenExpiresAt.getTime() / 1000)
+        };
+        
+        const refreshPayload = {
+            sub: userId,
+            sid: sessionId,
+            did: deviceId,
+            token_type: 'refresh',
+            iat: Math.floor(now.getTime() / 1000),
+            exp: Math.floor(refreshExpiresAt.getTime() / 1000)
+        };
+        
+        // Sign tokens with server private key
+        const accessToken = jwt.sign(tokenPayload, process.env.JWT_SECRET!);
+        const refreshToken = jwt.sign(refreshPayload, process.env.JWT_REFRESH_SECRET!);
+        
+        return {
+            sessionId,
+            accessToken,
+            refreshToken,
+            tokenExpiresAt,
+            refreshExpiresAt,
+            biometricCycleExpiresAt
+        };
     }
 }
 ```
@@ -794,6 +1313,70 @@ class ServerSideEncryption {
     }
 }
 ```
+
+### **AWS Bedrock Medical Data Processing**
+
+**Agent Handoff**: Bedrock integration details in **→ system-architecture.md** and **→ llm-integration-architecture.md**
+
+**Critical Architecture Decision**: Based on AWS expert investigation, Bedrock cannot decrypt pre-encrypted medical documents internally. Our server must decrypt before sending to Bedrock for AI processing.
+
+**Secure Processing Pipeline**:
+```typescript
+class SecureMedicalDocumentProcessor {
+    private bedrock: BedrockClient;
+    private kmsClient: KMSClient;
+
+    async processEncryptedDocument(
+        encryptedDocument: Buffer,
+        biometricKey: Uint8List,
+        userId: string
+    ): Promise<EncryptedAnalysisResult> {
+        
+        // 1. Decrypt document in memory (server-side)
+        const plaintext = await this.decryptWithBiometricKey(
+            encryptedDocument, 
+            biometricKey
+        );
+        
+        // 2. Send to Bedrock via VPC PrivateLink (secure network)
+        const aiResponse = await this.bedrock.invokeModel({
+            modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+            contentType: 'application/json',
+            body: JSON.stringify({
+                messages: [{ role: 'user', content: plaintext }],
+                max_tokens: 4000,
+                temperature: 0.7
+            })
+        });
+        
+        // 3. Secure memory cleanup
+        this.secureDeletePlaintext(plaintext);
+        
+        // 4. Re-encrypt response for device storage
+        return await this.encryptWithBiometricKey(aiResponse, biometricKey);
+    }
+    
+    private secureDeletePlaintext(plaintext: string): void {
+        // Overwrite memory with random data
+        // Force garbage collection
+        // Implement secure deletion protocols
+    }
+}
+```
+
+**Security Guarantees**:
+- **VPC Isolation**: All Bedrock communication within private VPC using PrivateLink
+- **Memory Protection**: Plaintext exists only during processing, then securely deleted
+- **Encryption in Transit**: TLS 1.2+ encryption for all Bedrock communication
+- **Customer Managed Keys**: Bedrock uses CMK for internal encryption at rest
+- **Audit Logging**: All Bedrock API calls logged via CloudTrail
+- **HIPAA Compliance**: Full Business Associate Agreement coverage
+
+**Temporary Storage Policy**:
+- **S3 Processing**: Documents temporarily stored encrypted in S3 (max 2 days)
+- **Automatic Cleanup**: S3 lifecycle policies delete processed documents
+- **Processing Retries**: Temporary retention for polling and retry mechanisms
+- **No Persistent Storage**: Medical data never permanently stored server-side
 
 ---
 
@@ -1544,6 +2127,108 @@ class SecurityAuditIntegration {
                 'consecutive_failures': await _getConsecutiveFailureCount()
             }
         });
+    }
+}
+```
+
+### **Device-Side Audit Logging Integration**
+
+**Purpose**: Local audit logging for content access events only (viewing results/reports)
+
+```dart
+// Device-side audit logging for local content access
+class DeviceSideAuditLogger {
+    // Log when users view medical content locally (Category 4: Content Access Events)
+    static Future<void> logContentAccessEvent(
+        String contentId,
+        String contentType, // 'result' or 'report'
+        String accessMethod // 'view', 'search', 'timeline'
+    ) async {
+        await LocalAuditStorage.storeEvent({
+            'event_id': Uuid().v4(),
+            'event_type': 'data_access',
+            'event_subtype': 'medical_content_accessed',
+            'timestamp': DateTime.now().toIso8601String(),
+            'user_id': await DeviceAuth.getCurrentUserId(),
+            'content_details': {
+                'content_id': contentId,
+                'content_type': contentType,
+                'access_method': accessMethod,
+                'data_sensitivity': 'high' // All medical content is high sensitivity
+            },
+            'device_context': {
+                'app_version': await PackageInfo.fromPlatform().version,
+                'platform': Platform.operatingSystem,
+                'device_id': await DeviceAuth.getDeviceFingerprint(),
+                'session_id': await SessionManager.getCurrentSessionId()
+            }
+        });
+    }
+    
+    // Log local search operations on medical data
+    static Future<void> logLocalSearchEvent(
+        String searchQuery,
+        int resultsCount,
+        List<String> accessedContentIds
+    ) async {
+        await LocalAuditStorage.storeEvent({
+            'event_id': Uuid().v4(),
+            'event_type': 'data_access',
+            'event_subtype': 'medical_data_search',
+            'timestamp': DateTime.now().toIso8601String(),
+            'user_id': await DeviceAuth.getCurrentUserId(),
+            'search_details': {
+                'query_hash': sha256.convert(utf8.encode(searchQuery)).toString(), // Hash for privacy
+                'results_count': resultsCount,
+                'accessed_content_ids': accessedContentIds,
+                'search_scope': 'local_database'
+            },
+            'device_context': {
+                'app_version': await PackageInfo.fromPlatform().version,
+                'platform': Platform.operatingSystem,
+                'session_id': await SessionManager.getCurrentSessionId()
+            }
+        });
+    }
+}
+
+// Local audit storage for device-side events
+class LocalAuditStorage {
+    static const String _auditTableName = 'audit_logs';
+    
+    static Future<void> storeEvent(Map<String, dynamic> eventData) async {
+        final db = await DatabaseHelper.instance.database;
+        await db.insert(_auditTableName, {
+            'event_id': eventData['event_id'],
+            'event_type': eventData['event_type'],
+            'event_subtype': eventData['event_subtype'],
+            'timestamp': eventData['timestamp'],
+            'user_id': eventData['user_id'],
+            'event_data': jsonEncode(eventData), // Store full event as encrypted JSON
+            'created_at': DateTime.now().toIso8601String()
+        });
+    }
+    
+    // Optional: Export audit logs for compliance (encrypted)
+    static Future<String> exportAuditLogs({
+        DateTime? fromDate,
+        DateTime? toDate
+    }) async {
+        final db = await DatabaseHelper.instance.database;
+        final List<Map<String, dynamic>> logs = await db.query(
+            _auditTableName,
+            where: fromDate != null && toDate != null 
+                ? 'timestamp BETWEEN ? AND ?' 
+                : null,
+            whereArgs: fromDate != null && toDate != null 
+                ? [fromDate.toIso8601String(), toDate.toIso8601String()] 
+                : null,
+            orderBy: 'timestamp DESC'
+        );
+        
+        // Encrypt audit log export
+        final exportData = jsonEncode(logs);
+        return await FieldLevelEncryption.encryptField(exportData, 'audit_logs');
     }
 }
 ```

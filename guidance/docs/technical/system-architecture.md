@@ -122,16 +122,18 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   return { statusCode: 404, body: JSON.stringify({ error: 'Not Found' }) };
 };
 
-// Configuration - Higher resources for AI processing
+// Configuration - Higher resources for Bedrock AI processing
 const config = {
   runtime: 'nodejs18.x',
-  timeout: 180, // 3 minutes for AI processing
+  timeout: 180, // 3 minutes for Bedrock AI processing
   memorySize: 2048, // 2GB for document processing
   environment: {
-    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    BEDROCK_REGION: process.env.BEDROCK_REGION || 'eu-west-1',
+    BEDROCK_MODEL_ID: process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-5-sonnet-20241022-v2:0',
     S3_BUCKET_NAME: process.env.S3_BUCKET_NAME,
     DATABASE_URL: process.env.DATABASE_URL,
-    KMS_KEY_ID: process.env.KMS_KEY_ID
+    KMS_KEY_ID: process.env.KMS_KEY_ID,
+    COST_TRACKING_TABLE: process.env.COST_TRACKING_TABLE
   }
 };
 ```
@@ -157,12 +159,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 // Configuration
 const config = {
   runtime: 'nodejs18.x',
-  timeout: 60, // 1 minute for AI chat responses
-  memorySize: 1024, // 1GB for AI processing
+  timeout: 60, // 1 minute for Bedrock AI chat responses
+  memorySize: 1024, // 1GB for Bedrock AI processing
   environment: {
-    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    BEDROCK_REGION: process.env.BEDROCK_REGION || 'eu-west-1',
+    BEDROCK_MODEL_ID: process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-5-sonnet-20241022-v2:0',
     DATABASE_URL: process.env.DATABASE_URL,
-    KMS_KEY_ID: process.env.KMS_KEY_ID
+    KMS_KEY_ID: process.env.KMS_KEY_ID,
+    COST_TRACKING_TABLE: process.env.COST_TRACKING_TABLE
   }
 };
 ```
@@ -264,12 +268,14 @@ const kms = new KMS();
 export async function uploadDocument(
   fileData: Buffer, 
   fileName: string, 
-  userId: string
+  userId: string,
+  jobId: string
 ): Promise<string> {
-  const key = `uploads/${userId}/${Date.now()}-${fileName}`;
+  // Updated S3 key structure to match API contracts workflow
+  const key = `jobs/${jobId}_original`;
   
   const uploadParams = {
-    Bucket: process.env.S3_BUCKET_NAME,
+    Bucket: 'serenya-temp-processing', // Updated bucket name
     Key: key,
     Body: fileData,
     ServerSideEncryption: 'aws:kms',
@@ -286,16 +292,9 @@ export async function uploadDocument(
 }
 
 export async function scheduleDocumentDeletion(key: string): Promise<void> {
-  // Schedule deletion after 24 hours
-  const deleteParams = {
-    Bucket: process.env.S3_BUCKET_NAME,
-    Delete: {
-      Objects: [{ Key: key }]
-    }
-  };
-  
-  // Use EventBridge to schedule deletion
-  await scheduleEventBridgeRule(deleteParams, 24); // hours
+  // Deletion handled by S3 lifecycle policies (2 days retention)
+  // No manual deletion needed - lifecycle rules handle cleanup automatically
+  console.log(`Document ${key} scheduled for automatic deletion via lifecycle policy`);
 }
 ```
 
@@ -378,6 +377,56 @@ DatabaseSecurityGroup:
         SourceSecurityGroupId: !Ref LambdaSecurityGroup
 ```
 
+### **VPC PrivateLink for AWS Bedrock Integration**
+
+**Purpose**: Secure, private connectivity to AWS Bedrock for AI processing without internet exposure
+
+```yaml
+# VPC Endpoint for Bedrock (PrivateLink)
+BedrockVPCEndpoint:
+  Type: AWS::EC2::VPCEndpoint
+  Properties:
+    VpcId: !Ref VPC
+    ServiceName: !Sub 'com.amazonaws.${AWS::Region}.bedrock-runtime'
+    VpcEndpointType: Interface
+    SubnetIds:
+      - !Ref PrivateSubnet1
+      - !Ref PrivateSubnet2
+    SecurityGroupIds:
+      - !Ref BedrockSecurityGroup
+    PrivateDnsEnabled: true
+    PolicyDocument:
+      Version: '2012-10-17'
+      Statement:
+        - Effect: Allow
+          Principal: '*'
+          Action:
+            - bedrock:InvokeModel
+            - bedrock:InvokeModelWithResponseStream
+          Resource: !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-5-sonnet-*'
+
+# Security group for Bedrock VPC Endpoint
+BedrockSecurityGroup:
+  Type: AWS::EC2::SecurityGroup
+  Properties:
+    VpcId: !Ref VPC
+    GroupDescription: Security group for Bedrock VPC Endpoint
+    SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        SourceSecurityGroupId: !Ref LambdaSecurityGroup
+        Description: HTTPS access from Lambda functions
+```
+
+**Medical Document Processing Security Architecture**:
+1. **Encrypted Upload**: Documents uploaded encrypted to S3 temporary storage
+2. **Lambda Processing**: ProcessFunction temporarily decrypts documents in memory only
+3. **VPC PrivateLink**: Bedrock communication stays within AWS private network
+4. **Secure Memory Management**: Plaintext content securely deleted from Lambda memory
+5. **Response Encryption**: AI results encrypted before storage/transmission
+6. **Automatic Cleanup**: S3 temporary files automatically deleted
+
 ### **IAM Roles and Policies**
 ```yaml
 # Lambda execution role
@@ -421,30 +470,421 @@ LambdaExecutionRole:
                 - s3:GetObject
                 - s3:PutObject
                 - s3:DeleteObject
-              Resource: !Sub "${DocumentBucket}/*"
+              Resource: 
+                - !Sub "${TempProcessingBucket}/*"
+                - !Sub "${TempProcessingBucket}"
+      - PolicyName: BedrockAccess
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
+              Resource: 
+                - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-5-sonnet-*'
+                - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-haiku-*'
+            - Effect: Allow
+              Action:
+                - bedrock:GetFoundationModel
+                - bedrock:ListFoundationModels
+              Resource: '*'
+      - PolicyName: CostTrackingAccess
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:Query
+                - dynamodb:UpdateItem
+              Resource: !Sub "${CostTrackingTable.Arn}"
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: '*'
+              Condition:
+                StringEquals:
+                  'cloudwatch:namespace': 'Serenya/LLM'
+```
+
+### **Cost Tracking Infrastructure**
+
+#### **DynamoDB Table for LLM Usage**
+```yaml
+# Cost tracking table
+CostTrackingTable:
+  Type: AWS::DynamoDB::Table
+  Properties:
+    TableName: serenya-llm-cost-tracking
+    BillingMode: PAY_PER_REQUEST
+    AttributeDefinitions:
+      - AttributeName: userId
+        AttributeType: S
+      - AttributeName: timestamp
+        AttributeType: N
+    KeySchema:
+      - AttributeName: userId
+        KeyType: HASH
+      - AttributeName: timestamp
+        KeyType: RANGE
+    TimeToLiveSpecification:
+      AttributeName: ttl
+      Enabled: true
+    GlobalSecondaryIndexes:
+      - IndexName: monthly-usage-index
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+          - AttributeName: month
+            KeyType: RANGE
+        Projection:
+          ProjectionType: INCLUDE
+          NonKeyAttributes: [inputTokens, outputTokens, totalCost]
+    PointInTimeRecoverySpecification:
+      PointInTimeRecoveryEnabled: true
+```
+
+#### **CloudWatch Metrics for LLM Usage**
+```typescript
+// monitoring/llm-metrics.ts
+import { CloudWatch } from 'aws-sdk';
+
+const cloudwatch = new CloudWatch();
+
+export interface LLMUsageMetrics {
+  inputTokens: number;
+  outputTokens: number;
+  totalCost: number;
+  provider: 'bedrock' | 'mock';
+  modelId: string;
+  processingTimeMs: number;
+  userId: string;
+  documentType: 'lab_results' | 'vitals' | 'chat' | 'report';
+}
+
+export async function trackLLMUsage(metrics: LLMUsageMetrics): Promise<void> {
+  const metricData = [
+    {
+      MetricName: 'InputTokens',
+      Dimensions: [
+        { Name: 'Provider', Value: metrics.provider },
+        { Name: 'ModelId', Value: metrics.modelId },
+        { Name: 'DocumentType', Value: metrics.documentType }
+      ],
+      Value: metrics.inputTokens,
+      Unit: 'Count',
+      Timestamp: new Date()
+    },
+    {
+      MetricName: 'OutputTokens', 
+      Dimensions: [
+        { Name: 'Provider', Value: metrics.provider },
+        { Name: 'ModelId', Value: metrics.modelId },
+        { Name: 'DocumentType', Value: metrics.documentType }
+      ],
+      Value: metrics.outputTokens,
+      Unit: 'Count',
+      Timestamp: new Date()
+    },
+    {
+      MetricName: 'TotalCost',
+      Dimensions: [
+        { Name: 'Provider', Value: metrics.provider },
+        { Name: 'ModelId', Value: metrics.modelId }
+      ],
+      Value: metrics.totalCost,
+      Unit: 'Count', // Cost in cents
+      Timestamp: new Date()
+    },
+    {
+      MetricName: 'ProcessingTime',
+      Dimensions: [
+        { Name: 'DocumentType', Value: metrics.documentType }
+      ],
+      Value: metrics.processingTimeMs,
+      Unit: 'Milliseconds',
+      Timestamp: new Date()
+    }
+  ];
+
+  await cloudwatch.putMetricData({
+    Namespace: 'Serenya/LLM',
+    MetricData: metricData
+  }).promise();
+
+  // Store detailed usage in DynamoDB for billing integration
+  await storeLLMUsageRecord(metrics);
+}
+
+async function storeLLMUsageRecord(metrics: LLMUsageMetrics): Promise<void> {
+  const dynamodb = new AWS.DynamoDB.DocumentClient();
+  
+  const record = {
+    userId: metrics.userId,
+    timestamp: Date.now(),
+    month: new Date().toISOString().substring(0, 7), // YYYY-MM for GSI
+    inputTokens: metrics.inputTokens,
+    outputTokens: metrics.outputTokens,
+    totalCost: metrics.totalCost,
+    provider: metrics.provider,
+    modelId: metrics.modelId,
+    documentType: metrics.documentType,
+    processingTimeMs: metrics.processingTimeMs,
+    ttl: Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60) // 1 year retention
+  };
+
+  await dynamodb.put({
+    TableName: process.env.COST_TRACKING_TABLE,
+    Item: record
+  }).promise();
+}
+```
+
+### **HIPAA Compliance Infrastructure**
+
+#### **VPC Flow Logs for Audit Trail**
+```yaml
+# VPC Flow Logs Role
+VPCFlowLogsRole:
+  Type: AWS::IAM::Role
+  Properties:
+    AssumeRolePolicyDocument:
+      Statement:
+        - Effect: Allow
+          Principal:
+            Service: vpc-flow-logs.amazonaws.com
+          Action: sts:AssumeRole
+    Policies:
+      - PolicyName: CloudWatchLogsPolicy
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - logs:DescribeLogGroups
+                - logs:DescribeLogStreams
+              Resource: '*'
+
+# VPC Flow Logs
+VPCFlowLogs:
+  Type: AWS::EC2::FlowLog
+  Properties:
+    ResourceType: VPC
+    ResourceId: !Ref VPC
+    TrafficType: ALL
+    LogDestination: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:serenya-vpc-flow-logs"
+    LogDestinationType: cloud-watch-logs
+    DeliverLogsPermissionArn: !GetAtt VPCFlowLogsRole.Arn
+    LogFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action} ${flowlogstatus}'
+```
+
+#### **Network ACLs for Subnet-Level Security**
+```yaml
+# Network ACL for Isolated Subnets (Document/Chat Lambdas)
+IsolatedNetworkAcl:
+  Type: AWS::EC2::NetworkAcl
+  Properties:
+    VpcId: !Ref VPC
+    Tags:
+      - Key: Name
+        Value: IsolatedSubnetACL
+
+# Inbound rules for isolated subnets
+IsolatedNetworkAclInboundRule:
+  Type: AWS::EC2::NetworkAclEntry
+  Properties:
+    NetworkAclId: !Ref IsolatedNetworkAcl
+    RuleNumber: 100
+    Protocol: 6
+    RuleAction: allow
+    CidrBlock: 10.0.0.0/16
+    PortRange:
+      From: 443
+      To: 443
+
+# Outbound rules for isolated subnets
+IsolatedNetworkAclOutboundRule:
+  Type: AWS::EC2::NetworkAclEntry
+  Properties:
+    NetworkAclId: !Ref IsolatedNetworkAcl
+    RuleNumber: 100
+    Protocol: 6
+    RuleAction: allow
+    CidrBlock: 10.0.0.0/16
+    PortRange:
+      From: 443
+      To: 443
+    Egress: true
+
+# Associate ACL with isolated subnets
+IsolatedSubnet1AclAssociation:
+  Type: AWS::EC2::SubnetNetworkAclAssociation
+  Properties:
+    SubnetId: !Ref IsolatedSubnet1
+    NetworkAclId: !Ref IsolatedNetworkAcl
+
+IsolatedSubnet2AclAssociation:
+  Type: AWS::EC2::SubnetNetworkAclAssociation
+  Properties:
+    SubnetId: !Ref IsolatedSubnet2
+    NetworkAclId: !Ref IsolatedNetworkAcl
+```
+
+#### **Enhanced CloudTrail for HIPAA Compliance**
+```yaml
+# CloudTrail with data events
+HIPAACompliantCloudTrail:
+  Type: AWS::CloudTrail::Trail
+  Properties:
+    TrailName: serenya-hipaa-audit-trail
+    S3BucketName: !Ref CloudTrailLogsBucket
+    S3KeyPrefix: cloudtrail-logs/
+    IncludeGlobalServiceEvents: true
+    IsMultiRegionTrail: true
+    EnableLogFileValidation: true
+    EventSelectors:
+      - ReadWriteType: All
+        IncludeManagementEvents: true
+        DataResources:
+          - Type: "AWS::S3::Object"
+            Values: 
+              - !Sub "${TempProcessingBucket}/*"
+          - Type: "AWS::KMS::Key"
+            Values: 
+              - !GetAtt DatabaseEncryptionKey.Arn
+              - !GetAtt DocumentsKMSKey.Arn
+    InsightSelectors:
+      - InsightType: ApiCallRateInsight
+
+# CloudTrail logs bucket
+CloudTrailLogsBucket:
+  Type: AWS::S3::Bucket
+  Properties:
+    BucketName: !Sub "serenya-cloudtrail-logs-${AWS::AccountId}"
+    BucketEncryption:
+      ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+    PublicAccessBlockConfiguration:
+      BlockPublicAcls: true
+      BlockPublicPolicy: true
+      IgnorePublicAcls: true
+      RestrictPublicBuckets: true
 ```
 
 ---
 
 ## 📊 **Monitoring & Observability**
 
+### **Unified Error Handling Infrastructure**
+**Infrastructure support for three-layer error handling strategy (Issue #16 resolution):**
+
+#### **Circuit Breaker Implementation**
+```yaml
+# infrastructure/circuit-breakers.yml
+CircuitBreakers:
+  GoogleOAuthService:
+    failure_threshold: 5
+    success_threshold: 3
+    timeout: 30
+    monitor_window: 60
+    fallback_enabled: false
+    
+  OpenAIService:
+    failure_threshold: 3
+    success_threshold: 2
+    timeout: 45
+    monitor_window: 120
+    fallback_enabled: true  # Enable cached responses
+    
+  DatabaseService:
+    failure_threshold: 10
+    success_threshold: 5
+    timeout: 15
+    monitor_window: 30
+    fallback_enabled: false  # Critical service
+
+# Lambda environment variables
+Environment:
+  CIRCUIT_BREAKER_CONFIG_ARN: !Ref CircuitBreakerConfig
+  ERROR_CORRELATION_TABLE: !Ref ErrorCorrelationTable
+```
+
+#### **Error Monitoring & Alerting**
+```typescript
+// monitoring/error-metrics.ts
+const errorMetrics = {
+  "ErrorCategorization": {
+    "MetricName": "ErrorsByCategory",
+    "Dimensions": [
+      {"Name": "Category", "Value": "technical|validation|business|external"},
+      {"Name": "RecoveryStrategy", "Value": "retry|fallback|escalate|ignore"}
+    ],
+    "Unit": "Count"
+  },
+  "CircuitBreakerStatus": {
+    "MetricName": "CircuitBreakerState", 
+    "Dimensions": [
+      {"Name": "Service", "Value": "google_oauth|openai_api|database"},
+      {"Name": "Status", "Value": "open|closed|half_open"}
+    ],
+    "Unit": "Count"
+  },
+  "ErrorRecovery": {
+    "MetricName": "RecoverySuccess",
+    "Dimensions": [
+      {"Name": "Strategy", "Value": "retry|fallback|escalate|ignore"},
+      {"Name": "Success", "Value": "true|false"}
+    ],
+    "Unit": "Count"
+  }
+}
+```
+
+#### **Lambda Error Handling Configuration**  
+```typescript
+// All Lambda functions must implement:
+const errorHandler = {
+  timeout: 180000,  // 3 minutes max
+  retryPolicy: {
+    maximumRetryAttempts: 2,
+    maximumEventAge: 3600
+  },
+  deadLetterQueue: {
+    targetArn: errorProcessingQueue
+  },
+  environment: {
+    ERROR_CORRELATION_ENABLED: 'true',
+    CIRCUIT_BREAKER_ENABLED: 'true', 
+    FALLBACK_MODE_ENABLED: 'true'
+  }
+}
+```
+
 ### **CloudWatch Dashboards**
 ```typescript
-// monitoring/dashboard.ts
+// monitoring/dashboard.ts - Aligned with API requirements
 const dashboardConfig = {
   "widgets": [
     {
       "type": "metric",
       "properties": {
         "metrics": [
-          ["AWS/Lambda", "Duration", "FunctionName", "auth-function"],
-          ["AWS/Lambda", "Duration", "FunctionName", "document-function"],
-          ["AWS/Lambda", "Duration", "FunctionName", "chat-function"]
+          ["AWS/Lambda", "Duration", "FunctionName", "serenya-auth-function"],
+          ["AWS/Lambda", "Duration", "FunctionName", "serenya-document-function"],
+          ["AWS/Lambda", "Duration", "FunctionName", "serenya-chat-function"]
         ],
         "period": 300,
         "stat": "Average",
-        "region": "us-west-2",
-        "title": "Lambda Function Duration"
+        "region": "eu-west-1", // Updated to match BEDROCK_REGION
+        "title": "Lambda Function Duration",
+        "yAxis": {
+          "left": {
+            "min": 0,
+            "max": 180000 // 3 minutes timeout visualization
+          }
+        }
       }
     },
     {
@@ -453,12 +893,13 @@ const dashboardConfig = {
         "metrics": [
           ["AWS/ApiGatewayV2", "Count", "ApiId", "serenya-api"],
           ["AWS/ApiGatewayV2", "4XXError", "ApiId", "serenya-api"],
-          ["AWS/ApiGatewayV2", "5XXError", "ApiId", "serenya-api"]
+          ["AWS/ApiGatewayV2", "5XXError", "ApiId", "serenya-api"],
+          ["AWS/ApiGatewayV2", "IntegrationLatency", "ApiId", "serenya-api"]
         ],
         "period": 300,
         "stat": "Sum",
-        "region": "us-west-2", 
-        "title": "API Gateway Requests & Errors"
+        "region": "eu-west-1", 
+        "title": "API Gateway Performance & Errors"
       }
     },
     {
@@ -467,12 +908,82 @@ const dashboardConfig = {
         "metrics": [
           ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "serenya-db"],
           ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "serenya-db"],
-          ["AWS/RDS", "FreeableMemory", "DBInstanceIdentifier", "serenya-db"]
+          ["AWS/RDS", "FreeableMemory", "DBInstanceIdentifier", "serenya-db"],
+          ["AWS/RDS", "ReadLatency", "DBInstanceIdentifier", "serenya-db"],
+          ["AWS/RDS", "WriteLatency", "DBInstanceIdentifier", "serenya-db"]
         ],
         "period": 300,
         "stat": "Average",
-        "region": "us-west-2",
+        "region": "eu-west-1",
         "title": "Database Performance"
+      }
+    },
+    {
+      // NEW: LLM Cost Tracking Metrics (aligned with API contracts)
+      "type": "metric",
+      "properties": {
+        "metrics": [
+          ["Serenya/LLM", "InputTokens", "Provider", "bedrock"],
+          ["Serenya/LLM", "OutputTokens", "Provider", "bedrock"],
+          ["Serenya/LLM", "TotalCost", "Provider", "bedrock"],
+          ["Serenya/LLM", "ProcessingTime", "DocumentType", "lab_results"],
+          ["Serenya/LLM", "ProcessingTime", "DocumentType", "vitals"],
+          ["Serenya/LLM", "ProcessingTime", "DocumentType", "chat"]
+        ],
+        "period": 300,
+        "stat": "Sum",
+        "region": "eu-west-1",
+        "title": "LLM Usage & Cost Tracking"
+      }
+    },
+    {
+      // NEW: S3 Bucket Performance (for document processing workflow)
+      "type": "metric",
+      "properties": {
+        "metrics": [
+          ["AWS/S3", "NumberOfObjects", "BucketName", "serenya-temp-processing"],
+          ["AWS/S3", "BucketSizeBytes", "BucketName", "serenya-temp-processing"],
+          ["AWS/S3", "AllRequests", "BucketName", "serenya-temp-processing"]
+        ],
+        "period": 3600,
+        "stat": "Average",
+        "region": "eu-west-1",
+        "title": "Document Processing S3 Metrics"
+      }
+    },
+    {
+      // NEW: Unified Error Handling Metrics
+      "type": "metric",
+      "properties": {
+        "metrics": [
+          ["Serenya/Errors", "ErrorsByCategory", "Category", "technical"],
+          ["Serenya/Errors", "ErrorsByCategory", "Category", "validation"],
+          ["Serenya/Errors", "ErrorsByCategory", "Category", "business"],
+          ["Serenya/Errors", "ErrorsByCategory", "Category", "external"],
+          ["Serenya/Errors", "CircuitBreakerState", "Service", "google_oauth"],
+          ["Serenya/Errors", "CircuitBreakerState", "Service", "openai_api"],
+          ["Serenya/Errors", "RecoverySuccess", "Strategy", "retry"],
+          ["Serenya/Errors", "RecoverySuccess", "Strategy", "fallback"]
+        ],
+        "period": 300,
+        "stat": "Sum", 
+        "region": "eu-west-1",
+        "title": "Error Handling & Recovery Metrics"
+      }
+    },
+    {
+      // NEW: VPC and Network Security Monitoring
+      "type": "metric",
+      "properties": {
+        "metrics": [
+          ["AWS/VPC", "PacketDropCount", "VPC", "serenya-vpc"],
+          ["AWS/Lambda", "ConcurrentExecutions", "FunctionName", "serenya-document-function"],
+          ["AWS/Lambda", "ConcurrentExecutions", "FunctionName", "serenya-chat-function"]
+        ],
+        "period": 300,
+        "stat": "Sum",
+        "region": "eu-west-1",
+        "title": "Network Security & Concurrency"
       }
     }
   ]
@@ -481,7 +992,62 @@ const dashboardConfig = {
 
 ### **Alarms and Notifications**
 ```yaml
-# Critical alarms
+# Critical alarms aligned with API requirements + unified error handling
+
+# Circuit Breaker Alarms
+CircuitBreakerOpenAlarm:
+  Type: AWS::CloudWatch::Alarm
+  Properties:
+    AlarmDescription: "Circuit breaker opened for critical service"
+    MetricName: CircuitBreakerState
+    Namespace: Serenya/Errors
+    Statistic: Sum
+    Period: 60
+    EvaluationPeriods: 1
+    Threshold: 1
+    ComparisonOperator: GreaterThanOrEqualToThreshold
+    Dimensions:
+      - Name: "Status"
+        Value: "open"
+    AlarmActions:
+      - !Ref CriticalAlertsTopic
+
+# High Error Rate by Category
+HighTechnicalErrorAlarm:
+  Type: AWS::CloudWatch::Alarm
+  Properties:
+    AlarmDescription: "High rate of technical errors indicating infrastructure issues"
+    MetricName: ErrorsByCategory
+    Namespace: Serenya/Errors
+    Statistic: Sum
+    Period: 300
+    EvaluationPeriods: 2
+    Threshold: 20
+    ComparisonOperator: GreaterThanThreshold
+    Dimensions:
+      - Name: "Category"
+        Value: "technical"
+    AlarmActions:
+      - !Ref CriticalAlertsTopic
+
+# Recovery Strategy Failure
+RecoveryStrategyFailureAlarm:
+  Type: AWS::CloudWatch::Alarm
+  Properties:
+    AlarmDescription: "Error recovery strategies failing at high rate"
+    MetricName: RecoverySuccess
+    Namespace: Serenya/Errors
+    Statistic: Sum
+    Period: 300
+    EvaluationPeriods: 3
+    Threshold: 10
+    ComparisonOperator: LessThanThreshold
+    Dimensions:
+      - Name: "Success"
+        Value: "true"
+    AlarmActions:
+      - !Ref CriticalAlertsTopic
+
 HighErrorRateAlarm:
   Type: AWS::CloudWatch::Alarm
   Properties:
@@ -510,19 +1076,101 @@ DatabaseConnectionAlarm:
     AlarmActions:
       - !Ref WarningAlertsTopic
 
-LambdaDurationAlarm:
+# Updated Lambda timeout alarms to match API contracts
+DocumentProcessingTimeoutAlarm:
   Type: AWS::CloudWatch::Alarm
   Properties:
-    AlarmDescription: "Lambda function duration high"
+    AlarmDescription: "Document processing Lambda approaching timeout"
     MetricName: Duration
     Namespace: AWS/Lambda
+    Dimensions:
+      - Name: FunctionName
+        Value: serenya-document-function
     Statistic: Average
     Period: 300
     EvaluationPeriods: 2
-    Threshold: 25000 # 25 seconds
+    Threshold: 150000 # 150 seconds (30s before 180s timeout)
     ComparisonOperator: GreaterThanThreshold
     AlarmActions:
       - !Ref PerformanceAlertsTopic
+
+ChatResponseTimeoutAlarm:
+  Type: AWS::CloudWatch::Alarm
+  Properties:
+    AlarmDescription: "Chat Lambda approaching timeout"
+    MetricName: Duration
+    Namespace: AWS/Lambda
+    Dimensions:
+      - Name: FunctionName
+        Value: serenya-chat-function
+    Statistic: Average
+    Period: 300
+    EvaluationPeriods: 2
+    Threshold: 50000 # 50 seconds (10s before 60s timeout)
+    ComparisonOperator: GreaterThanThreshold
+    AlarmActions:
+      - !Ref PerformanceAlertsTopic
+
+AuthTimeoutAlarm:
+  Type: AWS::CloudWatch::Alarm
+  Properties:
+    AlarmDescription: "Auth Lambda approaching timeout"
+    MetricName: Duration
+    Namespace: AWS/Lambda
+    Dimensions:
+      - Name: FunctionName
+        Value: serenya-auth-function
+    Statistic: Average
+    Period: 300
+    EvaluationPeriods: 2
+    Threshold: 50000 # 50 seconds (10s before 60s timeout)
+    ComparisonOperator: GreaterThanThreshold
+    AlarmActions:
+      - !Ref PerformanceAlertsTopic
+
+# NEW: LLM Cost Tracking Alarms
+LLMCostThresholdAlarm:
+  Type: AWS::CloudWatch::Alarm
+  Properties:
+    AlarmDescription: "LLM costs exceeding budget threshold"
+    MetricName: TotalCost
+    Namespace: Serenya/LLM
+    Statistic: Sum
+    Period: 3600
+    EvaluationPeriods: 1
+    Threshold: 100 # $1.00 per hour threshold
+    ComparisonOperator: GreaterThanThreshold
+    AlarmActions:
+      - !Ref CostAlertsTopic
+
+# NEW: HIPAA Security Alerts  
+VPCFlowLogsFailureAlarm:
+  Type: AWS::CloudWatch::Alarm
+  Properties:
+    AlarmDescription: "VPC Flow Logs delivery failures"
+    MetricName: DeliveryErrors
+    Namespace: AWS/VPCFlowLogs
+    Statistic: Sum
+    Period: 300
+    EvaluationPeriods: 1
+    Threshold: 1
+    ComparisonOperator: GreaterThanOrEqualToThreshold
+    AlarmActions:
+      - !Ref SecurityAlertsTopic
+
+UnauthorizedAPIAccessAlarm:
+  Type: AWS::CloudWatch::Alarm
+  Properties:
+    AlarmDescription: "High rate of 4XX authentication errors"
+    MetricName: 4XXError
+    Namespace: AWS/ApiGatewayV2
+    Statistic: Sum
+    Period: 300
+    EvaluationPeriods: 2
+    Threshold: 50
+    ComparisonOperator: GreaterThanThreshold
+    AlarmActions:
+      - !Ref SecurityAlertsTopic
 ```
 
 ### **Structured Logging**

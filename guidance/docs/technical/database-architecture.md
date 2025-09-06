@@ -1,6 +1,6 @@
 # Database Architecture - Serenya AI Health Agent
 
-**Date:** September 1, 2025  
+**Date:** September 4, 2025 (Updated)  
 **Domain:** Data Design & Database Management  
 **AI Agent:** Database Design Agent  
 **Dependencies:** None (foundational document)  
@@ -16,10 +16,11 @@
 
 ### **Core Architecture Principles**
 - **UUIDs for all primary keys**: Server-generated UUIDs used as primary keys and foreign keys
-- **No document storage**: Documents processed temporarily, then deleted - only extracted medical data persists
-- **Privacy-first architecture**: Complete medical data stored locally on device
-- **Minimal server storage**: Only authentication, consent, and reference data on server
+- **No persistent document storage**: Documents processed temporarily via S3, then deleted - only extracted medical data persists
+- **Privacy-first architecture**: Complete medical data stored locally on device after processing
+- **Minimal server storage**: Only authentication, consent, and reference data on server - NO medical data tables (serenya_content, lab_results, vitals, chat_messages) on server
 - **Hybrid ENUM management**: Database-level constraints + code-level constants + documentation
+- **Temporary S3 processing**: Original files and AI results stored temporarily in S3 during asynchronous processing
 
 ### **Storage Distribution**
 ```
@@ -36,6 +37,28 @@
 └─────────────────────────┘    └─────────────────────────┘
 ```
 
+### **Document Processing Data Flow**
+```
+1. Document Upload → S3 Temporary Storage
+   └─ s3://serenya-temp-processing/jobs/{job_id}_original
+
+2. AI Processing → S3 Results Storage  
+   └─ s3://serenya-temp-processing/results/{job_id}.json
+
+3. Client Polling → API Response Transformation
+   └─ S3 data → Encrypted API chunks → Local device storage
+
+4. Local Storage Population → S3 Cleanup
+   └─ serenya_content, lab_results, vitals tables populated
+   └─ S3 files deleted (or auto-expire in 2 days)
+```
+
+**Key Points:**
+- **No server-side jobs table**: Job tracking via job_id format (`{user_id}_{timestamp}_{random}`)
+- **Temporary S3 storage only**: Files exist only during processing and polling
+- **Final storage on device**: All medical data ends up in local SQLite database
+- **Automatic cleanup**: S3 lifecycle policy removes files older than 2 days
+
 ---
 
 ## 📊 **ENUM Definitions**
@@ -45,9 +68,21 @@
 -- Authentication & User Management
 CREATE TYPE auth_provider_type AS ENUM ('google', 'apple', 'facebook');
 CREATE TYPE account_status_type AS ENUM ('active', 'suspended', 'deactivated', 'deleted');
+CREATE TYPE device_status_type AS ENUM ('active', 'inactive', 'revoked');
+CREATE TYPE biometric_type AS ENUM ('fingerprint', 'face', 'voice');
+CREATE TYPE session_status_type AS ENUM ('active', 'expired', 'revoked');
 
--- Legal Compliance
-CREATE TYPE consent_type AS ENUM ('medical_disclaimers', 'terms_of_service', 'privacy_policy');
+-- Legal Compliance (5 consent types for onboarding)
+-- UI Implementation: 2 bundled checkboxes map to these 5 consent types
+-- Checkbox 1 -> terms_of_service, privacy_policy, healthcare_consultation
+-- Checkbox 2 -> medical_disclaimer, emergency_care_limitation
+CREATE TYPE consent_type AS ENUM (
+  'terms_of_service', 
+  'privacy_policy', 
+  'medical_disclaimer', 
+  'healthcare_consultation', 
+  'emergency_care_limitation'
+);
 
 -- Subscription & Payments
 CREATE TYPE subscription_status_type AS ENUM ('active', 'expired', 'cancelled', 'pending');
@@ -156,6 +191,10 @@ CREATE TABLE consent_records (
     consent_given BOOLEAN NOT NULL,
     consent_version VARCHAR(50) NOT NULL,    -- e.g., "v2.1.0"
     
+    -- Bundled consent tracking (UI -> Database mapping)
+    consent_method VARCHAR(20) DEFAULT 'bundled_consent',  -- 'bundled_consent' | 'granular_consent'
+    ui_checkbox_group INTEGER,                             -- 1 or 2 (which checkbox collected this consent)
+    
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -208,6 +247,32 @@ CREATE INDEX idx_subscriptions_end_date ON subscriptions(end_date);
 ```
 
 **Encryption Requirements**: See **→ encryption-strategy.md** for field-level encryption of `user_id, subscription_status, subscription_type`
+
+### **`subscription_tiers` Table**
+```sql
+CREATE TABLE subscription_tiers (
+    -- Primary identification
+    tier_name VARCHAR(20) PRIMARY KEY,  -- 'free', 'premium'
+    
+    -- Feature flags
+    medical_reports BOOLEAN DEFAULT FALSE,  -- AI-generated professional analysis
+    
+    -- Metadata
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Default tier configurations
+INSERT INTO subscription_tiers (tier_name, medical_reports) VALUES
+('free', FALSE),      -- Free: Document upload, processing, chat - NO medical reports
+('premium', TRUE);    -- Premium: All features including medical reports
+
+-- Index for efficient tier lookups
+CREATE INDEX idx_subscription_tiers_medical_reports ON subscription_tiers(medical_reports);
+```
+
+**Purpose**: Defines available features for each subscription tier
+**No Encryption Required**: Reference data, no PII or sensitive information
 
 ### **`payments` Table**
 ```sql
@@ -277,278 +342,166 @@ CREATE INDEX idx_chat_options_category ON chat_options(category);
 
 **Encryption Requirements**: No encryption required (public reference data)
 
+### **`user_devices` Table**
+```sql
+CREATE TABLE user_devices (
+    -- Primary identification
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    
+    -- User association
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- Device identification
+    device_id TEXT NOT NULL,                    -- Client-generated unique device ID
+    device_name TEXT,                          -- User-friendly device name
+    
+    -- Device information
+    platform TEXT NOT NULL,                   -- 'ios' or 'android'
+    model TEXT,                               -- Device model (e.g., 'iPhone 14 Pro')
+    os_version TEXT,                          -- Operating system version
+    app_version TEXT,                         -- App version at registration
+    
+    -- Biometric capability
+    biometric_type biometric_type,            -- Primary biometric method
+    secure_element BOOLEAN DEFAULT FALSE,     -- Hardware security support
+    public_key TEXT,                          -- Device hardware public key for verification
+    
+    -- Device status
+    status device_status_type DEFAULT 'active',
+    last_active_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Timestamps
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Constraints
+    CONSTRAINT unique_device_per_user UNIQUE (user_id, device_id)
+);
+
+-- Indexes for authentication queries
+CREATE INDEX idx_user_devices_user_id ON user_devices(user_id, status);
+CREATE INDEX idx_user_devices_device_id ON user_devices(device_id);
+CREATE INDEX idx_user_devices_active ON user_devices(status, last_active_at);
+```
+
+**Purpose**: Track registered devices for authentication and session management. Supports single-device policy with future multi-device capability.
+
+**Encryption Requirements**: Device information and public keys - no encryption needed (non-sensitive technical data)
+
+### **`user_sessions` Table**
+```sql
+CREATE TABLE user_sessions (
+    -- Primary identification
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    
+    -- User and device association
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    device_id UUID NOT NULL REFERENCES user_devices(id) ON DELETE CASCADE,
+    
+    -- Session tokens
+    session_id TEXT NOT NULL UNIQUE,          -- JWT session identifier
+    refresh_token_hash TEXT NOT NULL,        -- Hashed refresh token
+    access_token_hash TEXT,                  -- Optional: hashed access token
+    
+    -- Session lifecycle
+    status session_status_type DEFAULT 'active',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_accessed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    
+    -- Biometric authentication tracking
+    last_biometric_auth_at TIMESTAMP WITH TIME ZONE,
+    biometric_expires_at TIMESTAMP WITH TIME ZONE,
+    requires_biometric_reauth BOOLEAN DEFAULT FALSE,
+    
+    -- Timestamps
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for session management
+CREATE INDEX idx_user_sessions_user_device ON user_sessions(user_id, device_id);
+CREATE INDEX idx_user_sessions_token ON user_sessions(session_id, status);
+CREATE INDEX idx_user_sessions_refresh ON user_sessions(refresh_token_hash);
+CREATE INDEX idx_user_sessions_expiry ON user_sessions(expires_at, status);
+CREATE INDEX idx_user_sessions_biometric ON user_sessions(biometric_expires_at, requires_biometric_reauth);
+```
+
+**Purpose**: Track user sessions, refresh tokens, and biometric re-authentication requirements. Supports 15-minute access tokens and 7-day refresh tokens with 7-day biometric cycles.
+
+**Encryption Requirements**: Token hashes stored (already hashed), no additional encryption needed
+
+### **`biometric_registrations` Table**
+```sql
+CREATE TABLE biometric_registrations (
+    -- Primary identification
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    
+    -- Device association
+    device_id UUID NOT NULL REFERENCES user_devices(id) ON DELETE CASCADE,
+    
+    -- Registration details
+    registration_id TEXT NOT NULL UNIQUE,     -- Client-facing registration ID
+    biometric_type biometric_type NOT NULL,  -- Type of biometric registered
+    
+    -- Challenge-response data
+    challenge TEXT NOT NULL,                  -- Current verification challenge
+    challenge_expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    
+    -- Registration status
+    is_verified BOOLEAN DEFAULT FALSE,       -- Initial registration verified
+    is_active BOOLEAN DEFAULT TRUE,          -- Registration is active
+    verification_failures INTEGER DEFAULT 0, -- Failed verification attempts
+    
+    -- Security metadata
+    device_attestation_data JSONB,           -- Device security attestation
+    registration_metadata JSONB,             -- Additional registration context
+    
+    -- Timestamps
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_verified_at TIMESTAMP WITH TIME ZONE,
+    
+    -- Constraints
+    CONSTRAINT unique_device_biometric UNIQUE (device_id, biometric_type)
+);
+
+-- Indexes for biometric operations
+CREATE INDEX idx_biometric_registrations_device ON biometric_registrations(device_id, is_active);
+CREATE INDEX idx_biometric_registrations_id ON biometric_registrations(registration_id);
+CREATE INDEX idx_biometric_registrations_challenge ON biometric_registrations(challenge_expires_at, is_active);
+CREATE INDEX idx_biometric_registrations_failures ON biometric_registrations(verification_failures, is_active);
+```
+
+**Purpose**: Manage biometric authentication registrations, challenges, and verification status per device. Supports challenge-response authentication flow.
+
+**Encryption Requirements**: Challenge data and device attestation may contain sensitive information - consider field-level encryption for challenge and attestation data
+
 ---
 
 ## 📱 **Local Device Database Schema**
 
-### **Data Flow Context**
-**Agent Handoff Note**: Local device storage supports the complete user medical data as defined in the single-server-round-trip workflow (**→ system-architecture.md**). All tables require encryption per **→ encryption-strategy.md** specifications.
+**Note**: Local SQLite database schema and implementation details have been moved to **→ flutter-app-architecture.md** to avoid duplication and provide better context for mobile developers.
 
-### **`serenya_content` Table**
-```sql
-CREATE TABLE serenya_content (
-    -- Primary identification (from server)
-    id UUID PRIMARY KEY,                    -- Server-generated UUID
-    user_id UUID NOT NULL,                  -- References server users.id
-    
-    -- Content classification
-    content_type content_type NOT NULL,     -- 'result' or 'report'
-    title VARCHAR(255) NOT NULL,            -- AI-generated, constrained format
-    
-    -- AI-generated content
-    content TEXT NOT NULL,                  -- Markdown formatted AI response
-    confidence_score DECIMAL(3,1) NOT NULL CHECK (confidence_score >= 0.0 AND confidence_score <= 10.0),
-    medical_flags JSON,                     -- AI-generated alerts array
-    
-    -- Timestamps
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL
-);
-
--- Indexes for timeline queries (most critical performance requirement)
-CREATE INDEX idx_serenya_content_user_timeline ON serenya_content(user_id, created_at DESC);
-CREATE INDEX idx_serenya_content_type ON serenya_content(user_id, content_type);
-CREATE INDEX idx_serenya_content_confidence ON serenya_content(confidence_score);
-```
-
-**Purpose**: Central table for all AI analyses and reports. **Timeline Integration**: All timeline items come from this table, ordered by `created_at DESC`
-
-**Encryption Requirements**: See **→ encryption-strategy.md** for field-level encryption of `content, medical_flags`
-
-### **`lab_results` Table**
-```sql
-CREATE TABLE lab_results (
-    -- Primary identification  
-    id UUID PRIMARY KEY,                    -- Server-generated UUID
-    user_id UUID NOT NULL,                  -- References server users.id
-    serenya_content_id UUID NOT NULL,       -- References serenya_content.id
-    
-    -- Test identification
-    test_name VARCHAR(255) NOT NULL,        -- e.g., "Blood Glucose", "Total Cholesterol"
-    test_category test_category_type NOT NULL,
-    
-    -- Test results
-    test_value DECIMAL(10,3),               -- Numeric result value
-    test_unit VARCHAR(50),                  -- e.g., "mg/dL", "mmol/L", "%"
-    
-    -- Reference ranges (lab-specific)
-    reference_range_low DECIMAL(10,3),
-    reference_range_high DECIMAL(10,3),
-    reference_range_text VARCHAR(255),      -- e.g., "Normal", "< 200 mg/dL"
-    
-    -- AI analysis
-    is_abnormal BOOLEAN DEFAULT FALSE,
-    confidence_score DECIMAL(3,1) CHECK (confidence_score >= 0.0 AND confidence_score <= 10.0),
-    ai_interpretation TEXT,                 -- AI analysis of this specific result
-    
-    -- Timestamps
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL
-);
-
--- Indexes for medical data queries
-CREATE INDEX idx_lab_results_user_timeline ON lab_results(user_id, created_at DESC);
-CREATE INDEX idx_lab_results_content_id ON lab_results(serenya_content_id);
-CREATE INDEX idx_lab_results_test_name ON lab_results(test_name);
-CREATE INDEX idx_lab_results_abnormal ON lab_results(user_id, is_abnormal);
-CREATE INDEX idx_lab_results_category ON lab_results(user_id, test_category);
-```
-
-**Purpose**: Normalized storage of extracted lab test results. **Agent Handoff**: Data populated by AI processing workflow defined in **→ system-architecture.md**.
-
-**Encryption Requirements**: See **→ encryption-strategy.md** for full table encryption (sensitive medical data)
-
-### **`vitals` Table**
-```sql
-CREATE TABLE vitals (
-    -- Primary identification
-    id UUID PRIMARY KEY,                    -- Server-generated UUID  
-    user_id UUID NOT NULL,                  -- References server users.id
-    serenya_content_id UUID NOT NULL,       -- References serenya_content.id
-    
-    -- Vital sign identification
-    vital_type vital_type NOT NULL,
-    
-    -- Measurements (flexible schema for different vital types)
-    systolic_value INTEGER,                 -- For blood pressure
-    diastolic_value INTEGER,                -- For blood pressure  
-    numeric_value DECIMAL(6,2),             -- For single-value vitals
-    unit VARCHAR(20),                       -- e.g., "mmHg", "°C", "kg", "bpm"
-    
-    -- AI analysis
-    is_abnormal BOOLEAN DEFAULT FALSE,
-    confidence_score DECIMAL(3,1) CHECK (confidence_score >= 0.0 AND confidence_score <= 10.0),
-    ai_interpretation TEXT,                 -- AI analysis of this vital sign
-    
-    -- Timestamps
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL
-);
-
--- Indexes for vital signs queries
-CREATE INDEX idx_vitals_user_timeline ON vitals(user_id, created_at DESC);
-CREATE INDEX idx_vitals_content_id ON vitals(serenya_content_id);
-CREATE INDEX idx_vitals_type ON vitals(user_id, vital_type, created_at DESC);
-CREATE INDEX idx_vitals_abnormal ON vitals(user_id, is_abnormal);
-```
-
-**Purpose**: Normalized storage of extracted vital sign measurements.
-
-**Usage Examples**:
-- **Blood Pressure**: `vital_type='blood_pressure'`, `systolic_value=120`, `diastolic_value=80`, `unit='mmHg'`
-- **Heart Rate**: `vital_type='heart_rate'`, `numeric_value=72`, `unit='bpm'`
-- **Weight**: `vital_type='weight'`, `numeric_value=70.5`, `unit='kg'`
-
-**Encryption Requirements**: See **→ encryption-strategy.md** for full table encryption (sensitive medical data)
-
-### **`chat_messages` Table**
-```sql
-CREATE TABLE chat_messages (
-    -- Primary identification
-    id UUID PRIMARY KEY,                    -- Server-generated UUID
-    serenya_content_id UUID NOT NULL,       -- References serenya_content.id
-    
-    -- Message details
-    sender message_sender_type NOT NULL,    -- 'user' or 'serenya'
-    message TEXT NOT NULL,                  -- The actual message content
-    
-    -- Optional metadata
-    message_metadata JSON,                  -- Optional: typing indicators, read status, etc.
-    
-    -- Timestamps
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL
-);
-
--- Indexes for chat retrieval
-CREATE INDEX idx_chat_messages_content_timeline ON chat_messages(serenya_content_id, created_at ASC);
-CREATE INDEX idx_chat_messages_sender ON chat_messages(serenya_content_id, sender);
-```
-
-**Purpose**: Direct conversation messages linked to specific results or reports. **Agent Handoff**: UI patterns defined in **→ ui-specifications.md** Chat Interface section.
-
-**Encryption Requirements**: See **→ encryption-strategy.md** for field-level encryption of `message`
+- **Local SQLite Schema**: Table definitions, indexes, and relationships → `flutter-app-architecture.md`
+- **Local Data Access Patterns**: Query examples and performance optimization → `flutter-app-architecture.md` 
+- **Local Storage Estimates**: Data volume calculations → `flutter-app-architecture.md`
+- **Entity Relationships**: Local database foreign key relationships → `flutter-app-architecture.md`
 
 ---
 
-## 🔗 **Data Relationships & Constraints**
+## 🔄 **Database Schema Migrations**
 
-### **Relationship Diagram**
-```
-SERVER-SIDE:
-users (1) ←→ (many) consent_records
-users (1) ←→ (many) subscriptions  
-subscriptions (1) ←→ (many) payments
-(no table relationships) chat_options
-
-LOCAL DEVICE:
-serenya_content (1) ←→ (many) lab_results
-serenya_content (1) ←→ (many) vitals
-serenya_content (1) ←→ (many) chat_messages
-
-CROSS-REFERENCE:
-users.id ←→ serenya_content.user_id (logical, not FK)
-```
-
-### **Referential Integrity**
-**Server-Side**: Standard foreign key constraints with CASCADE DELETE for data consistency
-**Local Device**: No foreign key constraints (performance + offline capability)
-**Cross-System**: Logical references only, handled at application level
-
-### **Data Consistency Rules**
-1. **User Profile**: Each user has exactly 3 consent records (one per consent type)
-2. **Subscription**: Active users can have 0 or 1 active subscription
-3. **Content Hierarchy**: Every lab_result and vital must reference valid serenya_content
-4. **Chat Conversations**: Chat messages must reference existing serenya_content
-
----
-
-## 🚀 **Performance Optimization**
-
-### **Query Patterns by Importance**
-
-**Critical Performance (Timeline View)**:
+### **Version Control Strategy**
 ```sql
--- Timeline query (most frequent)
-SELECT * FROM serenya_content 
-WHERE user_id = ? 
-ORDER BY created_at DESC 
-LIMIT 50;
-
--- Chat history (frequent)
-SELECT * FROM chat_messages 
-WHERE serenya_content_id = ? 
-ORDER BY created_at ASC;
-```
-
-**Important Performance (Medical Data)**:
-```sql
--- Lab results for specific content
-SELECT * FROM lab_results 
-WHERE serenya_content_id = ?;
-
--- Abnormal results search
-SELECT * FROM lab_results 
-WHERE user_id = ? AND is_abnormal = TRUE
-ORDER BY created_at DESC;
-```
-
-### **Index Strategy**
-- **Primary Indexes**: Timeline queries (user_id, created_at DESC)
-- **Secondary Indexes**: Search and filter operations
-- **Composite Indexes**: Multi-column queries for performance
-- **JSON Indexes**: Medical flags and metadata searches (if needed)
-
-### **Storage Estimates**
-```
-Per User Estimate (1 year):
-- serenya_content: ~50 records × 2KB = 100KB
-- lab_results: ~200 records × 1KB = 200KB  
-- vitals: ~100 records × 0.5KB = 50KB
-- chat_messages: ~500 records × 0.3KB = 150KB
-Total per user per year: ~500KB
-```
-
----
-
-## 📋 **Agent Handoff Requirements**
-
-### **For Security Agent (→ encryption-strategy.md)**
-**Required Information**:
-- Table encryption classifications (provided above)
-- Field-level encryption requirements for specific columns
-- Key derivation requirements for different data types
-- Performance impact considerations for encrypted queries
-
-### **For API Agent (→ api-contracts.md)**
-**Required Information**:
-- Complete table schemas for request/response validation
-- UUID generation and foreign key relationships
-- Data validation rules and constraints
-- Query patterns for endpoint optimization
-
-### **For Compliance Agent (→ audit-logging.md)**
-**Required Information**:
-- User and consent table structures for audit context
-- Payment table schema for financial audit events
-- Data classification levels for each table
-
-### **For System Architecture Agent (→ system-architecture.md)**
-**Required Information**:
-- Server vs local storage distribution
-- Database technology requirements (PostgreSQL + SQLite)
-- Backup and replication requirements
-- Performance and scaling considerations
-
----
-
-## 🔄 **Migration & Versioning Strategy**
-
-### **Schema Version Management**
-```sql
--- Version tracking table
 CREATE TABLE schema_versions (
-    version VARCHAR(20) PRIMARY KEY,
-    applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    description TEXT
+    version INTEGER PRIMARY KEY,
+    applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    description TEXT,
+    rollback_sql TEXT  -- Optional rollback commands
 );
+
+-- Track current schema version
+INSERT INTO schema_versions VALUES (1, NOW(), 'Initial Serenya schema', NULL);
 ```
 
 ### **Migration Approach**
@@ -557,18 +510,12 @@ CREATE TABLE schema_versions (
 3. **Data Migrations**: ENUM updates, data transformations - require downtime planning
 4. **Breaking Changes**: Table renames, relationship changes - major version updates
 
-### **Local Device Migration**
-- **App Updates**: Schema migrations handled by Flutter/SQLite migration framework
-- **Data Preservation**: Critical user data must survive app updates
-- **Rollback Strategy**: Schema downgrades not supported (data loss risk)
-
 ---
 
 ## ✅ **Implementation Checklist**
 
 ### **Database Setup**
 - [ ] PostgreSQL server configuration and optimization
-- [ ] SQLite local database setup with encryption
 - [ ] ENUM type creation and validation
 - [ ] Table creation with proper constraints
 - [ ] Index creation and performance testing
@@ -581,7 +528,6 @@ CREATE TABLE schema_versions (
 
 ### **Performance Testing**
 - [ ] Timeline query performance benchmarking
-- [ ] Large dataset performance testing
 - [ ] Index effectiveness validation
 - [ ] Memory usage optimization
 
@@ -594,5 +540,5 @@ CREATE TABLE schema_versions (
 ---
 
 **Document Status**: ✅ Complete - Ready for agent handoff  
-**Last Updated**: September 1, 2025  
+**Last Updated**: September 4, 2025  
 **Next Reviews**: Security Agent, API Agent, System Architecture Agent

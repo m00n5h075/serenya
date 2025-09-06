@@ -98,3 +98,107 @@ Always remember: We are not just building a product, we are building trust.
 **Timing:** Automatically triggered when a full feature is considered delivered.
 
 **Command Shortcut:** "Run feature retrospective on the latest feature."
+
+---
+
+## 🔧 **Error Handling Implementation Standards**
+
+**Critical requirement for medical applications - all features must implement unified three-layer error handling strategy (Issue #16 resolution).**
+
+### **Mandatory Error Handling Patterns**
+
+#### **Layer 1 - Server Error Processing (All Lambda Functions)**
+```typescript
+// Required error categorization in all endpoints
+const categorizeError = (error: Error): ErrorResponse => {
+  return {
+    category: 'technical|validation|business|external',
+    recovery_strategy: 'retry|fallback|escalate|ignore',
+    circuit_breaker_status: getCircuitBreakerStatus()
+  }
+}
+```
+
+#### **Layer 2 - Client Error Translation (All API Calls)**
+```dart
+// Required UnifiedError implementation for all API responses
+class UnifiedError {
+  final ErrorCategory category;
+  final RecoveryStrategy recoveryStrategy;
+  final String userMessage;
+  final bool fallbackAvailable;
+  final Duration? retryAfter;
+}
+```
+
+#### **Layer 3 - User Experience (All UI Components)**
+```dart
+// Required error UI components for all user-facing errors
+Widget buildErrorUI(UnifiedError error) {
+  return ErrorStateWidget(
+    message: error.userMessage,
+    primaryAction: getRecoveryAction(error.recoveryStrategy),
+    fallbackAvailable: error.fallbackAvailable
+  );
+}
+```
+
+### **Code Review Requirements**
+
+**Every pull request must pass error handling checklist:**
+
+- [ ] Server errors categorized using standard ErrorCategory enum
+- [ ] Recovery strategies defined for all error scenarios  
+- [ ] Circuit breaker patterns implemented for external services
+- [ ] User-facing errors include actionable recovery steps
+- [ ] Fallback functionality implemented where applicable
+- [ ] Error correlation IDs generated for support tracking
+- [ ] Audit logging included for all error scenarios
+
+### **Testing Requirements**
+
+**Error scenario testing is mandatory:**
+
+- [ ] Unit tests for all error categories and recovery strategies
+- [ ] Integration tests for circuit breaker functionality
+- [ ] UI tests for error state components and recovery actions
+- [ ] End-to-end tests for complete error recovery flows
+- [ ] Performance tests for error handling under load
+
+### **Performance Requirements**
+
+**Error processing performance standards:**
+
+- Error categorization: <5ms per error
+- Circuit breaker decision: <1ms per check  
+- Error UI rendering: <100ms from error to display
+- Recovery action execution: <2s for retry operations
+
+### **Error Message Content Guidelines**
+
+**Length Requirements:**
+- Target: 8-12 words per user-facing error message
+- Minimum: 6 words (avoid being too terse)
+- Maximum: 15 words (avoid being too verbose)
+
+**Tone Requirements:**
+- Use "we" partnership language (not "you" blame language)
+- Acknowledge the situation briefly ("We're having trouble...")
+- Maintain warm, supportive tone appropriate for healthcare context
+- Include "please" for politeness but avoid excessive formality
+
+**Content Structure:**
+1. **Brief acknowledgment** of the issue (2-4 words)
+2. **Clear action** for user to take (4-8 words)
+3. **Optional context** when helpful (2-4 words)
+
+**Healthcare-Specific Requirements:**
+- Consider user anxiety about health information
+- Provide extra reassurance around security ("for security")
+- Use encouraging language for medical data interactions
+- Avoid technical jargon that might confuse or worry users
+
+**Examples of Balanced Messages:**
+- ✅ Good: "We're having trouble signing you in. Let's try again" (11 words)
+- ❌ Too terse: "Sign-in failed" (2 words - lacks empathy)
+- ❌ Too verbose: "We are experiencing difficulties with the authentication service and are unable to complete your sign-in request at this time" (20 words - too long)

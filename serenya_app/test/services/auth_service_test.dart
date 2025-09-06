@@ -1,0 +1,328 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/mockito.dart';
+import 'package:mockito/annotations.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:dio/dio.dart';
+
+import '../../lib/services/auth_service.dart';
+import '../../lib/core/security/biometric_auth_service.dart';
+import '../../lib/core/security/device_key_manager.dart';
+
+// Generate mocks for testing
+@GenerateMocks([
+  GoogleSignIn,
+  GoogleSignInAccount, 
+  GoogleSignInAuthentication,
+  FlutterSecureStorage,
+  Dio,
+  BiometricAuthService,
+])
+import 'auth_service_test.mocks.dart';
+
+void main() {
+  group('AuthService', () {
+    late AuthService authService;
+    late MockGoogleSignIn mockGoogleSignIn;
+    late MockFlutterSecureStorage mockStorage;
+    late MockDio mockDio;
+    late MockBiometricAuthService mockBiometricAuth;
+
+    setUp(() {
+      mockGoogleSignIn = MockGoogleSignIn();
+      mockStorage = MockFlutterSecureStorage();
+      mockDio = MockDio();
+      mockBiometricAuth = MockBiometricAuthService();
+      
+      // Note: In a real implementation, we'd need to inject these dependencies
+      // For now, this test structure shows the intended testing approach
+      authService = AuthService();
+    });
+
+    group('Authentication Flow', () {
+      test('should successfully authenticate with Google OAuth and backend', () async {
+        // Arrange
+        final mockGoogleUser = MockGoogleSignInAccount();
+        final mockGoogleAuth = MockGoogleSignInAuthentication();
+        
+        when(mockGoogleSignIn.signIn()).thenAnswer((_) async => mockGoogleUser);
+        when(mockGoogleUser.authentication).thenAnswer((_) async => mockGoogleAuth);
+        when(mockGoogleAuth.accessToken).thenReturn('mock_access_token');
+        when(mockGoogleAuth.idToken).thenReturn('mock_id_token');
+        
+        when(mockBiometricAuth.isAvailable()).thenAnswer((_) async => true);
+        when(mockBiometricAuth.authenticate(reason: anyNamed('reason')))
+            .thenAnswer((_) async => BiometricAuthResult.success());
+        
+        when(mockDio.post('/auth/google', data: anyNamed('data')))
+            .thenAnswer((_) async => Response(
+              data: {
+                'success': true,
+                'data': {
+                  'access_token': 'jwt_access_token',
+                  'refresh_token': 'jwt_refresh_token',
+                  'user': {
+                    'id': 'user_123',
+                    'email': 'test@example.com',
+                  },
+                  'session': {
+                    'session_id': 'session_123',
+                    'expires_at': DateTime.now().add(Duration(minutes: 15)).toIso8601String(),
+                  }
+                }
+              },
+              statusCode: 200,
+              requestOptions: RequestOptions(path: '/auth/google'),
+            ));
+
+        // Act
+        final result = await authService.signInWithGoogle(
+          consentData: {
+            'medical_disclaimers': true,
+            'terms_of_service': true,
+            'privacy_policy': true,
+          },
+        );
+
+        // Assert
+        expect(result.success, isTrue);
+        expect(result.userData?['id'], equals('user_123'));
+        expect(result.sessionData?['session_id'], equals('session_123'));
+      });
+
+      test('should handle Google OAuth cancellation gracefully', () async {
+        // Arrange
+        when(mockGoogleSignIn.signIn()).thenAnswer((_) async => null);
+
+        // Act
+        final result = await authService.signInWithGoogle();
+
+        // Assert
+        expect(result.success, isFalse);
+        expect(result.cancelled, isFalse); // Should be treated as failure, not cancellation
+        expect(result.message, contains('cancelled'));
+      });
+
+      test('should handle biometric authentication failure', () async {
+        // Arrange
+        final mockGoogleUser = MockGoogleSignInAccount();
+        final mockGoogleAuth = MockGoogleSignInAuthentication();
+        
+        when(mockGoogleSignIn.signIn()).thenAnswer((_) async => mockGoogleUser);
+        when(mockGoogleUser.authentication).thenAnswer((_) async => mockGoogleAuth);
+        when(mockGoogleAuth.accessToken).thenReturn('mock_access_token');
+        when(mockGoogleAuth.idToken).thenReturn('mock_id_token');
+        
+        when(mockBiometricAuth.isAvailable()).thenAnswer((_) async => true);
+        when(mockBiometricAuth.authenticate(reason: anyNamed('reason')))
+            .thenAnswer((_) async => BiometricAuthResult.failed('Biometric auth failed'));
+
+        // Act
+        final result = await authService.signInWithGoogle(requireBiometric: true);
+
+        // Assert
+        expect(result.success, isFalse);
+        expect(result.message, contains('Biometric authentication required'));
+        
+        // Should sign out from Google when biometric fails
+        verify(mockGoogleSignIn.signOut()).called(1);
+      });
+
+      test('should handle backend authentication errors', () async {
+        // Arrange
+        final mockGoogleUser = MockGoogleSignInAccount();
+        final mockGoogleAuth = MockGoogleSignInAuthentication();
+        
+        when(mockGoogleSignIn.signIn()).thenAnswer((_) async => mockGoogleUser);
+        when(mockGoogleUser.authentication).thenAnswer((_) async => mockGoogleAuth);
+        when(mockGoogleAuth.accessToken).thenReturn('mock_access_token');
+        when(mockGoogleAuth.idToken).thenReturn('mock_id_token');
+        
+        when(mockBiometricAuth.isAvailable()).thenAnswer((_) async => false);
+        
+        when(mockDio.post('/auth/google', data: anyNamed('data')))
+            .thenAnswer((_) async => Response(
+              data: {
+                'success': false,
+                'error': {
+                  'code': 'INVALID_GOOGLE_TOKEN',
+                  'message': 'Google authentication failed',
+                  'user_message': 'Please try signing in with Google again'
+                }
+              },
+              statusCode: 401,
+              requestOptions: RequestOptions(path: '/auth/google'),
+            ));
+
+        // Act
+        final result = await authService.signInWithGoogle(requireBiometric: false);
+
+        // Assert
+        expect(result.success, isFalse);
+        expect(result.errorCode, equals('INVALID_GOOGLE_TOKEN'));
+        expect(result.message, equals('Please try signing in with Google again'));
+      });
+    });
+
+    group('Session Management', () {
+      test('should detect valid authentication status', () async {
+        // Arrange
+        const validJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjk5OTk5OTk5OTl9.Lf5xXWn3M6L5uKL_qLq_1qL5z2E0v9yIgq8gJzGkM7c';
+        
+        when(mockStorage.read(key: 'serenya_access_token'))
+            .thenAnswer((_) async => validJwt);
+        when(mockStorage.read(key: 'serenya_refresh_token'))
+            .thenAnswer((_) async => 'refresh_token');
+        when(mockStorage.read(key: 'serenya_last_auth_time'))
+            .thenAnswer((_) async => DateTime.now().subtract(Duration(minutes: 30)).toIso8601String());
+
+        // Act
+        final isLoggedIn = await authService.isLoggedIn();
+
+        // Assert
+        expect(isLoggedIn, isTrue);
+      });
+
+      test('should detect expired healthcare session', () async {
+        // Arrange
+        const validJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjk5OTk5OTk5OTl9.Lf5xXWn3M6L5uKL_qLq_1qL5z2E0v9yIgq8gJzGkM7c';
+        
+        when(mockStorage.read(key: 'serenya_access_token'))
+            .thenAnswer((_) async => validJwt);
+        when(mockStorage.read(key: 'serenya_refresh_token'))
+            .thenAnswer((_) async => 'refresh_token');
+        when(mockStorage.read(key: 'serenya_last_auth_time'))
+            .thenAnswer((_) async => DateTime.now().subtract(Duration(hours: 2)).toIso8601String());
+
+        // Act
+        final isLoggedIn = await authService.isLoggedIn();
+
+        // Assert
+        expect(isLoggedIn, isFalse);
+      });
+
+      test('should refresh expired access token automatically', () async {
+        // Arrange
+        const expiredJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjE1MTYyMzkwMjJ9.invalid';
+        const refreshToken = 'valid_refresh_token';
+        
+        when(mockStorage.read(key: 'serenya_access_token'))
+            .thenAnswer((_) async => expiredJwt);
+        when(mockStorage.read(key: 'serenya_refresh_token'))
+            .thenAnswer((_) async => refreshToken);
+        
+        when(mockDio.post('/auth/refresh', data: anyNamed('data')))
+            .thenAnswer((_) async => Response(
+              data: {
+                'success': true,
+                'data': {
+                  'access_token': 'new_access_token',
+                  'refresh_token': 'new_refresh_token',
+                  'user': {'id': 'user_123'},
+                  'session': {'session_id': 'session_123'}
+                }
+              },
+              statusCode: 200,
+              requestOptions: RequestOptions(path: '/auth/refresh'),
+            ));
+
+        // Act
+        final isLoggedIn = await authService.isLoggedIn();
+
+        // Assert
+        expect(isLoggedIn, isTrue);
+        verify(mockDio.post('/auth/refresh', data: anyNamed('data'))).called(1);
+      });
+    });
+
+    group('Biometric Re-authentication', () {
+      test('should require biometric re-authentication after timeout', () async {
+        // Arrange
+        when(mockStorage.read(key: 'serenya_biometric_session'))
+            .thenAnswer((_) async => DateTime.now().subtract(Duration(minutes: 45)).toIso8601String());
+
+        // Act
+        final requiresReauth = await authService.requiresBiometricReauth();
+
+        // Assert
+        expect(requiresReauth, isTrue);
+      });
+
+      test('should not require biometric re-authentication when session is fresh', () async {
+        // Arrange
+        when(mockStorage.read(key: 'serenya_biometric_session'))
+            .thenAnswer((_) async => DateTime.now().subtract(Duration(minutes: 15)).toIso8601String());
+
+        // Act
+        final requiresReauth = await authService.requiresBiometricReauth();
+
+        // Assert
+        expect(requiresReauth, isFalse);
+      });
+    });
+
+    group('Sign Out', () {
+      test('should clear all authentication data on sign out', () async {
+        // Act
+        await authService.signOut();
+
+        // Assert
+        verify(mockGoogleSignIn.signOut()).called(1);
+        verify(mockStorage.delete(key: 'serenya_access_token')).called(1);
+        verify(mockStorage.delete(key: 'serenya_refresh_token')).called(1);
+        verify(mockStorage.delete(key: 'serenya_user_data')).called(1);
+        verify(mockStorage.delete(key: 'serenya_session_data')).called(1);
+        verify(mockStorage.delete(key: 'serenya_last_auth_time')).called(1);
+        verify(mockStorage.delete(key: 'serenya_biometric_session')).called(1);
+      });
+    });
+
+    group('User Data Management', () {
+      test('should retrieve current user data from secure storage', () async {
+        // Arrange
+        final userData = {
+          'id': 'user_123',
+          'email': 'test@example.com',
+          'subscription_tier': 'free'
+        };
+        
+        when(mockStorage.read(key: 'serenya_user_data'))
+            .thenAnswer((_) async => '{"id":"user_123","email":"test@example.com","subscription_tier":"free"}');
+
+        // Act
+        final result = await authService.getCurrentUser();
+
+        // Assert
+        expect(result, equals(userData));
+      });
+
+      test('should return null when no user data is stored', () async {
+        // Arrange
+        when(mockStorage.read(key: 'serenya_user_data'))
+            .thenAnswer((_) async => null);
+
+        // Act
+        final result = await authService.getCurrentUser();
+
+        // Assert
+        expect(result, isNull);
+      });
+    });
+  });
+}
+
+/// Mock BiometricAuthResult for testing
+class BiometricAuthResult {
+  final bool success;
+  final String? errorMessage;
+
+  const BiometricAuthResult._(this.success, this.errorMessage);
+
+  factory BiometricAuthResult.success() {
+    return BiometricAuthResult._(true, null);
+  }
+
+  factory BiometricAuthResult.failed(String message) {
+    return BiometricAuthResult._(false, message);
+  }
+}

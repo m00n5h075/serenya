@@ -420,6 +420,81 @@ export async function logMedicalDataProcessing(
 }
 ```
 
+### **Category 6: Device-Side Local Content Access Events**
+
+**Purpose**: Local audit logging for medical content access on device (viewing results/reports only)
+
+**Architecture Decision**: Device-side logging supplements server-side audit trail for complete compliance coverage. Only local content access events are logged on device - all other events remain server-side only.
+
+#### **Event Structure**
+```json
+{
+    "event_id": "uuid_v4_unique_identifier",
+    "event_type": "data_access",
+    "event_subtype": "medical_content_accessed|medical_data_search",
+    "timestamp": "2025-09-05T14:30:45.123Z",
+    "user_id": "user_uuid",
+    "content_details": {
+        "content_id": "content_uuid",
+        "content_type": "result|report", 
+        "access_method": "view|search|timeline",
+        "data_sensitivity": "high"
+    },
+    "device_context": {
+        "app_version": "1.0.0",
+        "platform": "iOS|Android",
+        "device_id": "hashed_device_fingerprint",
+        "session_id": "biometric_session_uuid"
+    }
+}
+```
+
+#### **Device-Side Implementation**
+```dart
+// Integration with Flutter app local audit storage
+class LocalContentAccessLogger {
+    static Future<void> logResultViewing(
+        String resultId,
+        String accessMethod
+    ) async {
+        await DeviceSideAuditLogger.logContentAccessEvent(
+            resultId,
+            'result',
+            accessMethod
+        );
+    }
+    
+    static Future<void> logReportViewing(
+        String reportId, 
+        String accessMethod
+    ) async {
+        await DeviceSideAuditLogger.logContentAccessEvent(
+            reportId,
+            'report', 
+            accessMethod
+        );
+    }
+    
+    static Future<void> logLocalSearch(
+        String searchQuery,
+        List<String> resultIds
+    ) async {
+        await DeviceSideAuditLogger.logLocalSearchEvent(
+            searchQuery,
+            resultIds.length,
+            resultIds
+        );
+    }
+}
+```
+
+#### **Compliance Integration**
+- **Local Storage**: Encrypted SQLite table `audit_logs` on device
+- **Export Capability**: Encrypted export for compliance audits if required
+- **Retention**: Same 7-year retention as server-side logs
+- **Privacy Protection**: Search queries hashed for privacy
+- **No Server Transmission**: These logs remain local-only unless explicitly exported for compliance
+
 ---
 
 ## 🔄 **Audit Event Processing & Storage**

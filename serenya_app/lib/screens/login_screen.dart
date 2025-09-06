@@ -19,18 +19,28 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final success = await _authService.signInWithGoogle();
+      final result = await _authService.signInWithGoogle(
+        consentData: {
+          'medical_disclaimers': true,
+          'terms_of_service': true,
+          'privacy_policy': true,
+        },
+        requireBiometric: true,
+      );
       
-      if (success) {
+      if (result.success) {
         // Navigate to home screen
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => HomeScreen()),
         );
+      } else if (result.cancelled) {
+        _showErrorDialog('Sign in was cancelled. Please try again to access your medical data securely.');
       } else {
-        _showErrorDialog('Sign in failed. Please try again.');
+        // Handle different error types with appropriate messaging
+        _showHealthcareErrorDialog(result);
       }
     } catch (e) {
-      _showErrorDialog('An error occurred during sign in.');
+      _showErrorDialog('An unexpected error occurred during authentication. Please try again.');
     } finally {
       setState(() {
         _isLoading = false;
@@ -42,7 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Error'),
+        title: Text('Authentication Error'),
         content: Text(message),
         actions: [
           TextButton(
@@ -50,6 +60,57 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Text('OK'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showHealthcareErrorDialog(dynamic result) {
+    String title = 'Authentication Required';
+    String message = result.message;
+    List<Widget> actions = [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: Text('OK'),
+      ),
+    ];
+
+    // Add specific actions based on error type
+    if (result.isNetworkError) {
+      title = 'Network Connection';
+      actions.insert(0, TextButton(
+        onPressed: () {
+          Navigator.of(context).pop();
+          _handleGoogleSignIn(); // Retry
+        },
+        child: Text('Retry'),
+      ));
+    } else if (result.errorCode == 'MISSING_CONSENT') {
+      title = 'Medical Access Agreement';
+      message = 'Please accept all required medical disclaimers to access healthcare features securely.';
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message),
+            if (result.isNetworkError) ...[
+              SizedBox(height: 8),
+              Text(
+                'Please check your internet connection and try again.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: actions,
       ),
     );
   }

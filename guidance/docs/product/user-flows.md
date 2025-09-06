@@ -24,8 +24,36 @@
 ### **Journey Mapping Strategy**
 - **Primary Flows**: Core value delivery (upload → analysis → understanding)
 - **Support Flows**: Onboarding, settings, premium features
-- **Error Recovery**: Graceful handling of technical and user errors
+- **Error Recovery**: Three-layer unified error handling with user-focused recovery actions
 - **Accessibility**: Alternative paths for different user capabilities
+
+### **Error Handling User Experience Patterns**
+**Aligned with unified three-layer error handling strategy (Issue #16):**
+
+#### **Layer 3 - User-Facing Error Experience**
+- **Contextual Messages**: Error messages match user's current task and mental model
+- **Recovery Actions**: Clear, actionable next steps for every error scenario
+- **Emotional Reassurance**: Warm, supportive tone that reduces user anxiety
+- **Progressive Disclosure**: Essential information first, details available on request
+
+#### **Error State UI Patterns**
+```
+┌─────────────────────────────────────┐
+│  🔄 Analysis Temporarily Unavailable│
+│                                     │
+│  AI analysis is temporarily         │
+│  unavailable. You can still view    │
+│  your documents in the timeline.    │
+│                                     │
+│  [ Try Again ]  [ View Documents ]  │
+└─────────────────────────────────────┘
+```
+
+#### **Recovery Strategy Implementation**
+- **RETRY**: One-tap retry buttons with smart backoff timing
+- **FALLBACK**: Graceful degradation with preserved core functionality  
+- **ESCALATE**: Clear guidance for user action or support contact
+- **IGNORE**: Continue with reduced functionality, option to retry later
 
 ---
 
@@ -54,7 +82,7 @@ Emotional State: Curious but slightly anxious
 
 **Step 2: File Selection**
 - **Action**: User selects photo/document from device
-- **UI Response**: Upload button changes to "Loading" state with progress indicator
+- **UI Response**: Upload button changes to "Loading" state with processing indicator
 - **API Call**: POST /api/v1/documents/upload (**→ api-contracts.md**)
 - **Biometric Trigger**: None (within active session)
 - **Error Paths**: 
@@ -216,13 +244,12 @@ Emotional State: Curious but cautious about health data privacy
 - **Legal Requirement**: Required for medical AI applications
 
 **Step 5: Onboarding Slide 4 - Consent & Authentication**
-- **Consent Collection**: 3 required checkboxes
-  - Medical disclaimers understanding
-  - Terms of Service agreement  
-  - Privacy Policy acceptance
+- **Consent Collection**: 2 required checkboxes (bundled consent approach)
+  - **Checkbox 1**: Legal agreements and AI processing consent (Terms of Service, Privacy Policy, Healthcare Consultation)
+  - **Checkbox 2**: Medical disclaimers understanding (Medical Disclaimer, Emergency Care Limitation)
 - **Authentication**: Google Sign-In button (WCAG compliant)
 - **API Call**: POST /api/v1/auth/google (**→ api-contracts.md**)
-- **Database Storage**: User record + 3 consent records
+- **Database Storage**: User record + 5 consent records (bundled from 2 checkboxes)
 
 **Step 6: Biometric Setup (Post-Authentication)**
 - **Trigger**: After successful Google authentication
@@ -378,7 +405,7 @@ Emotional State: Disappointed, needs resolution
 **Step 1: Processing Timeout Detection**
 - **Timeout Limit**: 3 minutes for document processing
 - **User Communication**: "Taking longer than usual. Please wait a moment more..."
-- **Extended Timeout**: Additional 2 minutes with progress updates
+- **Extended Timeout**: Additional 2 minutes with status updates
 - **Background Action**: Switch to fallback processing if available
 
 **Step 2: Processing Failure**
@@ -425,12 +452,14 @@ Emotional State: Disappointed, needs resolution
 **Navigation Implementation**:
 - Screen transition animations and performance
 - State management for complex flows (upload → processing → results)
-- Error handling and recovery UI patterns
+- Three-layer error handling implementation with UnifiedError models
 - Offline capability and queue management
+- Circuit breaker patterns for external service integration
+- Error recovery UI components and user guidance systems
 
 ### **For API Contracts Agent (→ api-contracts.md)**
 **API Flow Integration**:
-- Document upload with progress tracking
+- Document upload with status tracking
 - Real-time job status polling
 - Chat message creation and retrieval
 - Subscription management and payment processing

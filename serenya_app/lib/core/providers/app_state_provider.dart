@@ -58,17 +58,23 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> login() async {
+  Future<void> login({Map<String, dynamic>? consentData}) async {
     _setLoading(true);
     _clearError();
 
     try {
-      final success = await _authService.signInWithGoogle();
-      if (success) {
+      final result = await _authService.signInWithGoogle(
+        consentData: consentData,
+        requireBiometric: true,
+      );
+      
+      if (result.success) {
         _isLoggedIn = true;
         notifyListeners();
+      } else if (result.cancelled) {
+        _setError('Sign in was cancelled');
       } else {
-        _setError('Login failed');
+        _setError(result.message);
       }
     } catch (e) {
       _setError('Login error: $e');
