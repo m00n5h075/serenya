@@ -2,16 +2,20 @@ const {
   createResponse,
   createErrorResponse,
   getUserIdFromEvent,
-  getJobRecord,
-  auditLog,
   sanitizeError,
 } = require('../shared/utils');
+const { DocumentJobService } = require('../shared/document-database');
+const { auditService } = require('../shared/audit-service');
 
 /**
  * Processing Status Tracking
  * GET /api/v1/process/status/{jobId}
  */
 exports.handler = async (event) => {
+  const sessionId = event.requestContext?.requestId || 'unknown';
+  const sourceIp = event.requestContext?.identity?.sourceIp;
+  const userAgent = event.headers?.['User-Agent'];
+  
   try {
     const userId = getUserIdFromEvent(event);
     const jobId = event.pathParameters?.jobId;
@@ -24,20 +28,36 @@ exports.handler = async (event) => {
       return createErrorResponse(400, 'Missing job ID');
     }
 
-    auditLog('status_check', userId, { jobId });
+    // Enhanced audit logging
+    await auditService.logAuditEvent({
+      eventType: 'document_processing',
+      eventSubtype: 'status_check',
+      userId: userId,
+      eventDetails: {
+        jobId: jobId
+      },
+      sessionId: sessionId,
+      sourceIp: sourceIp,
+      userAgent: userAgent,
+      dataClassification: 'medical_phi'
+    });
 
-    // Get job record
-    const jobRecord = await getJobRecord(jobId);
+    // Get job record using PostgreSQL service
+    const jobRecord = await DocumentJobService.getJob(jobId, userId);
     
     if (!jobRecord) {
-      auditLog('status_job_not_found', userId, { jobId });
+      await auditService.logAuditEvent({
+        eventType: 'document_processing',
+        eventSubtype: 'status_job_not_found',
+        userId: userId,
+        eventDetails: {
+          jobId: jobId
+        },
+        sessionId: sessionId,
+        sourceIp: sourceIp,
+        dataClassification: 'medical_phi'
+      });
       return createErrorResponse(404, 'Job not found');
-    }
-
-    // Verify user owns this job
-    if (jobRecord.userId !== userId) {
-      auditLog('status_unauthorized', userId, { jobId, actualUserId: jobRecord.userId });
-      return createErrorResponse(403, 'Unauthorized access to job');
     }
 
     // Calculate processing duration and timeout status
@@ -99,10 +119,20 @@ exports.handler = async (event) => {
       responseData.confidence_score = jobRecord.confidenceScore;
     }
 
-    auditLog('status_retrieved', userId, { 
-      jobId, 
-      status, 
-      progressPercentage 
+    // Enhanced status retrieval audit
+    await auditService.logAuditEvent({
+      eventType: 'document_processing',
+      eventSubtype: 'status_retrieved',
+      userId: userId,
+      eventDetails: {
+        jobId: jobId,
+        status: status,
+        progressPercentage: progressPercentage,
+        retryCount: jobRecord.retryCount || 0
+      },
+      sessionId: sessionId,
+      sourceIp: sourceIp,
+      dataClassification: 'medical_phi'
     });
 
     return createResponse(200, {
@@ -116,9 +146,21 @@ exports.handler = async (event) => {
     const userId = getUserIdFromEvent(event) || 'unknown';
     const jobId = event.pathParameters?.jobId || 'unknown';
     
-    auditLog('status_error', userId, { 
-      jobId, 
-      error: sanitizeError(error).substring(0, 100) 
+    // Enhanced error audit logging
+    await auditService.logAuditEvent({
+      eventType: 'document_processing',
+      eventSubtype: 'status_error',
+      userId: userId,
+      eventDetails: {
+        jobId: jobId,
+        error: sanitizeError(error).substring(0, 100)
+      },
+      sessionId: sessionId,
+      sourceIp: sourceIp,
+      userAgent: userAgent,
+      dataClassification: 'system_error'
+    }).catch(auditError => {
+      console.error('Audit logging failed:', auditError);
     });
     
     return createErrorResponse(500, 'Failed to retrieve processing status');

@@ -643,6 +643,279 @@ const PaymentService = {
   }
 };
 
+/**
+ * Session management functions
+ */
+const SessionService = {
+  async createSession(sessionData) {
+    const {
+      userId,
+      deviceId,
+      sessionId,
+      refreshToken,
+      expiresAt,
+      userAgent,
+      sourceIp
+    } = sessionData;
+    
+    // Hash the refresh token for storage
+    const crypto = require('crypto');
+    const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    
+    const result = await query(`
+      INSERT INTO user_sessions (
+        user_id, device_id, session_id, refresh_token_hash, 
+        expires_at, user_agent, source_ip, session_status
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')
+      RETURNING *
+    `, [userId, deviceId, sessionId, refreshTokenHash, expiresAt, userAgent, sourceIp]);
+    
+    return result.rows[0];
+  },
+  
+  async findActiveSession(sessionId) {
+    const result = await query(`
+      SELECT * FROM user_sessions 
+      WHERE session_id = $1 AND session_status = 'active' AND expires_at > NOW()
+    `, [sessionId]);
+    
+    return result.rows[0];
+  },
+  
+  async findByRefreshToken(refreshToken) {
+    const crypto = require('crypto');
+    const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    
+    const result = await query(`
+      SELECT * FROM user_sessions 
+      WHERE refresh_token_hash = $1 AND session_status = 'active' AND expires_at > NOW()
+    `, [refreshTokenHash]);
+    
+    return result.rows[0];
+  },
+  
+  async updateLastActivity(sessionId) {
+    await query(`
+      UPDATE user_sessions 
+      SET last_activity_at = CURRENT_TIMESTAMP 
+      WHERE session_id = $1
+    `, [sessionId]);
+  },
+  
+  async revokeSession(sessionId) {
+    const result = await query(`
+      UPDATE user_sessions 
+      SET session_status = 'revoked', revoked_at = CURRENT_TIMESTAMP 
+      WHERE session_id = $1
+      RETURNING *
+    `, [sessionId]);
+    
+    return result.rows[0];
+  },
+  
+  async revokeAllUserSessions(userId) {
+    await query(`
+      UPDATE user_sessions 
+      SET session_status = 'revoked', revoked_at = CURRENT_TIMESTAMP 
+      WHERE user_id = $1 AND session_status = 'active'
+    `, [userId]);
+  },
+  
+  async cleanupExpiredSessions() {
+    await query(`
+      UPDATE user_sessions 
+      SET session_status = 'expired' 
+      WHERE expires_at < NOW() AND session_status = 'active'
+    `);
+  }
+};
+
+/**
+ * Device management functions
+ */
+const DeviceService = {
+  async findOrCreateDevice(deviceData) {
+    const { userId, platformType, appInstallationId, deviceFingerprint, appVersion } = deviceData;
+    
+    // Check if device already exists
+    let result = await query(`
+      SELECT * FROM user_devices 
+      WHERE user_id = $1 AND app_installation_id = $2
+    `, [userId, appInstallationId]);
+    
+    if (result.rows[0]) {
+      // Update last seen and app version
+      result = await query(`
+        UPDATE user_devices 
+        SET last_seen_at = CURRENT_TIMESTAMP, app_version = $1, device_fingerprint = $2
+        WHERE id = $3
+        RETURNING *
+      `, [appVersion, deviceFingerprint, result.rows[0].id]);
+      
+      return result.rows[0];
+    }
+    
+    // Create new device
+    result = await query(`
+      INSERT INTO user_devices (
+        user_id, platform_type, app_installation_id, 
+        device_fingerprint, app_version, device_status
+      )
+      VALUES ($1, $2, $3, $4, $5, 'active')
+      RETURNING *
+    `, [userId, platformType, appInstallationId, deviceFingerprint, appVersion]);
+    
+    return result.rows[0];
+  },
+  
+  async getUserDevices(userId) {
+    const result = await query(`
+      SELECT * FROM user_devices 
+      WHERE user_id = $1 AND device_status = 'active'
+      ORDER BY last_seen_at DESC
+    `, [userId]);
+    
+    return result.rows;
+  },
+  
+  async revokeDevice(deviceId) {
+    // Revoke device and all its sessions
+    await transaction([
+      {
+        sql: `UPDATE user_devices SET device_status = 'revoked', revoked_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        params: [deviceId]
+      },
+      {
+        sql: `UPDATE user_sessions SET session_status = 'revoked', revoked_at = CURRENT_TIMESTAMP WHERE device_id = $1`,
+        params: [deviceId]
+      }
+    ]);
+  }
+};
+
+/**
+ * Biometric registration functions with enhanced encryption
+ */
+const BiometricService = {
+  async createRegistration(registrationData) {
+    const {
+      deviceId,
+      biometricType,
+      challenge,
+      challengeExpiresAt,
+      deviceAttestationData,
+      registrationMetadata
+    } = registrationData;
+    
+    const registrationId = require('crypto').randomBytes(16).toString('hex');
+    
+    // Create encryption context for biometric data
+    const encryptionContext = {
+      deviceId: deviceId,
+      biometricType: biometricType,
+      dataType: 'biometric_registration'
+    };
+    
+    // Encrypt sensitive biometric data
+    const encryptedData = await encryptFields({
+      challenge: challenge,
+      device_attestation_data: JSON.stringify(deviceAttestationData || {}),
+      registration_metadata: JSON.stringify(registrationMetadata || {})
+    }, ['challenge', 'device_attestation_data', 'registration_metadata'], 
+    process.env.KMS_KEY_ID, encryptionContext);
+    
+    const result = await query(`
+      INSERT INTO biometric_registrations (
+        device_id, registration_id, biometric_type, challenge, 
+        challenge_expires_at, device_attestation_data, registration_metadata,
+        registration_status
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+      RETURNING id, device_id, registration_id, biometric_type, challenge_expires_at, created_at, registration_status
+    `, [
+      deviceId, 
+      registrationId, 
+      biometricType, 
+      encryptedData.challenge,
+      challengeExpiresAt,
+      encryptedData.device_attestation_data,
+      encryptedData.registration_metadata
+    ]);
+    
+    return {
+      ...result.rows[0],
+      challenge: challenge,
+      device_attestation_data: deviceAttestationData,
+      registration_metadata: registrationMetadata
+    };
+  },
+  
+  async findRegistration(registrationId) {
+    const result = await query(`
+      SELECT * FROM biometric_registrations 
+      WHERE registration_id = $1
+    `, [registrationId]);
+    
+    if (result.rows[0]) {
+      // Decrypt sensitive data
+      return await decryptFields(result.rows[0], ['challenge', 'device_attestation_data', 'registration_metadata']);
+    }
+    
+    return result.rows[0];
+  },
+  
+  async completeRegistration(registrationId, verificationData) {
+    const { signedChallenge, biometricPublicKey } = verificationData;
+    
+    // Encrypt the public key for storage
+    const encryptionContext = {
+      registrationId: registrationId,
+      dataType: 'biometric_keys'
+    };
+    
+    const encryptedKey = await encryptFields({
+      biometric_public_key: biometricPublicKey,
+      signed_challenge: signedChallenge
+    }, ['biometric_public_key', 'signed_challenge'], 
+    process.env.KMS_KEY_ID, encryptionContext);
+    
+    const result = await query(`
+      UPDATE biometric_registrations 
+      SET 
+        biometric_public_key = $1,
+        signed_challenge = $2,
+        registration_status = 'completed',
+        completed_at = CURRENT_TIMESTAMP
+      WHERE registration_id = $3
+      RETURNING *
+    `, [encryptedKey.biometric_public_key, encryptedKey.signed_challenge, registrationId]);
+    
+    if (result.rows[0]) {
+      return await decryptFields(result.rows[0], ['challenge', 'device_attestation_data', 'registration_metadata']);
+    }
+    
+    return result.rows[0];
+  },
+  
+  async getDeviceRegistrations(deviceId) {
+    const result = await query(`
+      SELECT * FROM biometric_registrations 
+      WHERE device_id = $1 AND registration_status = 'completed'
+      ORDER BY completed_at DESC
+    `, [deviceId]);
+    
+    // Decrypt registrations
+    const decryptedRegistrations = [];
+    for (const registration of result.rows) {
+      const decrypted = await decryptFields(registration, ['challenge', 'device_attestation_data', 'registration_metadata']);
+      decryptedRegistrations.push(decrypted);
+    }
+    
+    return decryptedRegistrations;
+  }
+};
+
 module.exports = {
   query,
   transaction,
@@ -651,5 +924,8 @@ module.exports = {
   ConsentService,
   ChatService,
   SubscriptionService,
-  PaymentService
+  PaymentService,
+  SessionService,
+  DeviceService,
+  BiometricService
 };

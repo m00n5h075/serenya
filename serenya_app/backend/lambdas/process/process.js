@@ -4,13 +4,12 @@ const sharp = require('sharp');
 const {
   createResponse,
   createErrorResponse,
-  getJobRecord,
-  updateJobStatus,
-  auditLog,
   sanitizeError,
   getSecrets,
   s3,
 } = require('../shared/utils');
+const { DocumentJobService } = require('../shared/document-database');
+const { auditService } = require('../shared/audit-service');
 
 /**
  * AI Processing with Anthropic Claude
@@ -35,19 +34,36 @@ exports.handler = async (event) => {
       return createErrorResponse(400, 'Invalid job ID');
     }
 
-    auditLog('processing_started', 'system', { jobId });
-
-    // Get job record
-    const jobRecord = await getJobRecord(jobId);
+    // Get job record using PostgreSQL service
+    const jobRecord = await DocumentJobService.getJob(jobId);
     if (!jobRecord) {
-      auditLog('processing_job_not_found', 'system', { jobId });
+      await auditService.logAuditEvent({
+        eventType: 'document_processing',
+        eventSubtype: 'job_not_found',
+        userId: 'system',
+        eventDetails: { jobId: jobId },
+        dataClassification: 'system_error'
+      });
       return createErrorResponse(404, 'Job not found');
     }
 
-    // Update status to processing
-    await updateJobStatus(jobId, 'processing', {
-      processingStartedAt: Date.now(),
+    // Enhanced processing started audit
+    await auditService.logAuditEvent({
+      eventType: 'document_processing',
+      eventSubtype: 'processing_started',
+      userId: jobRecord.userId,
+      eventDetails: {
+        jobId: jobId,
+        fileType: jobRecord.fileType,
+        fileSizeKB: Math.round(jobRecord.fileSize / 1024)
+      },
+      dataClassification: 'medical_phi'
     });
+
+    // Update status to processing using PostgreSQL service
+    await DocumentJobService.updateJobStatus(jobId, 'processing', {
+      processingStartedAt: Date.now(),
+    }, jobRecord.userId);
 
     // Download file from S3
     const fileContent = await downloadFileFromS3(jobRecord.s3Key);
@@ -61,23 +77,30 @@ exports.handler = async (event) => {
     // Process with Claude AI
     const aiResult = await processWithClaude(extractedText, jobRecord);
 
-    // Update job with results
-    await updateJobStatus(jobId, 'completed', {
+    // Store results using PostgreSQL service
+    await DocumentJobService.storeResults(jobId, aiResult, jobRecord.userId);
+
+    // Update job status to completed
+    await DocumentJobService.updateJobStatus(jobId, 'completed', {
       completedAt: Date.now(),
-      confidenceScore: aiResult.confidenceScore,
-      interpretationText: aiResult.interpretationText,
-      detailedInterpretation: aiResult.detailedInterpretation,
-      medicalFlags: aiResult.medicalFlags,
-      processingDuration: Date.now() - jobRecord.uploadedAt,
-    });
+      processingDuration: Date.now() - new Date(jobRecord.uploadedAt).getTime(),
+    }, jobRecord.userId);
 
     // Clean up S3 file immediately after successful processing
     await cleanupS3File(jobRecord.s3Key);
 
-    auditLog('processing_completed', jobRecord.userId, { 
-      jobId, 
-      confidenceScore: aiResult.confidenceScore,
-      flagsCount: aiResult.medicalFlags?.length || 0
+    // Enhanced processing completed audit
+    await auditService.logAuditEvent({
+      eventType: 'document_processing',
+      eventSubtype: 'processing_completed',
+      userId: jobRecord.userId,
+      eventDetails: {
+        jobId: jobId,
+        confidenceScore: aiResult.confidenceScore,
+        flagsCount: aiResult.medicalFlags?.length || 0,
+        processingDurationMs: Date.now() - new Date(jobRecord.uploadedAt).getTime()
+      },
+      dataClassification: 'medical_phi'
     });
 
     // Return result if called directly (not from S3 trigger)

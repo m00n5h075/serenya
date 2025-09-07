@@ -8,7 +8,7 @@ const {
   sanitizeError,
   getSecrets
 } = require('./utils');
-const { UserService, ConsentService } = require('./database');
+const { UserService, ConsentService, SessionService, DeviceService } = require('./database');
 
 /**
  * Google OAuth verification and JWT generation
@@ -103,6 +103,18 @@ exports.handler = async (event) => {
       await UserService.updateLastLogin(user.id);
     }
 
+    // Handle device registration
+    let device = null;
+    if (device_info) {
+      device = await DeviceService.findOrCreateDevice({
+        userId: user.id,
+        platformType: device_info.platform || 'unknown',
+        appInstallationId: device_info.app_installation_id || `fallback-${user.id}`,
+        deviceFingerprint: device_info.device_fingerprint || null,
+        appVersion: device_info.app_version || '1.0.0'
+      });
+    }
+
     // Create session record
     const sessionId = uuidv4();
     const refreshToken = uuidv4();
@@ -116,7 +128,18 @@ exports.handler = async (event) => {
       sessionId: sessionId
     });
     
-    // TODO: Store session in database (session management table to be added)
+    // Store session in database
+    if (device) {
+      await SessionService.createSession({
+        userId: user.id,
+        deviceId: device.id,
+        sessionId: sessionId,
+        refreshToken: refreshToken,
+        expiresAt: sessionExpiresAt,
+        userAgent: event.headers['User-Agent'] || 'Unknown',
+        sourceIp: event.requestContext?.identity?.sourceIp || 'Unknown'
+      });
+    }
     
     auditLog('auth_success', user.id, { 
       requestId,
@@ -142,7 +165,8 @@ exports.handler = async (event) => {
         session: {
           session_id: sessionId,
           expires_at: sessionExpiresAt.toISOString(),
-          biometric_required: false // TODO: Implement biometric requirements
+          biometric_required: device ? false : true, // Require biometric if device not registered
+          device_registered: !!device
         },
         encryption_support: {
           supported_algorithms: ['AES-256-GCM'],
@@ -256,13 +280,62 @@ exports.refreshHandler = async (event) => {
       return createErrorResponse(400, 'MISSING_REQUIRED_FIELD', 'Missing refresh token', 'Please provide a valid refresh token');
     }
 
-    // TODO: Implement refresh token validation against database
-    // For now, return error indicating token expired
-    auditLog('token_refresh_failed', 'anonymous', { requestId, reason: 'refresh_token_expired' });
+    // Validate refresh token against database
+    const session = await SessionService.findByRefreshToken(refresh_token);
     
-    return createErrorResponse(401, 'REFRESH_TOKEN_EXPIRED', 'Refresh token has expired', 'Please sign in again', {
-      action_required: 'full_authentication'
+    if (!session) {
+      auditLog('token_refresh_failed', 'anonymous', { requestId, reason: 'invalid_refresh_token' });
+      return createErrorResponse(401, 'INVALID_REFRESH_TOKEN', 'Invalid refresh token', 'Please sign in again');
+    }
+
+    // Get user data
+    const user = await UserService.findById(session.user_id);
+    if (!user) {
+      auditLog('token_refresh_failed', session.user_id, { requestId, reason: 'user_not_found' });
+      return createErrorResponse(401, 'USER_NOT_FOUND', 'User not found', 'Please sign in again');
+    }
+
+    // Generate new tokens
+    const newSessionId = uuidv4();
+    const newRefreshToken = uuidv4();
+    const newAccessToken = await generateJWT({
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      sessionId: newSessionId
     });
+
+    // Update session with new tokens
+    await SessionService.revokeSession(session.session_id);
+    
+    const newSessionExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    
+    await SessionService.createSession({
+      userId: user.id,
+      deviceId: session.device_id,
+      sessionId: newSessionId,
+      refreshToken: newRefreshToken,
+      expiresAt: newSessionExpiresAt,
+      userAgent: event.headers['User-Agent'] || 'Unknown',
+      sourceIp: event.requestContext?.identity?.sourceIp || 'Unknown'
+    });
+
+    auditLog('token_refresh_success', user.id, { requestId, sessionId: newSessionId });
+
+    const response = {
+      success: true,
+      data: {
+        access_token: newAccessToken,
+        refresh_token: newRefreshToken,
+        session: {
+          session_id: newSessionId,
+          expires_at: newSessionExpiresAt.toISOString()
+        }
+      },
+      audit_logged: true
+    };
+
+    return createResponse(200, response);
 
   } catch (error) {
     console.error('Token refresh error:', sanitizeError(error));

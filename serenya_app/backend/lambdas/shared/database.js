@@ -983,6 +983,25 @@ const BiometricService = {
       registrationMetadata
     } = registrationData;
 
+    // Create encryption context for biometric data
+    const encryptionContext = {
+      deviceId: deviceId,
+      registrationId: registrationId,
+      dataType: 'biometric_challenge'
+    };
+
+    // Encrypt sensitive biometric challenge data
+    const encryptedData = await encryptFields(
+      { 
+        challenge: challenge,
+        device_attestation_data: JSON.stringify(deviceAttestationData || {}),
+        registration_metadata: JSON.stringify(registrationMetadata || {})
+      },
+      ['challenge', 'device_attestation_data', 'registration_metadata'],
+      process.env.KMS_KEY_ID,
+      encryptionContext
+    );
+
     const result = await query(`
       INSERT INTO biometric_registrations (
         device_id, registration_id, biometric_type, challenge, 
@@ -994,12 +1013,31 @@ const BiometricService = {
         registration_id = EXCLUDED.registration_id,
         challenge = EXCLUDED.challenge,
         challenge_expires_at = EXCLUDED.challenge_expires_at,
+        device_attestation_data = EXCLUDED.device_attestation_data,
+        registration_metadata = EXCLUDED.registration_metadata,
         is_verified = false,
         verification_failures = 0,
         updated_at = CURRENT_TIMESTAMP
       RETURNING *
-    `, [deviceId, registrationId, biometricType, challenge, challengeExpiresAt, deviceAttestationData, registrationMetadata]);
+    `, [
+      deviceId, 
+      registrationId, 
+      biometricType, 
+      encryptedData.challenge, 
+      challengeExpiresAt, 
+      encryptedData.device_attestation_data, 
+      encryptedData.registration_metadata
+    ]);
 
+    // Return decrypted data for the response
+    if (result.rows[0]) {
+      const decrypted = await decryptFields(result.rows[0], ['challenge', 'device_attestation_data', 'registration_metadata']);
+      return {
+        ...decrypted,
+        device_attestation_data: JSON.parse(decrypted.device_attestation_data || '{}'),
+        registration_metadata: JSON.parse(decrypted.registration_metadata || '{}')
+      };
+    }
     return result.rows[0];
   },
 
@@ -1008,6 +1046,15 @@ const BiometricService = {
       SELECT * FROM biometric_registrations 
       WHERE registration_id = $1 AND is_active = true
     `, [registrationId]);
+    
+    if (result.rows[0]) {
+      const decrypted = await decryptFields(result.rows[0], ['challenge', 'device_attestation_data', 'registration_metadata']);
+      return {
+        ...decrypted,
+        device_attestation_data: JSON.parse(decrypted.device_attestation_data || '{}'),
+        registration_metadata: JSON.parse(decrypted.registration_metadata || '{}')
+      };
+    }
     return result.rows[0];
   },
 
@@ -1052,6 +1099,19 @@ const BiometricService = {
   },
 
   async updateChallenge(registrationId, challenge, challengeExpiresAt) {
+    // Encrypt the new challenge
+    const encryptionContext = {
+      registrationId: registrationId,
+      dataType: 'biometric_challenge'
+    };
+
+    const encryptedData = await encryptFields(
+      { challenge: challenge },
+      ['challenge'],
+      process.env.KMS_KEY_ID,
+      encryptionContext
+    );
+
     const result = await query(`
       UPDATE biometric_registrations 
       SET challenge = $1,
@@ -1059,7 +1119,16 @@ const BiometricService = {
           updated_at = CURRENT_TIMESTAMP
       WHERE registration_id = $3
       RETURNING *
-    `, [challenge, challengeExpiresAt, registrationId]);
+    `, [encryptedData.challenge, challengeExpiresAt, registrationId]);
+    
+    if (result.rows[0]) {
+      const decrypted = await decryptFields(result.rows[0], ['challenge', 'device_attestation_data', 'registration_metadata']);
+      return {
+        ...decrypted,
+        device_attestation_data: JSON.parse(decrypted.device_attestation_data || '{}'),
+        registration_metadata: JSON.parse(decrypted.registration_metadata || '{}')
+      };
+    }
     return result.rows[0];
   },
 

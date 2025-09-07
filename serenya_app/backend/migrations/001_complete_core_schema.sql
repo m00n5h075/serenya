@@ -497,9 +497,343 @@ COMMENT ON COLUMN biometric_registrations.device_attestation_data IS 'Device sec
 COMMENT ON COLUMN subscription_tiers.max_documents_per_month IS 'Maximum documents per month (NULL = unlimited)';
 
 -- ========================================
--- 16. SCHEMA VERSION RECORD
+-- 16. DOCUMENT PROCESSING TABLES
 -- ========================================
 
--- Insert consolidated schema version
+-- Document processing job statuses
+CREATE TYPE processing_status AS ENUM (
+    'uploaded',      -- File uploaded, waiting for processing
+    'processing',    -- Currently being processed by AI
+    'completed',     -- Processing completed successfully  
+    'failed',        -- Processing failed
+    'timeout',       -- Processing timed out
+    'retrying'       -- Retry in progress
+);
+
+-- Document file types supported
+CREATE TYPE document_file_type AS ENUM (
+    'pdf',
+    'jpg', 
+    'jpeg',
+    'png'
+);
+
+-- Document processing jobs table
+CREATE TABLE processing_jobs (
+    -- Primary identification
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_id TEXT NOT NULL UNIQUE,               -- Client-facing job identifier
+    
+    -- User association (encrypted PII reference)
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- File information
+    original_filename TEXT NOT NULL,           -- User's original filename (encrypted)
+    sanitized_filename TEXT NOT NULL,          -- Sanitized filename for storage (encrypted)
+    file_type document_file_type NOT NULL,     -- File type enum
+    file_size BIGINT NOT NULL,                 -- File size in bytes
+    file_checksum TEXT,                        -- SHA-256 checksum for integrity
+    
+    -- S3 storage information
+    s3_bucket TEXT NOT NULL,                   -- S3 bucket name
+    s3_key TEXT NOT NULL,                      -- S3 object key
+    s3_encryption_key_id TEXT,                 -- KMS key ID used for encryption
+    
+    -- Processing status and timing
+    status processing_status NOT NULL DEFAULT 'uploaded',
+    progress_percentage INTEGER DEFAULT 0 CHECK (progress_percentage >= 0 AND progress_percentage <= 100),
+    
+    -- Timestamps for processing pipeline
+    uploaded_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    processing_started_at TIMESTAMP WITH TIME ZONE,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    failed_at TIMESTAMP WITH TIME ZONE,
+    
+    -- Retry management
+    retry_count INTEGER DEFAULT 0 CHECK (retry_count >= 0 AND retry_count <= 3),
+    last_retry_at TIMESTAMP WITH TIME ZONE,
+    scheduled_retry_at TIMESTAMP WITH TIME ZONE,
+    max_retries INTEGER DEFAULT 3,
+    
+    -- Processing duration tracking
+    processing_duration_ms BIGINT,             -- Total processing time in milliseconds
+    upload_to_start_delay_ms BIGINT,           -- Time from upload to processing start
+    
+    -- Error information
+    error_message TEXT,                        -- Error details for failed jobs
+    error_code TEXT,                           -- Structured error codes
+    timeout_reason TEXT,                       -- Timeout classification
+    
+    -- Request context
+    user_agent TEXT,                           -- Client user agent
+    source_ip INET,                            -- Source IP for audit trail
+    api_version TEXT DEFAULT 'v1',             -- API version used
+    
+    -- Security validation results
+    security_scan_passed BOOLEAN DEFAULT FALSE,
+    magic_number_validated BOOLEAN DEFAULT FALSE,
+    file_integrity_verified BOOLEAN DEFAULT FALSE,
+    
+    -- Data retention (HIPAA compliance)
+    ttl_expires_at TIMESTAMP WITH TIME ZONE DEFAULT (CURRENT_TIMESTAMP + INTERVAL '24 hours'),
+    
+    -- Timestamps
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- AI processing results table
+CREATE TABLE processing_results (
+    -- Primary identification
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_id UUID NOT NULL REFERENCES processing_jobs(id) ON DELETE CASCADE,
+    
+    -- AI processing results (encrypted)
+    confidence_score INTEGER CHECK (confidence_score >= 1 AND confidence_score <= 10),
+    interpretation_text TEXT,                  -- Brief summary (encrypted)
+    detailed_interpretation TEXT,              -- Comprehensive analysis (encrypted)
+    
+    -- Medical flags and warnings (encrypted)
+    medical_flags JSONB DEFAULT '[]'::jsonb,   -- Array of flag codes (encrypted)
+    recommendations JSONB DEFAULT '[]'::jsonb, -- Array of recommendations (encrypted)
+    disclaimers JSONB DEFAULT '[]'::jsonb,     -- Array of medical disclaimers (encrypted)
+    safety_warnings JSONB DEFAULT '[]'::jsonb, -- Array of safety warnings (encrypted)
+    
+    -- AI model information
+    ai_model_used TEXT DEFAULT 'claude-3-sonnet-20240229',
+    ai_model_version TEXT,
+    ai_processing_time_ms BIGINT,
+    ai_token_usage JSONB,                      -- Token usage metrics
+    ai_cost_estimate DECIMAL(10,4),            -- Estimated processing cost
+    
+    -- Content extraction metadata
+    extracted_text_length INTEGER,
+    text_extraction_method TEXT,               -- 'pdf_parse', 'ocr', 'manual'
+    text_extraction_confidence DECIMAL(3,2),  -- Confidence in extracted text
+    
+    -- Result validation
+    result_validated_at TIMESTAMP WITH TIME ZONE,
+    validation_checksum TEXT,                  -- For integrity verification
+    
+    -- Data classification for audit
+    data_classification TEXT DEFAULT 'medical_phi',
+    processing_location TEXT DEFAULT 'us-east-1',
+    
+    -- Timestamps
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Processing job audit events table
+CREATE TABLE processing_job_events (
+    -- Primary identification
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_id UUID NOT NULL REFERENCES processing_jobs(id) ON DELETE CASCADE,
+    
+    -- Event information
+    event_type TEXT NOT NULL,                  -- 'upload', 'process_start', 'process_complete', etc.
+    event_subtype TEXT,                        -- More specific event classification
+    event_status TEXT NOT NULL,                -- 'success', 'error', 'warning'
+    
+    -- Event context
+    event_message TEXT,                        -- Human-readable event description
+    event_details JSONB DEFAULT '{}'::jsonb,   -- Structured event data
+    error_code TEXT,                           -- Error code if applicable
+    
+    -- User and session context (privacy-safe)
+    user_id_hash TEXT NOT NULL,               -- SHA-256 hash of user ID
+    session_id TEXT,                           -- Session identifier
+    correlation_id TEXT,                       -- Request correlation ID
+    
+    -- Request metadata
+    user_agent TEXT,
+    source_ip INET,
+    api_endpoint TEXT,                         -- Which API endpoint was called
+    request_method TEXT,                       -- HTTP method
+    
+    -- Performance metrics
+    processing_time_ms BIGINT,                 -- Time for this specific operation
+    memory_usage_mb INTEGER,                   -- Memory usage if available
+    
+    -- Security context
+    security_scan_results JSONB,               -- Security validation results
+    data_classification TEXT DEFAULT 'medical_phi',
+    
+    -- Compliance and retention
+    gdpr_lawful_basis TEXT DEFAULT 'consent',
+    retention_years INTEGER DEFAULT 7,
+    
+    -- Timestamps
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ========================================
+-- 17. DOCUMENT PROCESSING INDEXES
+-- ========================================
+
+-- Processing jobs indexes
+CREATE INDEX idx_processing_jobs_user_id ON processing_jobs(user_id);
+CREATE INDEX idx_processing_jobs_status ON processing_jobs(status, created_at DESC);
+CREATE INDEX idx_processing_jobs_job_id ON processing_jobs(job_id);
+CREATE INDEX idx_processing_jobs_retry ON processing_jobs(status, retry_count, scheduled_retry_at) WHERE status = 'retrying';
+CREATE INDEX idx_processing_jobs_cleanup ON processing_jobs(ttl_expires_at) WHERE status IN ('completed', 'failed');
+CREATE INDEX idx_processing_jobs_timeout ON processing_jobs(processing_started_at, status) WHERE status = 'processing';
+
+-- Processing results indexes
+CREATE INDEX idx_processing_results_job_id ON processing_results(job_id);
+CREATE INDEX idx_processing_results_confidence ON processing_results(confidence_score, created_at DESC);
+
+-- Processing job events indexes  
+CREATE INDEX idx_processing_job_events_job_id ON processing_job_events(job_id, created_at DESC);
+CREATE INDEX idx_processing_job_events_user_hash ON processing_job_events(user_id_hash, created_at DESC);
+CREATE INDEX idx_processing_job_events_type ON processing_job_events(event_type, event_status, created_at DESC);
+CREATE INDEX idx_processing_job_events_correlation ON processing_job_events(correlation_id);
+
+-- ========================================
+-- 18. DOCUMENT PROCESSING TRIGGERS
+-- ========================================
+
+-- Auto-update updated_at timestamp for processing tables
+CREATE TRIGGER update_processing_jobs_updated_at 
+    BEFORE UPDATE ON processing_jobs 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_processing_results_updated_at 
+    BEFORE UPDATE ON processing_results 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ========================================
+-- 19. DOCUMENT PROCESSING RLS POLICIES
+-- ========================================
+
+-- Enable RLS on processing tables
+ALTER TABLE processing_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE processing_results ENABLE ROW LEVEL SECURITY;
+ALTER TABLE processing_job_events ENABLE ROW LEVEL SECURITY;
+
+-- RLS policies for application access
+CREATE POLICY processing_jobs_user_policy ON processing_jobs
+    USING (user_id = current_setting('app.current_user_id')::uuid);
+
+CREATE POLICY processing_results_user_policy ON processing_results
+    USING (job_id IN (SELECT id FROM processing_jobs WHERE user_id = current_setting('app.current_user_id')::uuid));
+
+CREATE POLICY processing_job_events_user_policy ON processing_job_events
+    USING (job_id IN (SELECT id FROM processing_jobs WHERE user_id = current_setting('app.current_user_id')::uuid));
+
+-- ========================================
+-- 20. DOCUMENT PROCESSING FUNCTIONS
+-- ========================================
+
+-- Function to create a new processing job
+CREATE OR REPLACE FUNCTION create_processing_job(
+    p_job_id TEXT,
+    p_user_id UUID,
+    p_original_filename TEXT,
+    p_sanitized_filename TEXT,
+    p_file_type document_file_type,
+    p_file_size BIGINT,
+    p_s3_bucket TEXT,
+    p_s3_key TEXT,
+    p_user_agent TEXT DEFAULT NULL,
+    p_source_ip INET DEFAULT NULL
+)
+RETURNS UUID AS $$
+DECLARE
+    v_job_uuid UUID;
+BEGIN
+    INSERT INTO processing_jobs (
+        job_id, user_id, original_filename, sanitized_filename,
+        file_type, file_size, s3_bucket, s3_key,
+        user_agent, source_ip
+    ) VALUES (
+        p_job_id, p_user_id, p_original_filename, p_sanitized_filename,
+        p_file_type, p_file_size, p_s3_bucket, p_s3_key,
+        p_user_agent, p_source_ip
+    ) RETURNING id INTO v_job_uuid;
+    
+    RETURN v_job_uuid;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to update job status with timing
+CREATE OR REPLACE FUNCTION update_job_status(
+    p_job_id TEXT,
+    p_status processing_status,
+    p_error_message TEXT DEFAULT NULL,
+    p_retry_count INTEGER DEFAULT NULL
+)
+RETURNS BOOLEAN AS $$
+DECLARE
+    v_now TIMESTAMP WITH TIME ZONE := CURRENT_TIMESTAMP;
+BEGIN
+    UPDATE processing_jobs 
+    SET 
+        status = p_status,
+        processing_started_at = CASE WHEN p_status = 'processing' THEN v_now ELSE processing_started_at END,
+        completed_at = CASE WHEN p_status = 'completed' THEN v_now ELSE completed_at END,
+        failed_at = CASE WHEN p_status = 'failed' THEN v_now ELSE failed_at END,
+        error_message = COALESCE(p_error_message, error_message),
+        retry_count = COALESCE(p_retry_count, retry_count),
+        last_retry_at = CASE WHEN p_status = 'retrying' THEN v_now ELSE last_retry_at END,
+        processing_duration_ms = CASE 
+            WHEN p_status = 'completed' AND processing_started_at IS NOT NULL 
+            THEN EXTRACT(EPOCH FROM (v_now - processing_started_at)) * 1000
+            ELSE processing_duration_ms 
+        END
+    WHERE job_id = p_job_id;
+    
+    RETURN FOUND;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to cleanup expired jobs
+CREATE OR REPLACE FUNCTION cleanup_expired_jobs()
+RETURNS INTEGER AS $$
+DECLARE
+    v_deleted_count INTEGER;
+BEGIN
+    -- Delete expired job results first (foreign key dependency)
+    DELETE FROM processing_results 
+    WHERE job_id IN (
+        SELECT id FROM processing_jobs 
+        WHERE ttl_expires_at < CURRENT_TIMESTAMP
+    );
+    
+    -- Delete expired job events
+    DELETE FROM processing_job_events 
+    WHERE job_id IN (
+        SELECT id FROM processing_jobs 
+        WHERE ttl_expires_at < CURRENT_TIMESTAMP
+    );
+    
+    -- Delete expired jobs
+    DELETE FROM processing_jobs 
+    WHERE ttl_expires_at < CURRENT_TIMESTAMP;
+    
+    GET DIAGNOSTICS v_deleted_count = ROW_COUNT;
+    
+    RETURN v_deleted_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ========================================
+-- 21. DOCUMENT PROCESSING PERMISSIONS
+-- ========================================
+
+-- Grant permissions to application user for processing tables
+GRANT SELECT, INSERT, UPDATE, DELETE ON processing_jobs TO serenya_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON processing_results TO serenya_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON processing_job_events TO serenya_app;
+
+GRANT EXECUTE ON FUNCTION create_processing_job TO serenya_app;
+GRANT EXECUTE ON FUNCTION update_job_status TO serenya_app;
+GRANT EXECUTE ON FUNCTION cleanup_expired_jobs TO serenya_app;
+
+-- ========================================
+-- 22. SCHEMA VERSION RECORD
+-- ========================================
+
+-- Insert consolidated schema version including document processing
 INSERT INTO schema_versions (version, description) 
-VALUES ('2.0.0', 'Consolidated core schema: Complete user management, device/session tracking, biometric authentication, subscriptions, payments, and chat options with encryption support and performance optimization');
+VALUES ('3.0.0', 'Complete core schema: User management, device/session tracking, biometric authentication, subscriptions, payments, chat options, and document processing pipeline with encryption support and HIPAA compliance');

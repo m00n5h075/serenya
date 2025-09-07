@@ -2,16 +2,20 @@ const {
   createResponse,
   createErrorResponse,
   getUserIdFromEvent,
-  getJobRecord,
-  auditLog,
   sanitizeError,
 } = require('../shared/utils');
+const { DocumentJobService } = require('../shared/document-database');
+const { auditService } = require('../shared/audit-service');
 
 /**
  * Results Retrieval
  * GET /api/v1/process/result/{jobId}
  */
 exports.handler = async (event) => {
+  const sessionId = event.requestContext?.requestId || 'unknown';
+  const sourceIp = event.requestContext?.identity?.sourceIp;
+  const userAgent = event.headers?.['User-Agent'];
+  
   try {
     const userId = getUserIdFromEvent(event);
     const jobId = event.pathParameters?.jobId;
@@ -24,20 +28,34 @@ exports.handler = async (event) => {
       return createErrorResponse(400, 'Missing job ID');
     }
 
-    auditLog('result_request', userId, { jobId });
+    // Enhanced audit logging for result request
+    await auditService.logAuditEvent({
+      eventType: 'document_processing',
+      eventSubtype: 'result_request',
+      userId: userId,
+      eventDetails: {
+        jobId: jobId
+      },
+      sessionId: sessionId,
+      sourceIp: sourceIp,
+      userAgent: userAgent,
+      dataClassification: 'medical_phi'
+    });
 
-    // Get job record
-    const jobRecord = await getJobRecord(jobId);
+    // Get job record using PostgreSQL service (includes user verification)
+    const jobRecord = await DocumentJobService.getJob(jobId, userId);
     
     if (!jobRecord) {
-      auditLog('result_job_not_found', userId, { jobId });
+      await auditService.logAuditEvent({
+        eventType: 'document_processing',
+        eventSubtype: 'result_job_not_found',
+        userId: userId,
+        eventDetails: { jobId: jobId },
+        sessionId: sessionId,
+        sourceIp: sourceIp,
+        dataClassification: 'medical_phi'
+      });
       return createErrorResponse(404, 'Job not found');
-    }
-
-    // Verify user owns this job
-    if (jobRecord.userId !== userId) {
-      auditLog('result_unauthorized', userId, { jobId, actualUserId: jobRecord.userId });
-      return createErrorResponse(403, 'Unauthorized access to job');
     }
 
     // Check if processing is complete
@@ -54,19 +72,32 @@ exports.handler = async (event) => {
       });
     }
 
-    // Prepare interpretation result
+    // Get processing results using PostgreSQL service
+    const results = await DocumentJobService.getResults(jobId, userId);
+    if (!results) {
+      return createErrorResponse(500, 'Results not found', 'Processing results are not available');
+    }
+
+    // Prepare interpretation result with decrypted data
     const interpretationResult = {
       job_id: jobId,
-      confidence_score: jobRecord.confidenceScore,
-      interpretation_text: jobRecord.interpretationText,
-      detailed_interpretation: jobRecord.detailedInterpretation,
-      medical_flags: jobRecord.medicalFlags || [],
-      recommendations: jobRecord.recommendations || [],
-      disclaimers: jobRecord.disclaimers || [],
+      confidence_score: results.confidence_score,
+      interpretation_text: results.interpretation_text,
+      detailed_interpretation: results.detailed_interpretation,
+      medical_flags: results.medicalFlags || [],
+      recommendations: results.recommendations || [],
+      disclaimers: results.disclaimers || [],
+      safety_warnings: results.safetyWarnings || [],
       processed_at: new Date(jobRecord.completedAt).toISOString(),
       processing_duration_ms: jobRecord.processingDuration,
+      ai_model_info: {
+        model_used: results.ai_model_used,
+        processing_time_ms: results.ai_processing_time_ms,
+        token_usage: results.aiTokenUsage,
+        cost_estimate: results.ai_cost_estimate
+      },
       file_info: {
-        original_name: jobRecord.originalFileName,
+        original_name: jobRecord.original_filename,
         type: jobRecord.fileType,
         size: jobRecord.fileSize,
         uploaded_at: new Date(jobRecord.uploadedAt).toISOString(),
@@ -75,17 +106,27 @@ exports.handler = async (event) => {
 
     // Add medical safety warnings based on confidence and flags
     const safetyWarnings = generateSafetyWarnings(
-      jobRecord.confidenceScore,
-      jobRecord.medicalFlags
+      results.confidence_score,
+      results.medicalFlags
     );
     
-    interpretationResult.safety_warnings = safetyWarnings;
-    interpretationResult.confidence_level = getConfidenceLevel(jobRecord.confidenceScore);
+    interpretationResult.safety_warnings = [...(interpretationResult.safety_warnings || []), ...safetyWarnings];
+    interpretationResult.confidence_level = getConfidenceLevel(results.confidence_score);
 
-    auditLog('result_retrieved', userId, { 
-      jobId, 
-      confidenceScore: jobRecord.confidenceScore,
-      confidenceLevel: interpretationResult.confidence_level
+    // Enhanced result retrieval audit
+    await auditService.logAuditEvent({
+      eventType: 'document_processing',
+      eventSubtype: 'result_retrieved',
+      userId: userId,
+      eventDetails: {
+        jobId: jobId,
+        confidenceScore: results.confidence_score,
+        confidenceLevel: interpretationResult.confidence_level,
+        flagsCount: results.medicalFlags?.length || 0
+      },
+      sessionId: sessionId,
+      sourceIp: sourceIp,
+      dataClassification: 'medical_phi'
     });
 
     return createResponse(200, {

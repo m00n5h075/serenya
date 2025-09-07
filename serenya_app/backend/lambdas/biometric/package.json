@@ -1,0 +1,12 @@
+{
+  "name": "serenya-biometric-lambda",
+  "version": "1.0.0",
+  "description": "Serenya biometric registration and verification Lambda",
+  "main": "biometric.js",
+  "dependencies": {
+    "uuid": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

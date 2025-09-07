@@ -7,18 +7,25 @@ const {
   getUserIdFromEvent,
   validateFile,
   generateJobId,
-  storeJobRecord,
   sanitizeFileName,
-  auditLog,
   sanitizeError,
   s3,
 } = require('../shared/utils');
+const { DocumentJobService, DocumentSecurityService } = require('../shared/document-database');
+const { validateEncryptedPayload, sanitizeInput, validateFileUpload } = require('../shared/security-middleware');
+const { auditService } = require('../shared/audit-service');
+const crypto = require('crypto');
 
 /**
  * File Upload with Security Validation
  * POST /api/v1/process/upload
  */
 exports.handler = async (event) => {
+  const correlationId = crypto.randomUUID();
+  const sessionId = event.requestContext?.requestId || 'unknown';
+  const sourceIp = event.requestContext?.identity?.sourceIp;
+  const userAgent = event.headers?.['User-Agent'];
+  
   try {
     const userId = getUserIdFromEvent(event);
     
@@ -26,14 +33,52 @@ exports.handler = async (event) => {
       return createErrorResponse(401, 'Invalid or missing authentication');
     }
 
-    auditLog('upload_attempt', userId);
+    // Enhanced security validation with middleware
+    const securityValidation = await validateFileUpload(event);
+    if (!securityValidation.valid) {
+      await auditService.logAuditEvent({
+        eventType: 'security_violation',
+        eventSubtype: 'upload_blocked',
+        userId: userId,
+        eventDetails: {
+          reason: securityValidation.reason,
+          correlationId: correlationId
+        },
+        sessionId: sessionId,
+        sourceIp: sourceIp,
+        userAgent: userAgent,
+        dataClassification: 'security_event'
+      });
+      
+      return createErrorResponse(400, 'Upload security validation failed', securityValidation.reason);
+    }
+
+    // Check for suspicious activity patterns
+    const suspiciousActivity = await DocumentSecurityService.detectSuspiciousActivity(
+      userId, sourceIp, userAgent
+    );
+    
+    if (suspiciousActivity.suspicious) {
+      return createErrorResponse(429, 'Too many uploads', 'Please wait before uploading again');
+    }
 
     // Parse multipart form data
     let parsedBody;
     try {
       parsedBody = multipart.parse(event, true);
     } catch (parseError) {
-      auditLog('upload_parse_error', userId);
+      await auditService.logAuditEvent({
+        eventType: 'upload_error',
+        eventSubtype: 'parse_failed',
+        userId: userId,
+        eventDetails: {
+          error: parseError.message.substring(0, 100),
+          correlationId: correlationId
+        },
+        sessionId: sessionId,
+        sourceIp: sourceIp,
+        dataClassification: 'system_error'
+      });
       return createErrorResponse(400, 'Invalid multipart form data');
     }
 
@@ -42,22 +87,52 @@ exports.handler = async (event) => {
       return createErrorResponse(400, 'No file provided');
     }
 
-    const fileName = file.filename || 'unknown.pdf';
+    // Enhanced file validation with sanitization
+    const fileName = sanitizeInput(file.filename || 'unknown.pdf');
     const fileContent = file.content;
     const fileSize = fileContent.length;
     const fileType = parsedBody.file_type || fileName.split('.').pop()?.toLowerCase();
 
+    // Generate file checksum for integrity verification
+    const fileChecksum = crypto.createHash('sha256').update(fileContent).digest('hex');
+
     // Validate file
     const validation = validateFile(fileName, fileSize);
     if (!validation.valid) {
-      auditLog('upload_validation_failed', userId, { reason: validation.error });
+      await auditService.logAuditEvent({
+        eventType: 'upload_error',
+        eventSubtype: 'validation_failed',
+        userId: userId,
+        eventDetails: {
+          reason: validation.error,
+          fileName: fileName,
+          fileSize: fileSize,
+          correlationId: correlationId
+        },
+        sessionId: sessionId,
+        sourceIp: sourceIp,
+        dataClassification: 'medical_phi'
+      });
       return createErrorResponse(400, validation.error);
     }
 
     // Security scanning
     const securityCheck = await performSecurityScanning(fileContent, fileName);
     if (!securityCheck.safe) {
-      auditLog('upload_security_failed', userId, { reason: securityCheck.reason });
+      await auditService.logAuditEvent({
+        eventType: 'security_violation',
+        eventSubtype: 'file_scan_failed',
+        userId: userId,
+        eventDetails: {
+          reason: securityCheck.reason,
+          fileName: fileName,
+          fileChecksum: fileChecksum.substring(0, 16),
+          correlationId: correlationId
+        },
+        sessionId: sessionId,
+        sourceIp: sourceIp,
+        dataClassification: 'security_event'
+      });
       return createErrorResponse(400, 'File failed security validation');
     }
 
@@ -86,29 +161,32 @@ exports.handler = async (event) => {
 
     await s3.upload(uploadParams).promise();
 
-    // Store job record
+    // Store job record using enhanced PostgreSQL service
     const jobData = {
       jobId,
       userId,
-      status: 'uploaded',
-      fileName: sanitizedFileName,
-      originalFileName: fileName,
+      originalFilename: fileName,
+      sanitizedFilename: sanitizedFileName,
       fileType,
       fileSize,
+      s3Bucket: process.env.TEMP_BUCKET_NAME,
       s3Key,
-      uploadedAt: Date.now(),
-      processingStartedAt: null,
-      completedAt: null,
-      retryCount: 0,
-      lastRetryAt: null,
+      fileChecksum,
+      encryptionKeyId: process.env.KMS_KEY_ID,
+      userAgent,
+      sourceIp,
+      sessionId,
+      correlationId
     };
 
-    await storeJobRecord(jobData);
+    const jobResult = await DocumentJobService.createJob(jobData);
 
-    auditLog('upload_success', userId, { 
-      jobId, 
-      fileType, 
-      fileSizeKB: Math.round(fileSize / 1024) 
+    // Record security validation results
+    await DocumentSecurityService.recordSecurityValidation(jobId, {
+      userId,
+      securityScanPassed: securityCheck.safe,
+      magicNumberValidated: true,
+      fileIntegrityVerified: true
     });
 
     return createResponse(200, {
@@ -127,8 +205,22 @@ exports.handler = async (event) => {
     console.error('Upload error:', sanitizeError(error));
     
     const userId = getUserIdFromEvent(event) || 'unknown';
-    auditLog('upload_error', userId, { 
-      error: sanitizeError(error).substring(0, 100) 
+    
+    // Enhanced error audit logging
+    await auditService.logAuditEvent({
+      eventType: 'upload_error',
+      eventSubtype: 'system_error',
+      userId: userId,
+      eventDetails: {
+        error: sanitizeError(error).substring(0, 100),
+        correlationId: correlationId
+      },
+      sessionId: sessionId,
+      sourceIp: sourceIp,
+      userAgent: userAgent,
+      dataClassification: 'system_error'
+    }).catch(auditError => {
+      console.error('Audit logging failed:', auditError);
     });
     
     return createErrorResponse(500, 'Upload failed');
