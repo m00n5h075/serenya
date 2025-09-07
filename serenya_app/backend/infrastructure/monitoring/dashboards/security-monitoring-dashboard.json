@@ -1,0 +1,176 @@
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 0,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["Serenya/Security", "EncryptionOperations", "Environment", "${environment}", "Operation", "Encrypt", { "stat": "Sum" }],
+          [".", ".", ".", ".", ".", "Decrypt", { "stat": "Sum" }]
+        ],
+        "period": 300,
+        "stat": "Sum",
+        "region": "${region}",
+        "title": "PHI Encryption Operations",
+        "view": "timeSeries"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 8,
+      "y": 0,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["Serenya/Security", "AuthenticationAttempts", "Environment", "${environment}", "Result", "Success", { "stat": "Sum" }],
+          [".", ".", ".", ".", ".", "Failure", { "stat": "Sum" }]
+        ],
+        "period": 300,
+        "stat": "Sum",
+        "region": "${region}",
+        "title": "Authentication Attempts",
+        "view": "timeSeries"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 16,
+      "y": 0,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["AWS/WAFV2", "BlockedRequests", "WebACL", "SerenyaWAF-${environment}", "Rule", "ALL", { "stat": "Sum" }],
+          [".", "AllowedRequests", ".", ".", ".", ".", { "stat": "Sum" }]
+        ],
+        "period": 300,
+        "stat": "Sum",
+        "region": "${region}",
+        "title": "WAF Security Events",
+        "view": "timeSeries"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["Serenya/Security", "DataAccessAttempts", "Environment", "${environment}", "Resource", "UserData", { "stat": "Sum" }],
+          [".", ".", ".", ".", ".", "ProcessingResults", { "stat": "Sum" }],
+          [".", ".", ".", ".", ".", "HealthDocuments", { "stat": "Sum" }]
+        ],
+        "period": 300,
+        "stat": "Sum",
+        "region": "${region}",
+        "title": "PHI Data Access Patterns",
+        "view": "timeSeries"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["Serenya/Security", "SuspiciousActivity", "Environment", "${environment}", "Type", "RateLimitExceeded", { "stat": "Sum" }],
+          [".", ".", ".", ".", ".", "UnauthorizedAccess", { "stat": "Sum" }],
+          [".", ".", ".", ".", ".", "InvalidToken", { "stat": "Sum" }]
+        ],
+        "period": 300,
+        "stat": "Sum",
+        "region": "${region}",
+        "title": "Security Threat Indicators",
+        "view": "timeSeries"
+      }
+    },
+    {
+      "type": "log",
+      "x": 0,
+      "y": 12,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/aws/apigateway/serenya-${environment}'\n| filter @type = \"REPORT\" and @message like /ERROR/\n| stats count() by bin(5m)",
+        "region": "${region}",
+        "title": "Security-related Errors",
+        "view": "table"
+      }
+    },
+    {
+      "type": "log",
+      "x": 12,
+      "y": 12,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/aws/lambda/SerenyaBackend-${environment}-AuthorizerFunction'\n| filter @message like /DENIED/\n| stats count() by bin(5m)",
+        "region": "${region}",
+        "title": "JWT Authorization Denials",
+        "view": "table"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 18,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["AWS/KMS", "NumberOfRequestsSucceeded", "KeyId", "${kmsKeyId}", { "stat": "Sum" }],
+          [".", "NumberOfRequestsFailed", ".", ".", { "stat": "Sum" }]
+        ],
+        "period": 300,
+        "stat": "Sum",
+        "region": "${region}",
+        "title": "KMS Key Usage",
+        "view": "timeSeries"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 8,
+      "y": 18,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["AWS/VPC", "PacketsDroppedBySecurityGroup", "NetworkInterface", "*", { "stat": "Sum" }]
+        ],
+        "period": 300,
+        "stat": "Sum",
+        "region": "${region}",
+        "title": "VPC Security Group Drops",
+        "view": "timeSeries"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 16,
+      "y": 18,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["Serenya/Security", "AuditLogEntries", "Environment", "${environment}", "Category", "DataAccess", { "stat": "Sum" }],
+          [".", ".", ".", ".", ".", "Authentication", { "stat": "Sum" }],
+          [".", ".", ".", ".", ".", "Authorization", { "stat": "Sum" }]
+        ],
+        "period": 300,
+        "stat": "Sum",
+        "region": "${region}",
+        "title": "Audit Log Categories",
+        "view": "timeSeries"
+      }
+    }
+  ]
+}

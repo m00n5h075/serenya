@@ -6,7 +6,8 @@
   "dependencies": {
     "pg": "^8.11.3",
     "aws-sdk": "^2.1450.0",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^9.0.1"
   },
   "engines": {
     "node": ">=18.0.0"

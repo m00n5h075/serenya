@@ -1,0 +1,13 @@
+{
+  "name": "serenya-cost-tracking",
+  "version": "1.0.0",
+  "description": "Cost tracking and optimization for Serenya",
+  "main": "costTracking.js",
+  "dependencies": {
+    "aws-sdk": "^2.1691.0",
+    "uuid": "^9.0.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

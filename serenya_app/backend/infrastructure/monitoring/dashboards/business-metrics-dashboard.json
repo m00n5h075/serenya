@@ -1,0 +1,114 @@
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["AWS/ApiGateway", "Count", "ApiName", "serenya-api-${environment}", "Method", "POST", "Resource", "/api/v1/process/upload", { "stat": "Sum" }],
+          [".", ".", ".", ".", ".", ".", ".", "/auth/google", { "stat": "Sum" }]
+        ],
+        "period": 300,
+        "stat": "Sum",
+        "region": "${region}",
+        "title": "Document Processing Volume",
+        "view": "timeSeries",
+        "stacked": false
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["Serenya/Business", "ProcessingSuccess", "Environment", "${environment}", { "stat": "Sum" }],
+          [".", "ProcessingFailure", ".", ".", { "stat": "Sum" }]
+        ],
+        "period": 300,
+        "stat": "Sum",
+        "region": "${region}",
+        "title": "Processing Success vs Failure",
+        "view": "timeSeries",
+        "stacked": false
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 6,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["Serenya/Business", "UserRegistrations", "Environment", "${environment}", { "stat": "Sum" }],
+          [".", "ActiveUsers", ".", ".", { "stat": "Average" }]
+        ],
+        "period": 3600,
+        "stat": "Sum",
+        "region": "${region}",
+        "title": "User Analytics",
+        "view": "timeSeries",
+        "stacked": false
+      }
+    },
+    {
+      "type": "metric",
+      "x": 8,
+      "y": 6,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["Serenya/Business", "ProcessingDuration", "Environment", "${environment}", { "stat": "Average" }]
+        ],
+        "period": 300,
+        "stat": "Average",
+        "region": "${region}",
+        "title": "Average Processing Time",
+        "view": "timeSeries",
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 16,
+      "y": 6,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["Serenya/Business", "ConversionRate", "Environment", "${environment}", { "stat": "Average" }]
+        ],
+        "period": 3600,
+        "stat": "Average",
+        "region": "${region}",
+        "title": "User to Processing Conversion Rate",
+        "view": "singleValue",
+        "setPeriodToTimeRange": true
+      }
+    },
+    {
+      "type": "log",
+      "x": 0,
+      "y": 12,
+      "width": 24,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/aws/lambda/SerenyaBackend-${environment}-ProcessFunction'\n| filter @type = \"REPORT\"\n| stats count() by bin(5m)",
+        "region": "${region}",
+        "title": "Recent Processing Activities",
+        "view": "table"
+      }
+    }
+  ]
+}

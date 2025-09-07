@@ -1,0 +1,12 @@
+{
+  "name": "serenya-custom-metrics",
+  "version": "1.0.0",
+  "description": "Custom CloudWatch metrics for Serenya monitoring",
+  "main": "customMetrics.js",
+  "dependencies": {
+    "aws-sdk": "^2.1691.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,158 @@
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 0,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["AWS/ApiGateway", "Latency", "ApiName", "serenya-api-${environment}", { "stat": "Average" }],
+          [".", ".", ".", ".", { "stat": "p95" }],
+          [".", ".", ".", ".", { "stat": "p99" }]
+        ],
+        "period": 300,
+        "stat": "Average",
+        "region": "${region}",
+        "title": "API Gateway Latency",
+        "view": "timeSeries",
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 8,
+      "y": 0,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["AWS/Lambda", "Duration", "FunctionName", "SerenyaBackend-${environment}-ProcessFunction", { "stat": "Average" }],
+          [".", ".", ".", "SerenyaBackend-${environment}-AuthFunction", { "stat": "Average" }],
+          [".", ".", ".", "SerenyaBackend-${environment}-UploadFunction", { "stat": "Average" }]
+        ],
+        "period": 300,
+        "stat": "Average",
+        "region": "${region}",
+        "title": "Lambda Function Duration",
+        "view": "timeSeries"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 16,
+      "y": 0,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["AWS/Lambda", "Errors", "FunctionName", "SerenyaBackend-${environment}-ProcessFunction", { "stat": "Sum" }],
+          [".", ".", ".", "SerenyaBackend-${environment}-AuthFunction", { "stat": "Sum" }],
+          [".", ".", ".", "SerenyaBackend-${environment}-UploadFunction", { "stat": "Sum" }]
+        ],
+        "period": 300,
+        "stat": "Sum",
+        "region": "${region}",
+        "title": "Lambda Function Errors",
+        "view": "timeSeries"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "serenyabackend-${environment}-serenyad-${dbInstanceId}", { "stat": "Average" }],
+          [".", "DatabaseConnections", ".", ".", { "stat": "Average" }],
+          [".", "ReadLatency", ".", ".", { "stat": "Average" }],
+          [".", "WriteLatency", ".", ".", { "stat": "Average" }]
+        ],
+        "period": 300,
+        "stat": "Average",
+        "region": "${region}",
+        "title": "Database Performance",
+        "view": "timeSeries"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["AWS/Lambda", "ConcurrentExecutions", "FunctionName", "SerenyaBackend-${environment}-ProcessFunction", { "stat": "Maximum" }],
+          [".", ".", ".", "SerenyaBackend-${environment}-AuthFunction", { "stat": "Maximum" }],
+          [".", ".", ".", "SerenyaBackend-${environment}-UploadFunction", { "stat": "Maximum" }]
+        ],
+        "period": 300,
+        "stat": "Maximum",
+        "region": "${region}",
+        "title": "Lambda Concurrent Executions",
+        "view": "timeSeries"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 12,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["AWS/S3", "NumberOfObjects", "BucketName", "serenya-temp-files-${environment}-${accountId}", "StorageType", "AllStorageTypes", { "stat": "Average" }]
+        ],
+        "period": 3600,
+        "stat": "Average",
+        "region": "${region}",
+        "title": "S3 Temp Files Usage",
+        "view": "timeSeries"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 8,
+      "y": 12,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["Serenya/Performance", "EncryptionDuration", "Environment", "${environment}", { "stat": "Average" }],
+          [".", "DecryptionDuration", ".", ".", { "stat": "Average" }]
+        ],
+        "period": 300,
+        "stat": "Average",
+        "region": "${region}",
+        "title": "Encryption/Decryption Performance",
+        "view": "timeSeries"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 16,
+      "y": 12,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          ["AWS/ApiGateway", "4XXError", "ApiName", "serenya-api-${environment}", { "stat": "Sum" }],
+          [".", "5XXError", ".", ".", { "stat": "Sum" }]
+        ],
+        "period": 300,
+        "stat": "Sum",
+        "region": "${region}",
+        "title": "API Gateway Errors",
+        "view": "timeSeries"
+      }
+    }
+  ]
+}

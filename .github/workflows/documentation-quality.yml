@@ -1,0 +1,156 @@
+name: "📚 Documentation Quality Check"
+
+# When should this run?
+on:
+  push:
+    branches: [ main, develop ]
+    paths: 
+      - 'guidance/**/*.md'      # Only run when documentation changes
+      - '**/*.md'               # Any markdown file changes
+  pull_request:
+    branches: [ main ]
+    paths: 
+      - 'guidance/**/*.md'
+      - '**/*.md'
+
+jobs:
+  documentation-quality:
+    name: "Check Documentation Quality"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: "📥 Get the code"
+        uses: actions/checkout@v4
+        
+      - name: "🔍 Check for broken internal links"
+        run: |
+          echo "Checking for broken internal links in documentation..."
+          
+          # Find all markdown files
+          find . -name "*.md" -type f > md_files.txt
+          
+          # Check for internal links that might be broken
+          echo "Found $(cat md_files.txt | wc -l) markdown files"
+          
+          # Look for relative links and check if target files exist
+          broken_links=0
+          while IFS= read -r file; do
+            echo "Checking $file..."
+            # Extract relative markdown links like [text](../path/file.md)
+            grep -oE '\[([^\]]+)\]\(([^)]+\.md[^)]*)\)' "$file" | while IFS= read -r link; do
+              # Extract the path part
+              path=$(echo "$link" | sed -n 's/.*](\([^)]*\)).*/\1/p')
+              # Remove any anchor (#section)
+              path=$(echo "$path" | cut -d'#' -f1)
+              # Convert relative path to absolute
+              dir=$(dirname "$file")
+              full_path=$(cd "$dir" && realpath "$path" 2>/dev/null || echo "")
+              if [ -n "$full_path" ] && [ ! -f "$full_path" ]; then
+                echo "❌ BROKEN LINK in $file: $link"
+                broken_links=$((broken_links + 1))
+              fi
+            done
+          done < md_files.txt
+          
+          echo "✅ Internal link check completed"
+          
+      - name: "📝 Check documentation structure"
+        run: |
+          echo "Checking documentation structure..."
+          
+          # Check if key documentation files exist
+          required_files=(
+            "README.md"
+            "guidance/docs/README.md"
+            "guidance/docs/technical/README.md"
+            "guidance/docs/product/README.md"
+          )
+          
+          missing_files=0
+          for file in "${required_files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "⚠️  Missing required file: $file"
+              missing_files=$((missing_files + 1))
+            else
+              echo "✅ Found: $file"
+            fi
+          done
+          
+          if [ $missing_files -gt 0 ]; then
+            echo "❌ Missing $missing_files required documentation files"
+            exit 1
+          fi
+          
+          echo "✅ Documentation structure check completed"
+          
+      - name: "🔤 Spell check documentation"
+        uses: streetsidesoftware/cspell-action@v5
+        with:
+          # Only check markdown files
+          files: "**/*.md"
+          # Create a basic config
+          config: |
+            {
+              "version": "0.2",
+              "language": "en",
+              "words": [
+                "Serenya",
+                "HIPAA",
+                "GDPR",
+                "OAuth",
+                "API",
+                "AWS",
+                "Bedrock",
+                "Claude",
+                "SQLite",
+                "biometric",
+                "frontend",
+                "backend",
+                "middleware",
+                "PostgreSQL",
+                "CDK",
+                "CloudFormation",
+                "S3",
+                "DynamoDB",
+                "RDS",
+                "VPC",
+                "Flutter",
+                "Dart",
+                "iOS",
+                "Android",
+                "JWT",
+                "UUID",
+                "API",
+                "JSON",
+                "YAML",
+                "Markdown",
+                "PRD",
+                "CTO",
+                "UX",
+                "UI"
+              ],
+              "ignorePaths": [
+                "node_modules/**",
+                ".git/**",
+                "*.log"
+              ]
+            }
+            
+      - name: "📊 Generate documentation report"
+        if: always()  # Run even if previous steps failed
+        run: |
+          echo "📊 DOCUMENTATION QUALITY REPORT"
+          echo "================================"
+          echo "Total markdown files: $(find . -name "*.md" -type f | wc -l)"
+          echo "Documentation directories checked:"
+          find . -type d -name "*docs*" -o -name "*guidance*" | head -10
+          echo ""
+          echo "✅ Documentation quality check completed!"
+          echo ""
+          echo "💡 To fix spelling errors:"
+          echo "   1. Check the spell check results above"
+          echo "   2. Either fix the spelling or add technical terms to the word list"
+          echo ""
+          echo "💡 To fix broken links:"
+          echo "   1. Check the broken link report above"
+          echo "   2. Update the links to point to existing files"
