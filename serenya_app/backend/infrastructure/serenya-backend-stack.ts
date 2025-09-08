@@ -228,6 +228,18 @@ export class SerenyaBackendStack extends cdk.Stack {
               ],
               resources: [encryptionKey.keyArn],
             }),
+            // Bedrock permissions for AI chat functionality
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'bedrock:InvokeModel',
+                'bedrock:InvokeModelWithResponseStream',
+              ],
+              resources: [
+                `arn:aws:bedrock:${config.region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0`,
+                `arn:aws:bedrock:${config.region}::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0`,
+              ],
+            }),
           ],
         }),
       },
@@ -424,6 +436,61 @@ export class SerenyaBackendStack extends cdk.Stack {
       description: 'Database schema initialization and migrations',
     });
 
+    // Chat Lambda functions
+    const chatPromptsFunction = new lambda.Function(this, 'ChatPromptsFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'chatPrompts.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/chat-prompts')),
+      role: lambdaExecutionRole,
+      environment: commonLambdaEnvironment,
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [lambdaSecurityGroup],
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 256,
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      description: 'Chat prompts retrieval for conversation starters',
+    });
+
+    const chatMessagesFunction = new lambda.Function(this, 'ChatMessagesFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'chatMessages.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/chat-messages')),
+      role: lambdaExecutionRole,
+      environment: {
+        ...commonLambdaEnvironment,
+        BEDROCK_MODEL_ID: 'anthropic.claude-3-haiku-20240307-v1:0',
+      },
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [lambdaSecurityGroup],
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 512,
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      description: 'Chat message processing with AI response generation',
+    });
+
+    const chatStatusFunction = new lambda.Function(this, 'ChatStatusFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'chatStatus.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/chat-status')),
+      role: lambdaExecutionRole,
+      environment: commonLambdaEnvironment,
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [lambdaSecurityGroup],
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 256,
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      description: 'Chat response status polling',
+    });
+
     // Custom authorizer
     const jwtAuthorizer = new apigateway.TokenAuthorizer(this, 'JWTAuthorizer', {
       handler: authorizerFunction,
@@ -474,6 +541,9 @@ export class SerenyaBackendStack extends cdk.Stack {
       result: resultFunction,
       retry: retryFunction,
       doctorReport: doctorReportFunction,
+      chatPrompts: chatPromptsFunction,
+      chatMessages: chatMessagesFunction,
+      chatStatus: chatStatusFunction,
     });
 
     // CloudWatch Log Groups with retention
@@ -625,6 +695,38 @@ export class SerenyaBackendStack extends cdk.Stack {
     doctorReport.addMethod('POST', new apigateway.LambdaIntegration(functions.doctorReport), {
       authorizer,
       authorizationType: apigateway.AuthorizationType.CUSTOM,
+    });
+
+    // Chat API endpoints (authorization required)
+    const chat = apiV1.addResource('chat');
+
+    // Chat prompts endpoint - GET /api/v1/chat/prompts?content_type=results|reports
+    const prompts = chat.addResource('prompts');
+    prompts.addMethod('GET', new apigateway.LambdaIntegration(functions.chatPrompts), {
+      authorizer,
+      authorizationType: apigateway.AuthorizationType.CUSTOM,
+      requestParameters: {
+        'method.request.querystring.content_type': true,
+      },
+    });
+
+    // Chat messages endpoint - POST /api/v1/chat/messages
+    const messages = chat.addResource('messages');
+    messages.addMethod('POST', new apigateway.LambdaIntegration(functions.chatMessages), {
+      authorizer,
+      authorizationType: apigateway.AuthorizationType.CUSTOM,
+    });
+
+    // Chat jobs status endpoint - GET /api/v1/chat/jobs/{job_id}/status
+    const jobs = chat.addResource('jobs');
+    const jobId = jobs.addResource('{job_id}');
+    const jobStatus = jobId.addResource('status');
+    jobStatus.addMethod('GET', new apigateway.LambdaIntegration(functions.chatStatus), {
+      authorizer,
+      authorizationType: apigateway.AuthorizationType.CUSTOM,
+      requestParameters: {
+        'method.request.path.job_id': true,
+      },
     });
   }
 }

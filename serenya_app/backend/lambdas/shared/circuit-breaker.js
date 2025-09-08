@@ -332,6 +332,128 @@ class RetryHandler {
 }
 
 /**
+ * Bedrock-specific Circuit Breaker with AWS service error handling
+ */
+class BedrockCircuitBreaker extends CircuitBreaker {
+  constructor(options = {}) {
+    // Configure Bedrock-specific settings
+    const bedrockOptions = {
+      failureThreshold: 5,      // Open circuit after 5 failures
+      recoveryTimeout: 30000,   // Try again after 30 seconds
+      monitoringPeriod: 60000,  // Monitor failures over 1 minute
+      expectedErrors: [
+        'ValidationException',  // Don't trip circuit for validation errors
+        'AccessDeniedException', // Don't trip circuit for auth issues
+      ],
+      ...options
+    };
+
+    super(bedrockOptions);
+    this.name = options.name || 'bedrock-service';
+    this.logger = createLogger(`BedrockCircuitBreaker-${this.name}`);
+  }
+
+  /**
+   * Enhanced error categorization for Bedrock errors
+   */
+  isExpectedError(error) {
+    if (!error) return false;
+
+    // Check base expected errors first
+    if (super.isExpectedError(error)) {
+      return true;
+    }
+
+    // Bedrock-specific expected errors that shouldn't trip the circuit
+    const bedrockExpectedErrors = [
+      'ValidationException',      // User input issues
+      'AccessDeniedException',    // Permissions issues  
+      'ResourceNotFoundException', // Model not found
+    ];
+
+    // Check for Bedrock error names or codes
+    const errorName = error.name || error.constructor.name;
+    const errorCode = error.$metadata?.httpStatusCode || error.statusCode || error.code;
+
+    if (bedrockExpectedErrors.includes(errorName)) {
+      this.logger.debug('Bedrock expected error ignored by circuit breaker', {
+        errorName,
+        errorCode,
+        message: error.message
+      });
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Enhanced failure handling for Bedrock-specific errors
+   */
+  onFailure(error, context) {
+    // Add Bedrock-specific error context
+    const enhancedContext = {
+      ...context,
+      bedrockError: {
+        name: error.name,
+        code: error.code,
+        statusCode: error.$metadata?.httpStatusCode,
+        requestId: error.$metadata?.requestId,
+        service: 'bedrock'
+      }
+    };
+
+    // Check if this is a throttling error that should trip the circuit faster
+    if (this.isThrottlingError(error)) {
+      this.logger.warn('Bedrock throttling detected, increasing failure weight', {
+        context: enhancedContext,
+        currentFailures: this.failureCount
+      });
+      
+      // Count throttling errors as double failures
+      this.failureCount++;
+    }
+
+    super.onFailure(error, enhancedContext);
+  }
+
+  /**
+   * Check if error is a throttling/rate limiting error
+   */
+  isThrottlingError(error) {
+    const throttlingIndicators = [
+      'ThrottlingException',
+      'TooManyRequestsException',
+      'ServiceQuotaExceededException',
+      'LimitExceededException'
+    ];
+
+    const errorName = error.name || error.constructor.name;
+    const statusCode = error.$metadata?.httpStatusCode || error.statusCode;
+
+    return throttlingIndicators.includes(errorName) || statusCode === 429;
+  }
+
+  /**
+   * Get enhanced metrics with Bedrock-specific data
+   */
+  getMetrics() {
+    const baseMetrics = super.getMetrics();
+    
+    return {
+      ...baseMetrics,
+      service: 'bedrock',
+      name: this.name,
+      bedrockSpecific: {
+        throttlingAware: true,
+        expectedErrorHandling: true,
+        awsIntegrated: true
+      }
+    };
+  }
+}
+
+/**
  * Health checker for external services
  */
 class HealthChecker {
@@ -438,6 +560,7 @@ class HealthChecker {
 
 module.exports = {
   CircuitBreaker,
+  BedrockCircuitBreaker,
   CircuitBreakerOpenError,
   CircuitBreakerTimeoutError,
   RetryHandler,
