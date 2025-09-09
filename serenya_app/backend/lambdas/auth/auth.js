@@ -12,7 +12,7 @@ const { UserService, ConsentService, SessionService, DeviceService } = require('
 
 /**
  * Google OAuth verification and JWT generation
- * POST /auth/google
+ * POST /auth/google-onboarding
  */
 exports.handler = async (event) => {
   const requestId = uuidv4();
@@ -128,18 +128,16 @@ exports.handler = async (event) => {
       sessionId: sessionId
     });
     
-    // Store session in database
-    if (device) {
-      await SessionService.createSession({
-        userId: user.id,
-        deviceId: device.id,
-        sessionId: sessionId,
-        refreshToken: refreshToken,
-        expiresAt: sessionExpiresAt,
-        userAgent: event.headers['User-Agent'] || 'Unknown',
-        sourceIp: event.requestContext?.identity?.sourceIp || 'Unknown'
-      });
-    }
+    // Store session in database (always create session, use device.id if available, null otherwise)
+    await SessionService.createSession({
+      userId: user.id,
+      deviceId: device ? device.id : null,
+      sessionId: sessionId,
+      refreshToken: refreshToken,
+      expiresAt: sessionExpiresAt,
+      userAgent: event.headers['User-Agent'] || 'Unknown',
+      sourceIp: event.requestContext?.identity?.sourceIp || 'Unknown'
+    });
     
     auditLog('auth_success', user.id, { 
       requestId,
@@ -149,32 +147,21 @@ exports.handler = async (event) => {
       provider: 'google' 
     });
 
-    // Build response according to API contract
+    // Build response according to API contract (aligned with mobile AuthOnboardingResponse)
     const response = {
-      success: true,
-      data: {
-        access_token: accessToken,
-        refresh_token: refreshToken, // TODO: Implement refresh token logic
-        user: {
-          id: user.id,
-          email: user.email,
-          google_user_id: googleUserData.sub,
-          subscription_tier: 'free', // Default tier
-          profile_completion: !!(user.name && user.email)
-        },
-        session: {
-          session_id: sessionId,
-          expires_at: sessionExpiresAt.toISOString(),
-          biometric_required: device ? false : true, // Require biometric if device not registered
-          device_registered: !!device
-        },
-        encryption_support: {
-          supported_algorithms: ['AES-256-GCM'],
-          supported_tables: ['serenya_content', 'chat_messages'],
-          server_encryption_version: 'v1'
-        }
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      user: {
+        user_id: user.id,
+        email: user.email,
+        display_name: user.name || user.email.split('@')[0], // Default display name from email
+        profile_picture: googleUserData.picture || null,
+        timezone: 'UTC', // Default timezone, can be updated later
+        created_at: new Date().toISOString(),
+        last_login_at: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
+        preferences: null, // No preferences on first login
       },
-      audit_logged: true
+      expires_in: 3600, // 1 hour token expiration
     };
 
     return createResponse(200, response);

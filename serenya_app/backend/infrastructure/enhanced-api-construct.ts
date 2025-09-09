@@ -231,7 +231,7 @@ export class EnhancedApiConstruct extends Construct {
 
     // Auth routes (no authorization required)
     const auth = this.api.root.addResource('auth');
-    const googleAuth = auth.addResource('google');
+    const googleAuth = auth.addResource('google-onboarding');
     
     googleAuth.addMethod('POST', new apigateway.LambdaIntegration(functions.auth), {
       requestValidator: this.requestValidator,
