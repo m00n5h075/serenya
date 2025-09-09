@@ -4,7 +4,25 @@ import 'package:flutter/foundation.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart';
-import '../database/encrypted_database_service.dart';
+
+/// Audit event categories matching server-side audit system
+enum AuditCategory {
+  authentication,     // Login, logout, session events
+  authorization,      // Access control decisions
+  dataAccess,        // Medical data read operations
+  dataModification,  // Medical data write operations
+  securityEvent,     // Key access, encryption operations
+  systemEvent,       // App lifecycle, errors
+  userAction,        // User-initiated operations
+}
+
+/// Audit event severity levels
+enum AuditSeverity {
+  info,     // Normal operations
+  warning,  // Potential issues
+  error,    // System errors
+  critical, // Security violations
+}
 
 /// Local Audit Logging System for Sensitive Operations
 /// 
@@ -20,25 +38,6 @@ class LocalAuditLogger {
   static Database? _auditDb;
   static const String _auditDbName = 'serenya_audit_log.db';
   static const String _auditTableName = 'audit_events';
-  
-  /// Audit event categories matching server-side audit system
-  enum AuditCategory {
-    authentication,     // Login, logout, session events
-    authorization,      // Access control decisions
-    dataAccess,        // Medical data read operations
-    dataModification,  // Medical data write operations
-    securityEvent,     // Key access, encryption operations
-    systemEvent,       // App lifecycle, errors
-    userAction,        // User-initiated operations
-  }
-
-  /// Audit event severity levels
-  enum AuditSeverity {
-    info,     // Normal operations
-    warning,  // Potential issues
-    error,    // System errors
-    critical, // Security violations
-  }
 
   /// Initialize audit logging system
   static Future<void> initialize() async {

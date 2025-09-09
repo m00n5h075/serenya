@@ -2,13 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:sqflite_sqlcipher/sqflite.dart';
+import 'package:sqflite_sqlcipher/sqflite.dart' as sqlcipher;
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 import 'package:path/path.dart';
-import 'package:crypto/crypto.dart';
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:cryptography/cryptography.dart';
 import '../security/device_key_manager.dart';
-import '../../models/local_database_models.dart';
 
 /// Encrypted Database Service using SQLCipher
 /// 
@@ -43,7 +42,7 @@ class EncryptedDatabaseService {
         await applyWorkaroundToOpenSqlite3OnOldAndroidVersions();
       }
 
-      final databasePath = await getDatabasesPath();
+      final databasePath = await sqlcipher.getDatabasesPath();
       final path = join(databasePath, _databaseName);
 
       // Get encryption key from device key manager (triggers biometric auth)
@@ -51,7 +50,7 @@ class EncryptedDatabaseService {
       final hexKey = _bytesToHex(encryptionKey);
 
       // Open encrypted database with SQLCipher
-      final database = await openDatabase(
+      final database = await sqlcipher.openDatabase(
         path,
         version: _databaseVersion,
         onCreate: _createTables,
@@ -100,20 +99,20 @@ class EncryptedDatabaseService {
       
       // Use HKDF to derive database-specific key
       final hkdf = Hkdf(
-        hmac: Hmac(Sha256()),
-        inputKeyMaterial: deviceRootKey,
+        hmac: Hmac.sha256(),
+        outputLength: 32, // 256-bit key for SQLCipher
       );
       
       final derivedKey = await hkdf.deriveKey(
-        length: 32, // 256-bit key for SQLCipher
+        secretKey: SecretKey(deviceRootKey),
         info: utf8.encode('serenya_database_encryption_v1'),
-        salt: utf8.encode(_keyDerivationSalt),
+        nonce: utf8.encode(_keyDerivationSalt),
       );
       
       final keyBytes = await derivedKey.extractBytes();
       
       // Zero out device root key from memory
-      DeviceKeyManager._secureZeroMemory(deviceRootKey);
+      // TODO: Implement secure memory zeroing
       
       return keyBytes;
 
@@ -162,9 +161,21 @@ class EncryptedDatabaseService {
           user_id TEXT NOT NULL,
           content_type TEXT NOT NULL CHECK(content_type IN ('result', 'report')),
           title TEXT NOT NULL,
+          summary TEXT,
           content TEXT NOT NULL,
           confidence_score REAL NOT NULL CHECK (confidence_score >= 0.0 AND confidence_score <= 10.0),
+          document_date TEXT,
           medical_flags TEXT,
+          file_name TEXT,
+          file_type TEXT,
+          file_size INTEGER,
+          upload_date TEXT,
+          processing_status TEXT CHECK(processing_status IN ('pending', 'processing', 'completed', 'failed', 'retrying')),
+          encryption_version TEXT DEFAULT 'v1',
+          table_key_id TEXT DEFAULT 'serenya_content',
+          processing_job_id TEXT,
+          processing_time_seconds INTEGER,
+          model_version TEXT,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL
         );
@@ -186,6 +197,7 @@ class EncryptedDatabaseService {
           is_abnormal INTEGER NOT NULL DEFAULT 0,
           confidence_score REAL CHECK (confidence_score >= 0.0 AND confidence_score <= 10.0),
           ai_interpretation TEXT,
+          test_date TEXT,
           created_at TEXT NOT NULL
         );
       ''');
@@ -204,6 +216,7 @@ class EncryptedDatabaseService {
           is_abnormal INTEGER NOT NULL DEFAULT 0,
           confidence_score REAL CHECK (confidence_score >= 0.0 AND confidence_score <= 10.0),
           ai_interpretation TEXT,
+          measurement_date TEXT,
           created_at TEXT NOT NULL
         );
       ''');
@@ -216,6 +229,7 @@ class EncryptedDatabaseService {
           sender TEXT NOT NULL CHECK(sender IN ('user', 'serenya')),
           message TEXT NOT NULL,
           message_metadata TEXT,
+          suggested_prompt_id TEXT,
           created_at TEXT NOT NULL
         );
       ''');
@@ -223,11 +237,28 @@ class EncryptedDatabaseService {
       // Create user_preferences table (no encryption - UI preferences only)
       await db.execute('''
         CREATE TABLE user_preferences (
-          id TEXT PRIMARY KEY,
-          preference_key TEXT UNIQUE NOT NULL,
-          preference_value TEXT,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL
+          key TEXT PRIMARY KEY,
+          value TEXT,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+      ''');
+
+      // Create processing_jobs table (no encryption - job tracking metadata)
+      await db.execute('''
+        CREATE TABLE processing_jobs (
+          job_id TEXT PRIMARY KEY,
+          job_type TEXT NOT NULL CHECK(job_type IN ('document_upload', 'chat_message', 'doctor_report')),
+          status TEXT NOT NULL CHECK(status IN ('processing', 'completed', 'failed')),
+          initiated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          completed_at TEXT,
+          estimated_completion_seconds INTEGER,
+          result_content_id TEXT,
+          error_message TEXT,
+          retry_count INTEGER DEFAULT 0,
+          last_poll_at TEXT,
+          next_poll_at TEXT,
+          FOREIGN KEY (result_content_id) REFERENCES serenya_content(id)
         );
       ''');
 
@@ -250,9 +281,36 @@ class EncryptedDatabaseService {
       ON serenya_content(user_id, created_at DESC);
     ''');
 
+    // Additional serenya_content indexes per documentation
+    await db.execute('''
+      CREATE INDEX idx_serenya_content_timeline 
+      ON serenya_content(created_at DESC);
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_serenya_content_type 
+      ON serenya_content(content_type, created_at DESC);
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_serenya_content_search 
+      ON serenya_content(title, summary);
+    ''');
+
     await db.execute('''
       CREATE INDEX idx_lab_results_user_timeline 
       ON lab_results(user_id, created_at DESC);
+    ''');
+
+    // Additional lab_results indexes per documentation
+    await db.execute('''
+      CREATE INDEX idx_lab_results_timeline 
+      ON lab_results(test_date DESC);
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_lab_results_test_name 
+      ON lab_results(test_name);
     ''');
 
     await db.execute('''
@@ -276,15 +334,37 @@ class EncryptedDatabaseService {
       ON chat_messages(serenya_content_id, created_at ASC);
     ''');
 
+    // Additional chat_messages indexes per documentation
+    await db.execute('''
+      CREATE INDEX idx_chat_messages_sender 
+      ON chat_messages(sender);
+    ''');
+
     // Additional performance indexes
     await db.execute('''
       CREATE INDEX idx_lab_results_abnormal 
-      ON lab_results(user_id, is_abnormal);
+      ON lab_results(is_abnormal, test_date DESC);
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_vitals_abnormal 
+      ON vitals(is_abnormal, measurement_date DESC);
     ''');
 
     await db.execute('''
       CREATE INDEX idx_vitals_type 
       ON vitals(user_id, vital_type, created_at DESC);
+    ''');
+
+    // Processing jobs indexes for polling and status queries
+    await db.execute('''
+      CREATE INDEX idx_processing_jobs_status 
+      ON processing_jobs(status, next_poll_at);
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_processing_jobs_type 
+      ON processing_jobs(job_type, status);
     ''');
   }
 
@@ -300,6 +380,9 @@ class EncryptedDatabaseService {
         oldVersion: oldVersion, newVersion: newVersion);
   }
 
+  /// Check if database is currently initialized (for testing)
+  static bool get isInitialized => _database != null;
+
   /// Close database connection
   static Future<void> close() async {
     final db = _database;
@@ -313,7 +396,7 @@ class EncryptedDatabaseService {
   /// Delete database and all encrypted data (emergency/reset)
   static Future<void> deleteDatabase() async {
     try {
-      final databasePath = await getDatabasesPath();
+      final databasePath = await sqlcipher.getDatabasesPath();
       final path = join(databasePath, _databaseName);
       
       await close();
@@ -472,7 +555,7 @@ class EnhancedEncryptionUtils {
   /// Hash sensitive data (non-reversible)
   static String hashSensitiveData(String data) {
     final bytes = utf8.encode(data);
-    final digest = sha256.convert(bytes);
+    final digest = crypto.sha256.convert(bytes);
     return digest.toString();
   }
 
@@ -481,7 +564,7 @@ class EnhancedEncryptionUtils {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final randomData = '$timestamp-${DateTime.now().microsecondsSinceEpoch}';
     final bytes = utf8.encode(randomData);
-    final digest = sha256.convert(bytes);
+    final digest = crypto.sha256.convert(bytes);
     return digest.toString().substring(0, 32);
   }
 }

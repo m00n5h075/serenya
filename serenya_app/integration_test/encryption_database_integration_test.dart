@@ -404,7 +404,7 @@ void main() {
 
         // Query audit events
         final events = await LocalAuditLogger.queryAuditEvents(
-          category: LocalAuditLogger.AuditCategory.authentication,
+          category: AuditCategory.authentication,
           limit: 10,
         );
 
@@ -426,7 +426,7 @@ void main() {
         );
 
         final events = await LocalAuditLogger.queryAuditEvents(
-          category: LocalAuditLogger.AuditCategory.securityEvent,
+          category: AuditCategory.securityEvent,
           eventType: 'encryption_key_accessed',
           limit: 5,
         );
@@ -444,7 +444,7 @@ void main() {
         );
 
         final events = await LocalAuditLogger.queryAuditEvents(
-          category: LocalAuditLogger.AuditCategory.dataAccess,
+          category: AuditCategory.dataAccess,
           limit: 10,
         );
 
@@ -568,8 +568,8 @@ void main() {
 
         // Verify error was logged
         final events = await LocalAuditLogger.queryAuditEvents(
-          category: LocalAuditLogger.AuditCategory.securityEvent,
-          severity: LocalAuditLogger.AuditSeverity.error,
+          category: AuditCategory.securityEvent,
+          severity: AuditSeverity.error,
           limit: 10,
         );
 
@@ -595,7 +595,7 @@ void main() {
         await LocalAuditLogger.close();
 
         // Resources should be properly released
-        expect(EncryptedDatabaseService._database, isNull);
+        expect(EncryptedDatabaseService.isInitialized, false);
       });
     });
   });

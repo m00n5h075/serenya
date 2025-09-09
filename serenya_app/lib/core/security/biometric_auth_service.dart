@@ -1,13 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:crypto/crypto.dart';
-import '../utils/encryption_utils.dart';
+import 'device_key_manager.dart';
 
 enum AuthMethod {
   biometric,
@@ -91,7 +90,7 @@ class SessionManager {
     _sessionTimer?.cancel();
     
     // Clear any cached keys from memory
-    await TableKeyManager.clearCachedKeys();
+    await DeviceKeyManager.clearCachedKeys();
   }
 
   static void _resetSessionTimer() {
@@ -489,16 +488,6 @@ class AuditLogger {
   }) async {
     if (kDebugMode) {
       print('SECURITY_AUDIT: $event - Success: $success, Error: $error');
-    }
-  }
-}
-
-// Placeholder for table key manager - will be implemented in key derivation system
-class TableKeyManager {
-  static Future<void> clearCachedKeys() async {
-    // Implementation will be added in table key derivation system
-    if (kDebugMode) {
-      print('Clearing cached encryption keys');
     }
   }
 }

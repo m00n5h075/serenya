@@ -1,141 +1,218 @@
-import '../../models/health_document.dart';
-import '../constants/app_constants.dart';
-import 'database_service.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import '../../models/local_database_models.dart';
+import 'encrypted_database_service.dart';
 
+/// Health Data Repository - Migrated to use EncryptedDatabaseService
+/// 
+/// This repository now provides access to medical data stored locally
+/// using the encrypted database system following the architecture:
+/// - serenya_content: AI analysis results and reports
+/// - lab_results: Structured laboratory data
+/// - vitals: Vital sign measurements
+/// - chat_messages: Chat conversation history
+/// - user_preferences: UI and app preferences (unencrypted)
 class HealthDataRepository {
-  Future<List<HealthDocument>> getAllDocuments() async {
-    final db = await DatabaseService.database;
+  /// Get all medical content (results and reports) in timeline order
+  Future<List<SerenyaContent>> getAllContent({int? limit}) async {
+    final db = await EncryptedDatabaseService.database;
     final results = await db.query(
-      DatabaseConstants.healthDocumentsTable,
-      orderBy: 'upload_date DESC',
+      'serenya_content',
+      orderBy: 'created_at DESC',
+      limit: limit,
     );
     
-    return results.map((map) => HealthDocument.fromMap(map)).toList();
+    final List<SerenyaContent> content = [];
+    for (final result in results) {
+      content.add(await SerenyaContent.fromDatabaseJson(result));
+    }
+    return content;
   }
 
-  Future<HealthDocument?> getDocumentById(int id) async {
-    final db = await DatabaseService.database;
+  /// Get medical content by ID
+  Future<SerenyaContent?> getContentById(String id) async {
+    final db = await EncryptedDatabaseService.database;
     final results = await db.query(
-      DatabaseConstants.healthDocumentsTable,
+      'serenya_content',
       where: 'id = ?',
       whereArgs: [id],
       limit: 1,
     );
     
     if (results.isNotEmpty) {
-      return HealthDocument.fromMap(results.first);
+      return await SerenyaContent.fromDatabaseJson(results.first);
     }
     return null;
   }
 
-  Future<List<HealthDocument>> getDocumentsByStatus(ProcessingStatus status) async {
-    final db = await DatabaseService.database;
-    final statusString = status.toString().split('.').last;
-    
+  /// Get content by type (results vs reports)
+  Future<List<SerenyaContent>> getContentByType(ContentType contentType, {int? limit}) async {
+    final db = await EncryptedDatabaseService.database;
     final results = await db.query(
-      DatabaseConstants.healthDocumentsTable,
-      where: 'processing_status = ?',
-      whereArgs: [statusString],
-      orderBy: 'upload_date DESC',
-    );
-    
-    return results.map((map) => HealthDocument.fromMap(map)).toList();
-  }
-
-  Future<List<HealthDocument>> getRecentDocuments({int limit = 10}) async {
-    final db = await DatabaseService.database;
-    final results = await db.query(
-      DatabaseConstants.healthDocumentsTable,
-      orderBy: 'upload_date DESC',
+      'serenya_content',
+      where: 'content_type = ?',
+      whereArgs: [contentType.value],
+      orderBy: 'created_at DESC',
       limit: limit,
     );
     
-    return results.map((map) => HealthDocument.fromMap(map)).toList();
+    final List<SerenyaContent> content = [];
+    for (final result in results) {
+      content.add(await SerenyaContent.fromDatabaseJson(result));
+    }
+    return content;
   }
 
-  Future<int> insertDocument(HealthDocument document) async {
-    final db = await DatabaseService.database;
-    return await db.insert(
-      DatabaseConstants.healthDocumentsTable,
-      document.toMap(),
-    );
+  /// Insert new medical content
+  Future<void> insertContent(SerenyaContent content) async {
+    final db = await EncryptedDatabaseService.database;
+    final dbData = await content.toDatabaseJson();
+    await db.insert('serenya_content', dbData);
   }
 
-  Future<void> updateDocument(HealthDocument document) async {
-    if (document.id == null) throw ArgumentError('Document ID cannot be null for update');
-    
-    final db = await DatabaseService.database;
+  /// Update existing medical content
+  Future<void> updateContent(SerenyaContent content) async {
+    final db = await EncryptedDatabaseService.database;
+    final dbData = await content.toDatabaseJson();
     await db.update(
-      DatabaseConstants.healthDocumentsTable,
-      document.copyWith(updatedAt: DateTime.now()).toMap(),
+      'serenya_content',
+      {...dbData, 'updated_at': DateTime.now().toIso8601String()},
       where: 'id = ?',
-      whereArgs: [document.id],
+      whereArgs: [content.id],
     );
   }
 
-  Future<void> deleteDocument(int id) async {
-    final db = await DatabaseService.database;
-    await db.delete(
-      DatabaseConstants.healthDocumentsTable,
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+  /// Delete medical content and related data
+  Future<void> deleteContent(String contentId) async {
+    final db = await EncryptedDatabaseService.database;
+    await db.transaction((txn) async {
+      // Delete related lab results
+      await txn.delete('lab_results', where: 'serenya_content_id = ?', whereArgs: [contentId]);
+      // Delete related vitals
+      await txn.delete('vitals', where: 'serenya_content_id = ?', whereArgs: [contentId]);
+      // Delete related chat messages
+      await txn.delete('chat_messages', where: 'serenya_content_id = ?', whereArgs: [contentId]);
+      // Delete the content itself
+      await txn.delete('serenya_content', where: 'id = ?', whereArgs: [contentId]);
+    });
   }
 
-  Future<List<Interpretation>> getInterpretationsForDocument(int documentId) async {
-    final db = await DatabaseService.database;
+  /// Get lab results for content
+  Future<List<LabResult>> getLabResultsForContent(String contentId) async {
+    final db = await EncryptedDatabaseService.database;
     final results = await db.query(
-      DatabaseConstants.interpretationsTable,
-      where: 'document_id = ?',
-      whereArgs: [documentId],
+      'lab_results',
+      where: 'serenya_content_id = ?',
+      whereArgs: [contentId],
       orderBy: 'created_at DESC',
     );
     
-    return results.map((map) => Interpretation.fromMap(map)).toList();
+    final List<LabResult> labResults = [];
+    for (final result in results) {
+      labResults.add(LabResult.fromJson(result));
+    }
+    return labResults;
   }
 
-  Future<int> insertInterpretation(Interpretation interpretation) async {
-    final db = await DatabaseService.database;
-    return await db.insert(
-      DatabaseConstants.interpretationsTable,
-      interpretation.toMap(),
+  /// Get vitals for content
+  Future<List<Vital>> getVitalsForContent(String contentId) async {
+    final db = await EncryptedDatabaseService.database;
+    final results = await db.query(
+      'vitals',
+      where: 'serenya_content_id = ?',
+      whereArgs: [contentId],
+      orderBy: 'created_at DESC',
+    );
+    
+    final List<Vital> vitals = [];
+    for (final result in results) {
+      vitals.add(Vital.fromJson(result));
+    }
+    return vitals;
+  }
+
+  /// Get chat messages for content
+  Future<List<ChatMessage>> getChatMessagesForContent(String contentId) async {
+    final db = await EncryptedDatabaseService.database;
+    final results = await db.query(
+      'chat_messages',
+      where: 'serenya_content_id = ?',
+      whereArgs: [contentId],
+      orderBy: 'created_at ASC',
+    );
+    
+    final List<ChatMessage> messages = [];
+    for (final result in results) {
+      messages.add(await ChatMessage.fromDatabaseJson(result));
+    }
+    return messages;
+  }
+
+  /// Insert chat message
+  Future<void> insertChatMessage(ChatMessage message) async {
+    final db = await EncryptedDatabaseService.database;
+    final dbData = await message.toDatabaseJson();
+    await db.insert('chat_messages', dbData);
+  }
+
+  /// Get user preferences
+  Future<UserPreference?> getPreference(String key) async {
+    final db = await EncryptedDatabaseService.database;
+    final results = await db.query(
+      'user_preferences',
+      where: 'preference_key = ?',
+      whereArgs: [key],
+      limit: 1,
+    );
+    
+    if (results.isNotEmpty) {
+      return UserPreference.fromJson(results.first);
+    }
+    return null;
+  }
+
+  /// Set user preference
+  Future<void> setPreference(UserPreference preference) async {
+    final db = await EncryptedDatabaseService.database;
+    final dbData = preference.toJson();
+    
+    await db.insert(
+      'user_preferences', 
+      dbData,
+      conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 
-  Future<void> deleteInterpretationsForDocument(int documentId) async {
-    final db = await DatabaseService.database;
-    await db.delete(
-      DatabaseConstants.interpretationsTable,
-      where: 'document_id = ?',
-      whereArgs: [documentId],
-    );
-  }
-
+  /// Get database statistics
   Future<Map<String, dynamic>> getDatabaseStats() async {
-    final db = await DatabaseService.database;
+    final db = await EncryptedDatabaseService.database;
     
-    final documentCountResult = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseConstants.healthDocumentsTable}');
-    final documentCount = documentCountResult.first['count'] as int;
-    
-    final interpretationCountResult = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseConstants.interpretationsTable}');
-    final interpretationCount = interpretationCountResult.first['count'] as int;
+    final contentCount = await db.rawQuery('SELECT COUNT(*) as count FROM serenya_content');
+    final labResultsCount = await db.rawQuery('SELECT COUNT(*) as count FROM lab_results');
+    final vitalsCount = await db.rawQuery('SELECT COUNT(*) as count FROM vitals');
+    final chatMessagesCount = await db.rawQuery('SELECT COUNT(*) as count FROM chat_messages');
     
     final averageConfidence = await db.rawQuery(
-      'SELECT AVG(ai_confidence_score) as avg_confidence FROM ${DatabaseConstants.healthDocumentsTable} WHERE ai_confidence_score IS NOT NULL'
+      'SELECT AVG(confidence_score) as avg_confidence FROM serenya_content WHERE confidence_score IS NOT NULL'
     );
     
     return {
-      'total_documents': documentCount,
-      'total_interpretations': interpretationCount,
+      'total_content': contentCount.first['count'],
+      'total_lab_results': labResultsCount.first['count'],
+      'total_vitals': vitalsCount.first['count'],
+      'total_chat_messages': chatMessagesCount.first['count'],
       'average_confidence': averageConfidence.isNotEmpty ? averageConfidence.first['avg_confidence'] : 0.0,
     };
   }
 
+  /// Clear all medical data (for testing/reset)
   Future<void> clearAllData() async {
-    final db = await DatabaseService.database;
-    await db.delete(DatabaseConstants.interpretationsTable);
-    await db.delete(DatabaseConstants.healthDocumentsTable);
-    await db.delete(DatabaseConstants.userPreferencesTable);
-    await db.delete(DatabaseConstants.consentRecordsTable);
+    final db = await EncryptedDatabaseService.database;
+    await db.transaction((txn) async {
+      await txn.delete('chat_messages');
+      await txn.delete('vitals');
+      await txn.delete('lab_results');
+      await txn.delete('serenya_content');
+      await txn.delete('user_preferences');
+    });
   }
 }

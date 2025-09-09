@@ -1,10 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:crypto/crypto.dart';
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:cryptography/cryptography.dart';
 import 'biometric_auth_service.dart';
 
@@ -23,7 +22,7 @@ class DeviceKeyManager {
       storageCipherAlgorithm: StorageCipherAlgorithm.AES_GCM_NoPadding,
     ),
     iOptions: IOSOptions(
-      accessibility: KeychainAccessibility.whenUnlockedThisDeviceOnly,
+      accessibility: KeychainAccessibility.unlocked,
       accountName: 'serenya_health_app',
     ),
   );
@@ -103,7 +102,7 @@ class DeviceKeyManager {
     
     // Combine entropy sources
     final combined = entropyData.join('-');
-    final hash = sha256.convert(utf8.encode(combined));
+    final hash = crypto.sha256.convert(utf8.encode(combined));
     
     return Uint8List.fromList(hash.bytes);
   }
@@ -228,7 +227,7 @@ class DeviceKeyManager {
     
     // Generate stable device ID
     final combined = deviceData.join('-');
-    final hash = sha256.convert(utf8.encode(combined));
+    final hash = crypto.sha256.convert(utf8.encode(combined));
     final deviceId = hash.toString().substring(0, 16);
     
     await _secureStorage.write(key: _deviceIdentifierKey, value: deviceId);
@@ -247,7 +246,7 @@ class DeviceKeyManager {
     deviceData.add(Platform.localHostname);
     
     final combined = deviceData.join('-');
-    final hash = sha256.convert(utf8.encode(combined));
+    final hash = crypto.sha256.convert(utf8.encode(combined));
     final currentId = hash.toString().substring(0, 16);
     
     if (storedId != currentId) {
@@ -316,6 +315,15 @@ class DeviceKeyManager {
     for (int i = 0; i < data.length; i++) {
       data[i] = 0;
     }
+  }
+
+  /// Clear cached encryption keys (for logout/security)
+  static Future<void> clearCachedKeys() async {
+    await _logSecurityEvent('cached_keys_cleared');
+    if (kDebugMode) {
+      print('Clearing cached encryption keys');
+    }
+    // TODO: Clear cached keys when key caching is implemented
   }
 
   /// Log security events
@@ -402,14 +410,14 @@ class TableKeyManager {
     try {
       // Use HKDF for key derivation (RFC 5869)
       final hkdf = Hkdf(
-        hmac: Hmac(Sha256()),
-        inputKeyMaterial: deviceRootKey,
+        hmac: Hmac.sha256(),
+        outputLength: 32, // 256-bit derived key
       );
       
       final derivedKey = await hkdf.deriveKey(
-        length: 32, // 256-bit derived key
+        secretKey: SecretKey(deviceRootKey),
         info: utf8.encode(context),
-        salt: utf8.encode('serenya_key_derivation_salt_v1'),
+        nonce: utf8.encode('serenya_key_derivation_salt_v1'),
       );
       
       final keyBytes = await derivedKey.extractBytes();

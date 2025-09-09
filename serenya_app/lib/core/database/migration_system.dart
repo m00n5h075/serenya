@@ -1,8 +1,38 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import '../security/device_key_manager.dart';
 import 'encrypted_database_service.dart';
+
+/// Available migration strategies
+enum MigrationType {
+  addColumn,       // Safe - adds new column
+  addTable,        // Safe - adds new table
+  addIndex,        // Safe - adds new index
+  modifyColumn,    // Risky - requires data migration
+  dropColumn,      // Risky - data loss
+  renameTable,     // Risky - requires careful handling
+  dataTransform,   // Risky - transforms existing data
+}
+
+/// Migration definition
+class Migration {
+  final String version;
+  final String description;
+  final MigrationType type;
+  final Future<void> Function(Transaction txn) up;
+  final Future<void> Function(Transaction txn)? down;
+  final bool requiresDataMigration;
+  final bool requiresReencryption;
+
+  Migration({
+    required this.version,
+    required this.description,
+    required this.type,
+    required this.up,
+    this.down,
+    this.requiresDataMigration = false,
+    this.requiresReencryption = false,
+  });
+}
 
 /// Database Migration System for Encrypted SQLite
 /// 
@@ -12,38 +42,6 @@ import 'encrypted_database_service.dart';
 class MigrationSystem {
   static const String _migrationTableName = 'schema_migrations';
   static const String _currentSchemaVersion = '1.0.0';
-
-  /// Available migration strategies
-  enum MigrationType {
-    addColumn,       // Safe - adds new column
-    addTable,        // Safe - adds new table
-    addIndex,        // Safe - adds new index
-    modifyColumn,    // Risky - requires data migration
-    dropColumn,      // Risky - data loss
-    renameTable,     // Risky - requires careful handling
-    dataTransform,   // Risky - transforms existing data
-  }
-
-  /// Migration definition
-  class Migration {
-    final String version;
-    final String description;
-    final MigrationType type;
-    final Future<void> Function(Database db) up;
-    final Future<void> Function(Database db)? down;
-    final bool requiresDataMigration;
-    final bool requiresReencryption;
-
-    Migration({
-      required this.version,
-      required this.description,
-      required this.type,
-      required this.up,
-      this.down,
-      this.requiresDataMigration = false,
-      this.requiresReencryption = false,
-    });
-  }
 
   /// Initialize migration system
   static Future<void> initialize(Database db) async {

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import '../models/health_document.dart';
+import '../models/local_database_models.dart';
 import '../core/constants/app_constants.dart';
 import '../core/utils/encryption_utils.dart';
 import 'confidence_indicator.dart';
 
 class DocumentCard extends StatelessWidget {
-  final HealthDocument document;
+  final SerenyaContent document;
   final VoidCallback? onTap;
   final VoidCallback? onDelete;
   final bool showConfidence;
@@ -46,7 +46,7 @@ class DocumentCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          document.fileName,
+                          document.fileName ?? 'Untitled Document',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -66,7 +66,7 @@ class DocumentCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  _buildStatusChip(document.processingStatus),
+                  _buildStatusChip(document.processingStatus ?? ProcessingStatus.completed),
                   if (onDelete != null) ...[
                     SizedBox(width: AppConstants.smallPadding),
                     IconButton(
@@ -86,7 +86,7 @@ class DocumentCard extends StatelessWidget {
               Row(
                 children: [
                   Text(
-                    '${document.fileType.toUpperCase()} • ${EncryptionUtils.formatFileSize(document.fileSize)}',
+                    '${(document.fileType ?? 'unknown').toUpperCase()} • ${EncryptionUtils.formatFileSize(document.fileSize ?? 0)}',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey[600],
@@ -207,7 +207,8 @@ class DocumentCard extends StatelessWidget {
     }
   }
 
-  IconData _getFileIcon(String fileType) {
+  IconData _getFileIcon(String? fileType) {
+    if (fileType == null) return Icons.description;
     switch (fileType.toLowerCase()) {
       case 'pdf':
         return Icons.picture_as_pdf;
@@ -220,7 +221,8 @@ class DocumentCard extends StatelessWidget {
     }
   }
 
-  String _formatUploadDate(DateTime date) {
+  String _formatUploadDate(DateTime? date) {
+    if (date == null) return 'Unknown';
     final now = DateTime.now();
     final difference = now.difference(date);
     

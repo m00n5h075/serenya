@@ -73,4 +73,9 @@ class ApiConstants {
   
   static const int connectTimeoutSeconds = 30;
   static const int receiveTimeoutSeconds = 180; // 3 minutes for processing
+  static const int sendTimeoutSeconds = 60;
+  static const int maxRetryAttempts = 3;
+  static const Duration retryBaseDelay = Duration(seconds: 1);
+  static const int maxConcurrentRequests = 5;
+  static const Duration requestQueueTimeout = Duration(minutes: 5);
 }

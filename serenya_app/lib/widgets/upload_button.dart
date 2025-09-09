@@ -11,7 +11,7 @@ import '../core/providers/health_data_provider.dart';
 import '../core/utils/encryption_utils.dart';
 import '../services/processing_service.dart';
 import '../services/notification_service.dart';
-import '../models/health_document.dart';
+import '../models/local_database_models.dart';
 
 class UploadButton extends StatefulWidget {
   final VoidCallback? onViewResults;
@@ -116,7 +116,7 @@ class _UploadButtonState extends State<UploadButton>
       );
 
       if (result.success) {
-        _startMonitoringProcessing(result.document!.id!);
+        _startMonitoringProcessing(result.document!.id);
       } else {
         _handleUploadError(result.message, UploadErrorType.communication);
       }
@@ -210,7 +210,7 @@ class _UploadButtonState extends State<UploadButton>
     );
   }
 
-  void _startMonitoringProcessing(int documentId) {
+  void _startMonitoringProcessing(String documentId) {
     final dataProvider = context.read<HealthDataProvider>();
     
     Timer.periodic(Duration(seconds: 5), (timer) async {
@@ -247,11 +247,19 @@ class _UploadButtonState extends State<UploadButton>
     _spinController.stop();
     _notificationService.showResultsReadyNotification(
       // Will pass actual document when implemented
-      HealthDocument(
+      SerenyaContent(
+        id: 'placeholder',
+        userId: 'current_user',
+        contentType: ContentType.result,
+        title: 'Results Ready',
+        content: 'Your analysis is complete',
+        confidenceScore: 0.0,
+        medicalFlags: [],
         fileName: 'results',
         fileType: 'pdf',
         fileSize: 0,
         uploadDate: DateTime.now(),
+        processingStatus: ProcessingStatus.completed,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       ),

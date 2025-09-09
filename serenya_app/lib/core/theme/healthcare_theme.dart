@@ -14,8 +14,6 @@ class HealthcareTheme {
         onSecondary: HealthcareColors.serenyaWhite,
         surface: HealthcareColors.backgroundPrimary,
         onSurface: HealthcareColors.textPrimary,
-        background: HealthcareColors.backgroundSecondary,
-        onBackground: HealthcareColors.textPrimary,
         error: HealthcareColors.error,
         onError: HealthcareColors.serenyaWhite,
       ),

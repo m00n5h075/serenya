@@ -5,7 +5,7 @@ import '../core/constants/app_constants.dart';
 import '../widgets/document_card.dart';
 import '../widgets/confidence_indicator.dart';
 import '../widgets/medical_disclaimer.dart';
-import '../models/health_document.dart';
+import '../models/local_database_models.dart';
 
 class ResultsScreen extends StatefulWidget {
   final int? documentId;
@@ -20,8 +20,8 @@ class ResultsScreen extends StatefulWidget {
 }
 
 class _ResultsScreenState extends State<ResultsScreen> {
-  HealthDocument? _selectedDocument;
-  List<Interpretation> _interpretations = [];
+  SerenyaContent? _selectedDocument;
+  List<SerenyaContent> _interpretations = [];
 
   @override
   void initState() {
@@ -48,7 +48,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
     }
 
     if (_selectedDocument != null) {
-      await dataProvider.loadInterpretations(_selectedDocument!.id!);
+      await dataProvider.loadInterpretations();
       _interpretations = dataProvider.interpretations;
     }
 
@@ -172,7 +172,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
                     Row(
                       children: [
                         Text(
-                          _getInterpretationTypeLabel(interpretation.interpretationType),
+                          _getContentTypeLabel(interpretation.contentType),
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -188,7 +188,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
                     ),
                     SizedBox(height: AppConstants.smallPadding),
                     Text(
-                      interpretation.interpretationText,
+                      interpretation.content,
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey[700],
@@ -237,14 +237,12 @@ class _ResultsScreenState extends State<ResultsScreen> {
     );
   }
 
-  String _getInterpretationTypeLabel(InterpretationType type) {
+  String _getContentTypeLabel(ContentType type) {
     switch (type) {
-      case InterpretationType.basic:
-        return 'Basic Interpretation';
-      case InterpretationType.detailed:
-        return 'Detailed Analysis';
-      case InterpretationType.clinical:
-        return 'Clinical Summary';
+      case ContentType.result:
+        return 'Analysis Result';
+      case ContentType.report:
+        return 'Comprehensive Report';
     }
   }
 

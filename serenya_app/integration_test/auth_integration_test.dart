@@ -1,11 +1,8 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:mockito/mockito.dart';
-import 'package:mockito/annotations.dart';
 import 'package:serenya_app/main.dart' as app;
 import 'package:serenya_app/services/auth_service.dart';
-import 'package:serenya_app/services/api_service.dart';
 
 /// Integration tests for comprehensive authentication flow validation
 /// Tests end-to-end authentication scenarios including network resilience,
@@ -97,7 +94,7 @@ void main() {
 Future<void> _simulateNetworkInterruption(WidgetTester tester) async {
   // Mock network failure
   await tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-    SystemChannels.connectivity,
+    const MethodChannel('plugins.flutter.io/connectivity'),
     (MethodCall methodCall) async {
       if (methodCall.method == 'check') {
         return 'none'; // No connectivity

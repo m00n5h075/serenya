@@ -3,21 +3,15 @@
   "packages": [
     {
       "name": "_fe_analyzer_shared",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/_fe_analyzer_shared-72.0.0",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/_fe_analyzer_shared-67.0.0",
       "packageUri": "lib/",
-      "languageVersion": "3.3"
-    },
-    {
-      "name": "_macros",
-      "rootUri": "file:///Users/m00n5h075ai/development/serenya/flutter/bin/cache/dart-sdk/pkg/_macros",
-      "packageUri": "lib/",
-      "languageVersion": "3.4"
+      "languageVersion": "3.0"
     },
     {
       "name": "analyzer",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/analyzer-6.7.0",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/analyzer-6.4.1",
       "packageUri": "lib/",
-      "languageVersion": "3.3"
+      "languageVersion": "3.0"
     },
     {
       "name": "args",
@@ -30,6 +24,18 @@
       "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/async-2.11.0",
       "packageUri": "lib/",
       "languageVersion": "2.18"
+    },
+    {
+      "name": "bloc",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/bloc-8.1.4",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
+    },
+    {
+      "name": "bloc_test",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/bloc_test-9.1.7",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
     },
     {
       "name": "boolean_selector",
@@ -63,15 +69,15 @@
     },
     {
       "name": "build_runner",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/build_runner-2.4.13",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/build_runner-2.4.11",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "3.4"
     },
     {
       "name": "build_runner_core",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/build_runner_core-7.3.2",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/build_runner_core-7.3.1",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "3.4"
     },
     {
       "name": "built_collection",
@@ -98,6 +104,12 @@
       "languageVersion": "2.19"
     },
     {
+      "name": "cli_config",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/cli_config-0.2.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.0"
+    },
+    {
       "name": "clock",
       "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/clock-1.1.1",
       "packageUri": "lib/",
@@ -105,9 +117,9 @@
     },
     {
       "name": "code_builder",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/code_builder-4.10.1",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/code_builder-4.10.0",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "3.0"
     },
     {
       "name": "collection",
@@ -118,6 +130,12 @@
     {
       "name": "convert",
       "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/convert-3.1.2",
+      "packageUri": "lib/",
+      "languageVersion": "3.4"
+    },
+    {
+      "name": "coverage",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/coverage-1.15.0",
       "packageUri": "lib/",
       "languageVersion": "3.4"
     },
@@ -134,6 +152,12 @@
       "languageVersion": "3.4"
     },
     {
+      "name": "cryptography",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/cryptography-2.7.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.1"
+    },
+    {
       "name": "cupertino_icons",
       "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/cupertino_icons-1.0.8",
       "packageUri": "lib/",
@@ -141,9 +165,33 @@
     },
     {
       "name": "dart_style",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/dart_style-2.3.7",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/dart_style-2.3.6",
       "packageUri": "lib/",
       "languageVersion": "3.0"
+    },
+    {
+      "name": "diff_match_patch",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/diff_match_patch-0.4.1",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
+    },
+    {
+      "name": "dio",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/dio-5.9.0",
+      "packageUri": "lib/",
+      "languageVersion": "2.18"
+    },
+    {
+      "name": "dio_web_adapter",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/dio_web_adapter-2.1.1",
+      "packageUri": "lib/",
+      "languageVersion": "3.3"
+    },
+    {
+      "name": "equatable",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/equatable-2.0.7",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
     },
     {
       "name": "fake_async",
@@ -159,7 +207,7 @@
     },
     {
       "name": "file",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/file-7.0.1",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/file-7.0.0",
       "packageUri": "lib/",
       "languageVersion": "3.0"
     },
@@ -201,9 +249,15 @@
     },
     {
       "name": "flutter",
-      "rootUri": "file:///Users/m00n5h075ai/development/serenya/flutter/packages/flutter",
+      "rootUri": "file:///Users/m00n5h075ai/Development/flutter/packages/flutter",
       "packageUri": "lib/",
       "languageVersion": "3.3"
+    },
+    {
+      "name": "flutter_driver",
+      "rootUri": "file:///Users/m00n5h075ai/Development/flutter/packages/flutter_driver",
+      "packageUri": "lib/",
+      "languageVersion": "3.2"
     },
     {
       "name": "flutter_lints",
@@ -213,9 +267,9 @@
     },
     {
       "name": "flutter_plugin_android_lifecycle",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/flutter_plugin_android_lifecycle-2.0.26",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/flutter_plugin_android_lifecycle-2.0.22",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "3.4"
     },
     {
       "name": "flutter_secure_storage",
@@ -255,13 +309,13 @@
     },
     {
       "name": "flutter_test",
-      "rootUri": "file:///Users/m00n5h075ai/development/serenya/flutter/packages/flutter_test",
+      "rootUri": "file:///Users/m00n5h075ai/Development/flutter/packages/flutter_test",
       "packageUri": "lib/",
       "languageVersion": "3.3"
     },
     {
       "name": "flutter_web_plugins",
-      "rootUri": "file:///Users/m00n5h075ai/development/serenya/flutter/packages/flutter_web_plugins",
+      "rootUri": "file:///Users/m00n5h075ai/Development/flutter/packages/flutter_web_plugins",
       "packageUri": "lib/",
       "languageVersion": "3.2"
     },
@@ -272,10 +326,22 @@
       "languageVersion": "3.0"
     },
     {
+      "name": "fuchsia_remote_debug_protocol",
+      "rootUri": "file:///Users/m00n5h075ai/Development/flutter/packages/fuchsia_remote_debug_protocol",
+      "packageUri": "lib/",
+      "languageVersion": "3.2"
+    },
+    {
       "name": "glob",
       "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/glob-2.1.3",
       "packageUri": "lib/",
       "languageVersion": "3.3"
+    },
+    {
+      "name": "go_router",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/go_router-12.1.3",
+      "packageUri": "lib/",
+      "languageVersion": "3.0"
     },
     {
       "name": "google_identity_services_web",
@@ -291,9 +357,9 @@
     },
     {
       "name": "google_sign_in_android",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/google_sign_in_android-6.1.35",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/google_sign_in_android-6.1.31",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "3.4"
     },
     {
       "name": "google_sign_in_ios",
@@ -345,9 +411,9 @@
     },
     {
       "name": "image_picker_android",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/image_picker_android-0.8.12+21",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/image_picker_android-0.8.12+12",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "3.4"
     },
     {
       "name": "image_picker_for_web",
@@ -386,6 +452,18 @@
       "languageVersion": "2.19"
     },
     {
+      "name": "integration_test",
+      "rootUri": "file:///Users/m00n5h075ai/Development/flutter/packages/integration_test",
+      "packageUri": "lib/",
+      "languageVersion": "3.2"
+    },
+    {
+      "name": "intl",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/intl-0.19.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.0"
+    },
+    {
       "name": "io",
       "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/io-1.0.5",
       "packageUri": "lib/",
@@ -404,14 +482,20 @@
       "languageVersion": "3.0"
     },
     {
+      "name": "json_serializable",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/json_serializable-6.8.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.0"
+    },
+    {
       "name": "leak_tracker",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/leak_tracker-10.0.5",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/leak_tracker-10.0.4",
       "packageUri": "lib/",
       "languageVersion": "3.2"
     },
     {
       "name": "leak_tracker_flutter_testing",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/leak_tracker_flutter_testing-3.0.5",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/leak_tracker_flutter_testing-3.0.3",
       "packageUri": "lib/",
       "languageVersion": "3.2"
     },
@@ -428,14 +512,38 @@
       "languageVersion": "3.0"
     },
     {
-      "name": "logging",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/logging-1.3.0",
+      "name": "local_auth",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/local_auth-2.3.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.2"
+    },
+    {
+      "name": "local_auth_android",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/local_auth_android-1.0.43",
       "packageUri": "lib/",
       "languageVersion": "3.4"
     },
     {
-      "name": "macros",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/macros-0.1.2-main.4",
+      "name": "local_auth_darwin",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/local_auth_darwin-1.4.3",
+      "packageUri": "lib/",
+      "languageVersion": "3.4"
+    },
+    {
+      "name": "local_auth_platform_interface",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/local_auth_platform_interface-1.0.10",
+      "packageUri": "lib/",
+      "languageVersion": "3.0"
+    },
+    {
+      "name": "local_auth_windows",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/local_auth_windows-1.0.11",
+      "packageUri": "lib/",
+      "languageVersion": "3.2"
+    },
+    {
+      "name": "logging",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/logging-1.3.0",
       "packageUri": "lib/",
       "languageVersion": "3.4"
     },
@@ -447,19 +555,19 @@
     },
     {
       "name": "material_color_utilities",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/material_color_utilities-0.11.1",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/material_color_utilities-0.8.0",
       "packageUri": "lib/",
       "languageVersion": "2.17"
     },
     {
       "name": "meta",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/meta-1.15.0",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/meta-1.12.0",
       "packageUri": "lib/",
       "languageVersion": "2.12"
     },
     {
       "name": "mime",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/mime-2.0.0",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/mime-1.0.6",
       "packageUri": "lib/",
       "languageVersion": "3.2"
     },
@@ -470,8 +578,20 @@
       "languageVersion": "3.1"
     },
     {
+      "name": "mocktail",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/mocktail-1.0.4",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
+    },
+    {
       "name": "nested",
       "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/nested-1.0.0",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
+    },
+    {
+      "name": "node_preamble",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/node_preamble-2.0.2",
       "packageUri": "lib/",
       "languageVersion": "2.12"
     },
@@ -495,9 +615,9 @@
     },
     {
       "name": "path_provider_android",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/path_provider_android-2.2.15",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/path_provider_android-2.2.10",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "3.4"
     },
     {
       "name": "path_provider_foundation",
@@ -525,15 +645,15 @@
     },
     {
       "name": "permission_handler",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/permission_handler-11.4.0",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/permission_handler-11.3.1",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "2.15"
     },
     {
       "name": "permission_handler_android",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/permission_handler_android-12.1.0",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/permission_handler_android-12.0.13",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "2.15"
     },
     {
       "name": "permission_handler_apple",
@@ -549,9 +669,9 @@
     },
     {
       "name": "permission_handler_platform_interface",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/permission_handler_platform_interface-4.3.0",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/permission_handler_platform_interface-4.2.3",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "2.14"
     },
     {
       "name": "permission_handler_windows",
@@ -561,9 +681,9 @@
     },
     {
       "name": "platform",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/platform-3.1.6",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/platform-3.1.4",
       "packageUri": "lib/",
-      "languageVersion": "3.2"
+      "languageVersion": "3.0"
     },
     {
       "name": "plugin_platform_interface",
@@ -576,6 +696,12 @@
       "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/pool-1.5.1",
       "packageUri": "lib/",
       "languageVersion": "2.12"
+    },
+    {
+      "name": "process",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/process-5.0.2",
+      "packageUri": "lib/",
+      "languageVersion": "3.0"
     },
     {
       "name": "provider",
@@ -597,15 +723,15 @@
     },
     {
       "name": "shared_preferences",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/shared_preferences-2.5.3",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/shared_preferences-2.3.3",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "3.4"
     },
     {
       "name": "shared_preferences_android",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/shared_preferences_android-2.4.7",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/shared_preferences_android-2.3.2",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "3.4"
     },
     {
       "name": "shared_preferences_foundation",
@@ -644,14 +770,26 @@
       "languageVersion": "2.17"
     },
     {
-      "name": "shelf_web_socket",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/shelf_web_socket-2.0.1",
+      "name": "shelf_packages_handler",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/shelf_packages_handler-3.0.2",
+      "packageUri": "lib/",
+      "languageVersion": "2.17"
+    },
+    {
+      "name": "shelf_static",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/shelf_static-1.1.3",
       "packageUri": "lib/",
       "languageVersion": "3.3"
     },
     {
+      "name": "shelf_web_socket",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/shelf_web_socket-1.0.4",
+      "packageUri": "lib/",
+      "languageVersion": "2.17"
+    },
+    {
       "name": "sky_engine",
-      "rootUri": "file:///Users/m00n5h075ai/development/serenya/flutter/bin/cache/pkg/sky_engine",
+      "rootUri": "file:///Users/m00n5h075ai/Development/flutter/bin/cache/pkg/sky_engine",
       "packageUri": "lib/",
       "languageVersion": "3.2"
     },
@@ -662,6 +800,24 @@
       "languageVersion": "3.0"
     },
     {
+      "name": "source_helper",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/source_helper-1.3.5",
+      "packageUri": "lib/",
+      "languageVersion": "3.4"
+    },
+    {
+      "name": "source_map_stack_trace",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/source_map_stack_trace-2.1.2",
+      "packageUri": "lib/",
+      "languageVersion": "3.3"
+    },
+    {
+      "name": "source_maps",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/source_maps-0.10.13",
+      "packageUri": "lib/",
+      "languageVersion": "3.3"
+    },
+    {
       "name": "source_span",
       "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/source_span-1.10.0",
       "packageUri": "lib/",
@@ -669,21 +825,27 @@
     },
     {
       "name": "sqflite_common",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/sqflite_common-2.5.4+6",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/sqflite_common-2.5.4",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "3.3"
     },
     {
       "name": "sqflite_common_ffi",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/sqflite_common_ffi-2.3.4+4",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/sqflite_common_ffi-2.3.3",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "3.3"
+    },
+    {
+      "name": "sqflite_sqlcipher",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/sqflite_sqlcipher-2.2.1",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
     },
     {
       "name": "sqlite3",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/sqlite3-2.9.0",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/sqlite3-2.4.7",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "3.4"
     },
     {
       "name": "sqlite3_flutter_libs",
@@ -716,10 +878,16 @@
       "languageVersion": "2.18"
     },
     {
-      "name": "synchronized",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/synchronized-3.3.0+3",
+      "name": "sync_http",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/sync_http-0.3.1",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "2.12"
+    },
+    {
+      "name": "synchronized",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/synchronized-3.1.0+1",
+      "packageUri": "lib/",
+      "languageVersion": "3.0"
     },
     {
       "name": "term_glyph",
@@ -728,10 +896,22 @@
       "languageVersion": "2.12"
     },
     {
-      "name": "test_api",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/test_api-0.7.2",
+      "name": "test",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/test-1.25.2",
       "packageUri": "lib/",
-      "languageVersion": "3.2"
+      "languageVersion": "3.0"
+    },
+    {
+      "name": "test_api",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/test_api-0.7.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.0"
+    },
+    {
+      "name": "test_core",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/test_core-0.6.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.0"
     },
     {
       "name": "timing",
@@ -741,9 +921,9 @@
     },
     {
       "name": "typed_data",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/typed_data-1.4.0",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/typed_data-1.3.2",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "2.17"
     },
     {
       "name": "vector_math",
@@ -753,7 +933,7 @@
     },
     {
       "name": "vm_service",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/vm_service-14.2.4",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/vm_service-14.2.1",
       "packageUri": "lib/",
       "languageVersion": "3.3"
     },
@@ -770,22 +950,28 @@
       "languageVersion": "3.4"
     },
     {
-      "name": "web_socket",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/web_socket-1.0.1",
+      "name": "web_socket_channel",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/web_socket_channel-2.4.0",
       "packageUri": "lib/",
-      "languageVersion": "3.4"
+      "languageVersion": "2.15"
     },
     {
-      "name": "web_socket_channel",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/web_socket_channel-3.0.3",
+      "name": "webdriver",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/webdriver-3.0.3",
       "packageUri": "lib/",
-      "languageVersion": "3.3"
+      "languageVersion": "2.18"
+    },
+    {
+      "name": "webkit_inspection_protocol",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/webkit_inspection_protocol-1.2.1",
+      "packageUri": "lib/",
+      "languageVersion": "3.0"
     },
     {
       "name": "win32",
-      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/win32-5.10.1",
+      "rootUri": "file:///Users/m00n5h075ai/.pub-cache/hosted/pub.dev/win32-5.5.4",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "3.4"
     },
     {
       "name": "xdg_directories",
@@ -806,10 +992,10 @@
       "languageVersion": "3.0"
     }
   ],
-  "generated": "2025-08-30T22:58:12.787283Z",
+  "generated": "2025-09-08T10:16:49.958915Z",
   "generator": "pub",
-  "generatorVersion": "3.5.0",
-  "flutterRoot": "file:///Users/m00n5h075ai/development/serenya/flutter",
-  "flutterVersion": "3.24.0",
+  "generatorVersion": "3.4.4",
+  "flutterRoot": "file:///Users/m00n5h075ai/Development/flutter",
+  "flutterVersion": "3.22.3",
   "pubCache": "file:///Users/m00n5h075ai/.pub-cache"
 }

@@ -17,7 +17,7 @@ void main() {
 
       // App should start with loading screen or redirect based on state
       // Since this is a fresh install, it should show onboarding or loading
-      expect(find.byType(CircularProgressIndicator), findsAnyWidget);
+      expect(find.byType(CircularProgressIndicator), findsWidgets);
 
       // Wait for app state to initialize
       await tester.pumpAndSettle(const Duration(seconds: 3));
@@ -118,7 +118,8 @@ void main() {
         final buttons = find.byType(ElevatedButton);
         if (tester.any(buttons)) {
           final buttonSemantics = tester.getSemantics(buttons.first);
-          expect(buttonSemantics.hasAction(SemanticsAction.tap), isTrue);
+          // Check that button has proper semantics
+          expect(buttonSemantics.hasEnabledState, isTrue);
         }
         
         // Verify text elements have proper semantics

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-import '../models/health_document.dart';
+import '../models/local_database_models.dart';
 import '../core/constants/app_constants.dart';
 import '../core/providers/health_data_provider.dart';
 import 'api_service.dart';
@@ -17,7 +17,14 @@ class ProcessingService {
   }) async {
     try {
       // Create initial document record
-      final document = HealthDocument(
+      final document = SerenyaContent(
+        id: DateTime.now().millisecondsSinceEpoch.toString(), // Temporary ID until server assigns one
+        userId: 'current_user', // This should come from auth service
+        contentType: ContentType.result,
+        title: 'Processing ${fileName}',
+        content: '', // Will be filled when processing completes
+        confidenceScore: 0.0, // Will be filled when processing completes
+        medicalFlags: [],
         fileName: fileName,
         fileType: _extractFileType(fileName),
         fileSize: await file.length(),
@@ -33,10 +40,18 @@ class ProcessingService {
       final uploadResult = await _apiService.uploadDocument(
         file: file,
         fileName: fileName,
-        fileType: document.fileType,
+        fileType: document.fileType ?? 'unknown',
       );
 
-      final jobId = uploadResult['job_id'] as String;
+      if (!uploadResult.success || uploadResult.data == null) {
+        return ProcessingResult(
+          success: false,
+          message: uploadResult.message,
+          error: uploadResult.errorCode,
+        );
+      }
+
+      final jobId = uploadResult.data!['job_id'] as String;
       
       // Update document with processing status
       final updatedDocument = document.copyWith(
@@ -66,19 +81,21 @@ class ProcessingService {
 
   void _startProcessingMonitor(
     String jobId,
-    HealthDocument document,
+    SerenyaContent document,
     HealthDataProvider dataProvider,
   ) {
     Timer.periodic(Duration(seconds: 10), (timer) async {
       try {
-        final status = await _apiService.getProcessingStatus(jobId);
-        await _handleProcessingUpdate(
-          jobId,
-          status,
-          document,
-          dataProvider,
-          timer,
-        );
+        final statusResult = await _apiService.getProcessingStatus(jobId);
+        if (statusResult.success && statusResult.data != null) {
+          await _handleProcessingUpdate(
+            jobId,
+            statusResult.data!,
+            document,
+            dataProvider,
+            timer,
+          );
+        }
       } catch (e) {
         print('Error checking processing status: $e');
         // Continue monitoring - temporary network issues shouldn't stop monitoring
@@ -89,7 +106,7 @@ class ProcessingService {
   Future<void> _handleProcessingUpdate(
     String jobId,
     Map<String, dynamic> statusData,
-    HealthDocument document,
+    SerenyaContent document,
     HealthDataProvider dataProvider,
     Timer timer,
   ) async {
@@ -103,28 +120,32 @@ class ProcessingService {
         _retryAttempts.remove(jobId);
         
         try {
-          final interpretation = await _apiService.getInterpretation(jobId);
+          final interpretationResult = await _apiService.getInterpretation(jobId);
+          if (!interpretationResult.success || interpretationResult.data == null) {
+            await _markDocumentFailed(document, dataProvider, 'Failed to retrieve interpretation');
+            return;
+          }
+
+          final interpretation = interpretationResult.data!;
           final updatedDocument = document.copyWith(
             processingStatus: ProcessingStatus.completed,
-            aiConfidenceScore: interpretation['confidence_score']?.toDouble(),
-            interpretationText: interpretation['interpretation_text'],
+            confidenceScore: interpretation['confidence_score']?.toDouble() ?? 0.0,
+            content: interpretation['interpretation_text'] ?? '',
+            title: 'Analysis Complete - ${document.fileName ?? 'Document'}',
             updatedAt: currentTime,
           );
           
           await dataProvider.updateDocument(updatedDocument);
           
-          // Add detailed interpretation
+          // Update with detailed interpretation and medical flags
           if (interpretation['detailed_interpretation'] != null) {
-            final detailedInterpretation = Interpretation(
-              documentId: updatedDocument.id!,
-              interpretationType: InterpretationType.detailed,
-              confidenceScore: interpretation['confidence_score']?.toDouble() ?? 0.0,
-              interpretationText: interpretation['detailed_interpretation'],
+            final finalDocument = updatedDocument.copyWith(
+              content: interpretation['detailed_interpretation'],
               medicalFlags: _extractMedicalFlags(interpretation),
-              createdAt: currentTime,
+              updatedAt: currentTime,
             );
             
-            await dataProvider.addInterpretation(detailedInterpretation);
+            await dataProvider.updateDocument(finalDocument);
           }
           
         } catch (e) {
@@ -156,7 +177,7 @@ class ProcessingService {
 
   Future<void> _handleProcessingFailure(
     String jobId,
-    HealthDocument document,
+    SerenyaContent document,
     HealthDataProvider dataProvider,
     Map<String, dynamic> statusData,
   ) async {
@@ -177,7 +198,7 @@ class ProcessingService {
 
   Future<void> _handleProcessingTimeout(
     String jobId,
-    HealthDocument document,
+    SerenyaContent document,
     HealthDataProvider dataProvider,
   ) async {
     final currentAttempt = _retryAttempts[jobId] ?? 0;
@@ -196,7 +217,7 @@ class ProcessingService {
 
   Future<void> _scheduleRetry(
     String jobId,
-    HealthDocument document,
+    SerenyaContent document,
     HealthDataProvider dataProvider,
     int attemptNumber,
   ) async {
@@ -238,13 +259,13 @@ class ProcessingService {
   }
 
   Future<void> _markDocumentFailed(
-    HealthDocument document,
+    SerenyaContent document,
     HealthDataProvider dataProvider,
     String errorMessage,
   ) async {
     final failedDocument = document.copyWith(
       processingStatus: ProcessingStatus.failed,
-      interpretationText: 'Processing failed: $errorMessage',
+      content: 'Processing failed: $errorMessage',
       updatedAt: DateTime.now(),
     );
     await dataProvider.updateDocument(failedDocument);
@@ -283,7 +304,7 @@ class ProcessingService {
 class ProcessingResult {
   final bool success;
   final String? jobId;
-  final HealthDocument? document;
+  final SerenyaContent? document;
   final String message;
   final dynamic error;
 

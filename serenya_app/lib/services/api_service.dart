@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../core/constants/app_constants.dart';
 import '../core/utils/encryption_utils.dart';
+import '../core/security/certificate_pinning.dart';
 import 'auth_service.dart';
 
 /// Enhanced API Service for Healthcare Platform
@@ -40,6 +41,9 @@ class ApiService {
         'X-Platform': 'flutter',
       },
     ));
+
+    // Configure SSL certificate pinning for security
+    CertificatePinningService.configureCertificatePinning(_dio);
 
     // Add request interceptor for authentication
     _dio.interceptors.add(InterceptorsWrapper(

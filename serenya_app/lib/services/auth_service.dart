@@ -25,7 +25,7 @@ class AuthService {
       storageCipherAlgorithm: StorageCipherAlgorithm.AES_GCM_NoPadding,
     ),
     iOptions: IOSOptions(
-      accessibility: KeychainAccessibility.whenUnlockedThisDeviceOnly,
+      accessibility: IOSAccessibility.unlocked,
       accountName: 'serenya_health_auth',
     ),
   );

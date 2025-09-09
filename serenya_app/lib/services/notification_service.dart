@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/health_document.dart';
+import '../models/local_database_models.dart';
 
 class NotificationService {
   static NotificationService? _instance;
@@ -16,7 +16,7 @@ class NotificationService {
     _scaffoldKey = key;
   }
 
-  Future<void> showResultsReadyNotification(HealthDocument document) async {
+  Future<void> showResultsReadyNotification(SerenyaContent document) async {
     await _showInAppNotification(
       title: 'Results Ready',
       message: 'Your results have been analyzed',

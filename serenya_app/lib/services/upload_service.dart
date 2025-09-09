@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../models/health_document.dart';
+import '../models/local_database_models.dart';
 import '../core/constants/app_constants.dart';
 import '../core/utils/encryption_utils.dart';
 import '../core/providers/health_data_provider.dart';
@@ -230,13 +230,13 @@ class UploadService {
 
   void _startProcessingMonitor(
     String jobId,
-    HealthDocument document,
+    SerenyaContent document,
     HealthDataProvider dataProvider,
   ) {
     Timer.periodic(Duration(seconds: 15), (timer) async {
       try {
         // Check if document is still processing
-        final currentDoc = await _repository.getDocumentById(document.id!);
+        final currentDoc = await _repository.getContentById(document.id);
         if (currentDoc == null) {
           timer.cancel();
           return;
@@ -252,10 +252,12 @@ class UploadService {
         }
 
         // Check for timeout (3 minutes)
-        final processingDuration = DateTime.now().difference(currentDoc.uploadDate);
-        if (processingDuration.inMinutes >= AppConstants.processingTimeoutMinutes) {
-          timer.cancel();
-          await _handleProcessingTimeout(currentDoc, dataProvider);
+        if (currentDoc.uploadDate != null) {
+          final processingDuration = DateTime.now().difference(currentDoc.uploadDate!);
+          if (processingDuration.inMinutes >= AppConstants.processingTimeoutMinutes) {
+            timer.cancel();
+            await _handleProcessingTimeout(currentDoc, dataProvider);
+          }
         }
       } catch (e) {
         print('Error monitoring processing: $e');
@@ -263,7 +265,7 @@ class UploadService {
     });
   }
 
-  Future<void> _handleProcessingComplete(HealthDocument document) async {
+  Future<void> _handleProcessingComplete(SerenyaContent document) async {
     // Trigger vibration
     HapticFeedback.mediumImpact();
 
@@ -278,13 +280,13 @@ class UploadService {
   }
 
   Future<void> _handleProcessingTimeout(
-    HealthDocument document,
+    SerenyaContent document,
     HealthDataProvider dataProvider,
   ) async {
     // Mark document as failed due to timeout
     final timeoutDocument = document.copyWith(
       processingStatus: ProcessingStatus.failed,
-      interpretationText: 'Processing timeout after ${AppConstants.processingTimeoutMinutes} minutes',
+      content: 'Processing timeout after ${AppConstants.processingTimeoutMinutes} minutes',
       updatedAt: DateTime.now(),
     );
 
@@ -306,7 +308,7 @@ class UploadResult {
   final bool success;
   final String message;
   final String? jobId;
-  final HealthDocument? document;
+  final SerenyaContent? document;
   final UploadErrorType? error;
   final bool cancelled;
 
