@@ -76,7 +76,6 @@ CREATE TABLE serenya_content (
     table_key_id TEXT DEFAULT 'serenya_content',
     
     -- Processing metadata
-    processing_job_id TEXT,                -- Reference to original job_id
     processing_time_seconds INTEGER,
     model_version TEXT,
     
@@ -1325,7 +1324,6 @@ class DatabaseService {
     required String analysisMarkdown,
     required double confidenceScore,
     DateTime? documentDate,
-    String? processingJobId,
     Map<String, dynamic>? metadata,
   }) async {
     final db = await database;
@@ -1344,7 +1342,6 @@ class DatabaseService {
       'analysis_markdown': encryptedAnalysis,
       'confidence_score': confidenceScore,
       'document_date': documentDate?.toIso8601String(),
-      'processing_job_id': processingJobId,
       'created_at': DateTime.now().toIso8601String(),
       'updated_at': DateTime.now().toIso8601String(),
     });
