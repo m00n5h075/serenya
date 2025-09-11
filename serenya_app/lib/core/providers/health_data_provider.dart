@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import '../../models/local_database_models.dart';
 import '../database/health_data_repository.dart';
 
@@ -18,6 +19,19 @@ class HealthDataProvider extends ChangeNotifier {
   Map<String, List<ChatMessage>> _chatMessages = {};
   bool _isLoading = false;
   String? _error;
+  
+  // Pagination state
+  bool _isLoadingMore = false;
+  bool _hasMoreData = true;
+  int _currentPage = 0;
+  static const int _defaultPageSize = 20;
+  int _pageSize = _defaultPageSize;
+  String? _lastContentId;
+  
+  // Performance optimization
+  final Map<String, SerenyaContent> _contentCache = {};
+  DateTime? _lastCacheRefresh;
+  final List<SerenyaContent> _preloadedContent = [];
 
   List<SerenyaContent> get content => List.unmodifiable(_content);
   Map<String, List<LabResult>> get labResults => Map.unmodifiable(_labResults);
@@ -25,14 +39,55 @@ class HealthDataProvider extends ChangeNotifier {
   Map<String, List<ChatMessage>> get chatMessages => Map.unmodifiable(_chatMessages);
   bool get isLoading => _isLoading;
   String? get error => _error;
+  
+  // Pagination getters
+  bool get isLoadingMore => _isLoadingMore;
+  bool get hasMoreData => _hasMoreData;
+  int get currentPage => _currentPage;
+  int get pageSize => _pageSize;
+  int get totalContentCount => _content.length;
 
   /// Load all medical content (results and reports)
-  Future<void> loadContent({int? limit}) async {
+  /// Enhanced with pagination support and caching
+  Future<void> loadContent({
+    int? limit,
+    bool refresh = false,
+    bool resetPagination = true,
+  }) async {
+    if (resetPagination) {
+      _resetPaginationState();
+    }
+    
     _setLoading(true);
     _clearError();
 
     try {
-      _content = await _repository.getAllContent(limit: limit);
+      final pageLimit = limit ?? _pageSize;
+      final newContent = await _repository.getAllContent(
+        limit: pageLimit,
+        lastContentId: _lastContentId,
+      );
+      
+      if (refresh || _content.isEmpty) {
+        _content = newContent;
+        _contentCache.clear();
+      } else {
+        _content.addAll(newContent);
+      }
+      
+      // Update cache
+      for (final content in newContent) {
+        _contentCache[content.id] = content;
+      }
+      
+      // Update pagination state
+      _hasMoreData = newContent.length == pageLimit;
+      if (newContent.isNotEmpty) {
+        _lastContentId = newContent.last.id;
+        _currentPage++;
+      }
+      _lastCacheRefresh = DateTime.now();
+      
       notifyListeners();
     } catch (e) {
       _setError('Failed to load content: $e');
@@ -41,13 +96,95 @@ class HealthDataProvider extends ChangeNotifier {
     }
   }
 
+  /// Load more content for infinite scroll
+  /// This is the key method for pagination preloading
+  Future<void> loadMoreContent({ContentType? contentType}) async {
+    if (_isLoadingMore || !_hasMoreData) return;
+    
+    _isLoadingMore = true;
+    notifyListeners();
+    
+    try {
+      List<SerenyaContent> newContent;
+      if (contentType != null) {
+        newContent = await _repository.getContentByType(
+          contentType,
+          limit: _pageSize,
+          lastContentId: _lastContentId,
+        );
+      } else {
+        newContent = await _repository.getAllContent(
+          limit: _pageSize,
+          lastContentId: _lastContentId,
+        );
+      }
+      
+      // Add new content to existing list
+      _content.addAll(newContent);
+      
+      // Update cache
+      for (final content in newContent) {
+        _contentCache[content.id] = content;
+      }
+      
+      // Update pagination state
+      _hasMoreData = newContent.length == _pageSize;
+      if (newContent.isNotEmpty) {
+        _lastContentId = newContent.last.id;
+        _currentPage++;
+      }
+      
+      notifyListeners();
+    } catch (e) {
+      _setError('Failed to load more content: $e');
+    } finally {
+      _isLoadingMore = false;
+      notifyListeners();
+    }
+  }
+
   /// Load content by type (results vs reports)
-  Future<void> loadContentByType(ContentType contentType, {int? limit}) async {
+  /// Enhanced with pagination support
+  Future<void> loadContentByType(
+    ContentType contentType, {
+    int? limit,
+    bool refresh = false,
+    bool resetPagination = true,
+  }) async {
+    if (resetPagination) {
+      _resetPaginationState();
+    }
+    
     _setLoading(true);
     _clearError();
 
     try {
-      _content = await _repository.getContentByType(contentType, limit: limit);
+      final pageLimit = limit ?? _pageSize;
+      final newContent = await _repository.getContentByType(
+        contentType,
+        limit: pageLimit,
+        lastContentId: _lastContentId,
+      );
+      
+      if (refresh || _content.isEmpty) {
+        _content = newContent;
+        _contentCache.clear();
+      } else {
+        _content.addAll(newContent);
+      }
+      
+      // Update cache
+      for (final content in newContent) {
+        _contentCache[content.id] = content;
+      }
+      
+      // Update pagination state
+      _hasMoreData = newContent.length == pageLimit;
+      if (newContent.isNotEmpty) {
+        _lastContentId = newContent.last.id;
+        _currentPage++;
+      }
+      
       notifyListeners();
     } catch (e) {
       _setError('Failed to load content by type: $e');
@@ -261,5 +398,92 @@ class HealthDataProvider extends ChangeNotifier {
 
   void _clearError() {
     _error = null;
+  }
+
+  /// Reset pagination state for fresh loading
+  void _resetPaginationState() {
+    _currentPage = 0;
+    _lastContentId = null;
+    _hasMoreData = true;
+    _isLoadingMore = false;
+  }
+
+  /// Set page size for pagination (useful for performance tuning)
+  void setPageSize(int size) {
+    _pageSize = size;
+  }
+
+  /// Check if content is cached and fresh
+  bool _isContentCached(String contentId) {
+    if (!_contentCache.containsKey(contentId)) return false;
+    
+    final cacheAge = _lastCacheRefresh != null 
+        ? DateTime.now().difference(_lastCacheRefresh!)
+        : Duration(hours: 1);
+    
+    // Cache is considered fresh for 30 minutes
+    return cacheAge.inMinutes < 30;
+  }
+
+  /// Get content from cache if available
+  SerenyaContent? getCachedContent(String contentId) {
+    if (_isContentCached(contentId)) {
+      return _contentCache[contentId];
+    }
+    return null;
+  }
+
+  /// Preload next batch in background
+  /// This is triggered when user scrolls to 80% of current content
+  Future<void> preloadNextBatch({ContentType? contentType}) async {
+    if (_isLoadingMore || !_hasMoreData) return;
+    
+    // Perform background loading without UI indicators
+    try {
+      List<SerenyaContent> newContent;
+      if (contentType != null) {
+        newContent = await _repository.getContentByType(
+          contentType,
+          limit: _pageSize,
+          lastContentId: _lastContentId,
+        );
+      } else {
+        newContent = await _repository.getAllContent(
+          limit: _pageSize,
+          lastContentId: _lastContentId,
+        );
+      }
+      
+      // Pre-cache the content but don't add to main list yet
+      for (final content in newContent) {
+        _contentCache[content.id] = content;
+      }
+      
+      // Update pagination state quietly
+      if (newContent.isNotEmpty) {
+        // Store preloaded data temporarily
+        _preloadedContent.addAll(newContent);
+      }
+    } catch (e) {
+      // Silent failure for preloading - user won't see this
+      debugPrint('Preload failed: $e');
+    }
+  }
+
+  /// Apply preloaded content to main list
+  void applyPreloadedContent() {
+    if (_preloadedContent.isNotEmpty) {
+      _content.addAll(_preloadedContent);
+      
+      // Update pagination state
+      _hasMoreData = _preloadedContent.length == _pageSize;
+      if (_preloadedContent.isNotEmpty) {
+        _lastContentId = _preloadedContent.last.id;
+        _currentPage++;
+      }
+      
+      _preloadedContent.clear();
+      notifyListeners();
+    }
   }
 }

@@ -13,12 +13,42 @@ import 'encrypted_database_service.dart';
 /// - user_preferences: UI and app preferences (unencrypted)
 class HealthDataRepository {
   /// Get all medical content (results and reports) in timeline order
-  Future<List<SerenyaContent>> getAllContent({int? limit}) async {
+  /// Enhanced with pagination support for infinite scroll
+  Future<List<SerenyaContent>> getAllContent({
+    int? limit,
+    int? offset,
+    String? lastContentId,
+  }) async {
     final db = await EncryptedDatabaseService.database;
+    
+    List<Object?> whereArgs = [];
+    String? whereClause;
+    
+    // Use cursor-based pagination if lastContentId is provided (more efficient)
+    if (lastContentId != null) {
+      // Get the created_at timestamp of the last content for cursor pagination
+      final lastContentResults = await db.query(
+        'serenya_content',
+        columns: ['created_at'],
+        where: 'id = ?',
+        whereArgs: [lastContentId],
+        limit: 1,
+      );
+      
+      if (lastContentResults.isNotEmpty) {
+        final lastCreatedAt = lastContentResults.first['created_at'] as String;
+        whereClause = 'created_at < ?';
+        whereArgs.add(lastCreatedAt);
+      }
+    }
+    
     final results = await db.query(
       'serenya_content',
+      where: whereClause,
+      whereArgs: whereArgs.isNotEmpty ? whereArgs : null,
       orderBy: 'created_at DESC',
       limit: limit,
+      offset: offset,
     );
     
     final List<SerenyaContent> content = [];
@@ -45,14 +75,42 @@ class HealthDataRepository {
   }
 
   /// Get content by type (results vs reports)
-  Future<List<SerenyaContent>> getContentByType(ContentType contentType, {int? limit}) async {
+  /// Enhanced with pagination support for infinite scroll
+  Future<List<SerenyaContent>> getContentByType(
+    ContentType contentType, {
+    int? limit,
+    int? offset,
+    String? lastContentId,
+  }) async {
     final db = await EncryptedDatabaseService.database;
+    
+    List<Object?> whereArgs = [contentType.value];
+    String whereClause = 'content_type = ?';
+    
+    // Use cursor-based pagination if lastContentId is provided
+    if (lastContentId != null) {
+      final lastContentResults = await db.query(
+        'serenya_content',
+        columns: ['created_at'],
+        where: 'id = ?',
+        whereArgs: [lastContentId],
+        limit: 1,
+      );
+      
+      if (lastContentResults.isNotEmpty) {
+        final lastCreatedAt = lastContentResults.first['created_at'] as String;
+        whereClause = 'content_type = ? AND created_at < ?';
+        whereArgs.add(lastCreatedAt);
+      }
+    }
+    
     final results = await db.query(
       'serenya_content',
-      where: 'content_type = ?',
-      whereArgs: [contentType.value],
+      where: whereClause,
+      whereArgs: whereArgs,
       orderBy: 'created_at DESC',
       limit: limit,
+      offset: offset,
     );
     
     final List<SerenyaContent> content = [];
@@ -60,6 +118,32 @@ class HealthDataRepository {
       content.add(await SerenyaContent.fromDatabaseJson(result));
     }
     return content;
+  }
+
+  /// Get total count of content for pagination calculations
+  Future<int> getContentCount({ContentType? contentType}) async {
+    final db = await EncryptedDatabaseService.database;
+    
+    String query = 'SELECT COUNT(*) as count FROM serenya_content';
+    List<Object?> whereArgs = [];
+    
+    if (contentType != null) {
+      query += ' WHERE content_type = ?';
+      whereArgs.add(contentType.value);
+    }
+    
+    final result = await db.rawQuery(query, whereArgs.isNotEmpty ? whereArgs : null);
+    return result.first['count'] as int;
+  }
+
+  /// Check if there are more items available for pagination
+  Future<bool> hasMoreContent({
+    ContentType? contentType,
+    String? lastContentId,
+    int currentCount = 0,
+  }) async {
+    final totalCount = await getContentCount(contentType: contentType);
+    return currentCount < totalCount;
   }
 
   /// Insert new medical content
