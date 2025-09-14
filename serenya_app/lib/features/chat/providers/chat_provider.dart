@@ -26,6 +26,12 @@ class ChatProvider extends ChangeNotifier {
   List<MetricOption> _availableMetrics = [];
   bool _isLoadingMetrics = false;
 
+  // Chat prompts state
+  List<ChatPrompt> _availableChatPrompts = [];
+  bool _isLoadingChatPrompts = false;
+  DateTime? _chatPromptsLoadedAt;
+  String? _chatPromptsContentType;
+
   // Resource tracking for cleanup
   final Set<String> _activeMessageIds = <String>{};
 
@@ -46,6 +52,8 @@ class ChatProvider extends ChangeNotifier {
   PromptLevel get promptLevel => _promptLevel;
   List<MetricOption> get availableMetrics => List.unmodifiable(_availableMetrics);
   bool get isLoadingMetrics => _isLoadingMetrics;
+  List<ChatPrompt> get availableChatPrompts => List.unmodifiable(_availableChatPrompts);
+  bool get isLoadingChatPrompts => _isLoadingChatPrompts;
 
   /// Load chat history for a specific content item
   Future<void> loadConversation(String contentId) async {
@@ -63,9 +71,10 @@ class ChatProvider extends ChangeNotifier {
       notifyListeners();
 
       // Check if we need to fetch from server
+      // Note: Removed message limit as per CTO recommendation - user confirmed they don't expect long conversations
       final serverResult = await _chatApi.getConversation(
         conversationId: contentId,
-        messageLimit: 50,
+        // messageLimit: removed - no artificial limits on chat messages
       );
 
       if (serverResult.data != null) {
@@ -187,6 +196,40 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Load chat prompts for content type with 24-hour caching
+  Future<void> loadChatPrompts(String contentType) async {
+    // Check if we have cached prompts for this content type (24-hour TTL)
+    final now = DateTime.now();
+    if (_chatPromptsContentType == contentType && 
+        _chatPromptsLoadedAt != null &&
+        now.difference(_chatPromptsLoadedAt!).inHours < 24 &&
+        _availableChatPrompts.isNotEmpty) {
+      return; // Use cached prompts
+    }
+
+    if (_isLoadingChatPrompts) return;
+    
+    _isLoadingChatPrompts = true;
+    notifyListeners();
+
+    try {
+      final result = await _chatApi.getChatPrompts(contentType: contentType);
+      
+      if (result.success && result.data != null) {
+        _availableChatPrompts = result.data!.prompts;
+        _chatPromptsContentType = contentType;
+        _chatPromptsLoadedAt = now;
+      } else {
+        _error = 'Failed to load chat prompts: ${result.error ?? 'Unknown error'}';
+      }
+    } catch (e) {
+      _error = 'Failed to load chat prompts: $e';
+    } finally {
+      _isLoadingChatPrompts = false;
+      notifyListeners();
+    }
+  }
+
   /// Handle polling completion (called by polling service)
   Future<void> onPollingComplete(String messageId, dynamic result) async {
     try {
@@ -236,6 +279,10 @@ class ChatProvider extends ChangeNotifier {
     _promptLevel = PromptLevel.main;
     _availableMetrics.clear();
     _isLoadingMetrics = false;
+    _availableChatPrompts.clear();
+    _isLoadingChatPrompts = false;
+    _chatPromptsLoadedAt = null;
+    _chatPromptsContentType = null;
     _activeMessageIds.clear();
     notifyListeners();
   }
@@ -253,6 +300,7 @@ class ChatProvider extends ChangeNotifier {
       // Clear all state
       _messages.clear();
       _availableMetrics.clear();
+      _availableChatPrompts.clear();
       _currentContentId = null;
       
       if (kDebugMode) {

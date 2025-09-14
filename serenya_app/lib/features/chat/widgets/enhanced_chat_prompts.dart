@@ -7,11 +7,13 @@ import '../../../core/constants/design_tokens.dart';
 /// Enhanced chat prompts widget supporting two-level prompt system
 class EnhancedChatPromptsBottomSheet extends StatelessWidget {
   final String contentId;
+  final String contentType;
   final VoidCallback onClose;
 
   const EnhancedChatPromptsBottomSheet({
     Key? key,
     required this.contentId,
+    required this.contentType,
     required this.onClose,
   }) : super(key: key);
 
@@ -19,6 +21,11 @@ class EnhancedChatPromptsBottomSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<ChatProvider>(
       builder: (context, chatProvider, child) {
+        // Load chat prompts for this content type
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          chatProvider.loadChatPrompts(contentType);
+        });
+
         return Container(
           decoration: const BoxDecoration(
             color: HealthcareColors.serenyaWhite,
@@ -97,39 +104,78 @@ class EnhancedChatPromptsBottomSheet extends StatelessWidget {
   }
 
   Widget _buildMainPrompts(BuildContext context, ChatProvider chatProvider) {
-    final mainPrompts = [
-      ChatPromptOption(
-        title: 'Explain my results in simple terms',
-        subtitle: 'Get a clear overview of your test results',
-        icon: Icons.lightbulb_outline,
-        promptText: 'Can you explain my test results in simple, easy-to-understand terms?',
-      ),
-      ChatPromptOption(
-        title: 'What should I discuss with my doctor?',
-        subtitle: 'Prepare for your next appointment',
-        icon: Icons.medical_services_outlined,
-        promptText: 'What key points should I discuss with my doctor about these results?',
-      ),
-      ChatPromptOption(
-        title: 'Are there any concerning values?',
-        subtitle: 'Identify values that need attention',
-        icon: Icons.warning_amber_outlined,
-        promptText: 'Are there any values in my results that I should be concerned about?',
-      ),
-      ChatPromptOption(
-        title: 'Ask about specific metrics',
-        subtitle: 'Get detailed information about individual test values',
-        icon: Icons.analytics_outlined,
-        onTap: () => chatProvider.loadMetrics(contentId),
-        isMetricSelector: true,
-      ),
-      ChatPromptOption(
-        title: 'How do these compare to normal ranges?',
-        subtitle: 'Understand if your values are within expected ranges',
-        icon: Icons.compare_arrows_outlined,
-        promptText: 'How do my test values compare to the normal reference ranges?',
-      ),
-    ];
+    // Show loading state while prompts are being loaded
+    if (chatProvider.isLoadingChatPrompts) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(HealthcareSpacing.xl),
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(HealthcareColors.serenyaBluePrimary),
+          ),
+        ),
+      );
+    }
+
+    // Use dynamic prompts from API if available, otherwise fallback to hardcoded
+    List<ChatPromptOption> mainPrompts;
+    
+    if (chatProvider.availableChatPrompts.isNotEmpty) {
+      // Convert API prompts to ChatPromptOption objects
+      mainPrompts = chatProvider.availableChatPrompts.map((chatPrompt) {
+        return ChatPromptOption(
+          title: _getCategoryTitle(chatPrompt.category),
+          subtitle: _getCategorySubtitle(chatPrompt.category),
+          icon: _getCategoryIcon(chatPrompt.category),
+          promptText: chatPrompt.promptText,
+        );
+      }).toList();
+      
+      // Add metrics selector if this is results content
+      if (contentType == 'results') {
+        mainPrompts.add(ChatPromptOption(
+          title: 'Ask about specific metrics',
+          subtitle: 'Get detailed information about individual test values',
+          icon: Icons.analytics_outlined,
+          onTap: () => chatProvider.loadMetrics(contentId),
+          isMetricSelector: true,
+        ));
+      }
+    } else {
+      // Fallback to hardcoded prompts
+      mainPrompts = [
+        ChatPromptOption(
+          title: 'Explain my ${contentType == 'report' ? 'report' : 'results'} in simple terms',
+          subtitle: 'Get a clear overview of your ${contentType == 'report' ? 'report' : 'test results'}',
+          icon: Icons.lightbulb_outline,
+          promptText: 'Can you explain my ${contentType == 'report' ? 'report' : 'test results'} in simple, easy-to-understand terms?',
+        ),
+        ChatPromptOption(
+          title: 'What should I discuss with my doctor?',
+          subtitle: 'Prepare for your next appointment',
+          icon: Icons.medical_services_outlined,
+          promptText: 'What key points should I discuss with my doctor about these ${contentType == 'report' ? 'findings' : 'results'}?',
+        ),
+        ChatPromptOption(
+          title: 'Are there any concerning values?',
+          subtitle: 'Identify values that need attention',
+          icon: Icons.warning_amber_outlined,
+          promptText: 'Are there any values in my ${contentType == 'report' ? 'report' : 'results'} that I should be concerned about?',
+        ),
+        if (contentType == 'results') ChatPromptOption(
+          title: 'Ask about specific metrics',
+          subtitle: 'Get detailed information about individual test values',
+          icon: Icons.analytics_outlined,
+          onTap: () => chatProvider.loadMetrics(contentId),
+          isMetricSelector: true,
+        ),
+        ChatPromptOption(
+          title: 'How do these compare to normal ranges?',
+          subtitle: 'Understand if your values are within expected ranges',
+          icon: Icons.compare_arrows_outlined,
+          promptText: 'How do my ${contentType == 'report' ? 'report values' : 'test values'} compare to the normal reference ranges?',
+        ),
+      ];
+    }
 
     return ListView.separated(
       padding: const EdgeInsets.all(HealthcareSpacing.md),
@@ -239,7 +285,7 @@ class EnhancedChatPromptsBottomSheet extends StatelessWidget {
       color: HealthcareColors.backgroundSecondary,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
+        side: const BorderSide(
           color: HealthcareColors.borderColor,
           width: 1,
         ),
@@ -326,7 +372,7 @@ class EnhancedChatPromptsBottomSheet extends StatelessWidget {
       color: HealthcareColors.backgroundSecondary,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
+        side: const BorderSide(
           color: HealthcareColors.borderColor,
           width: 1,
         ),
@@ -401,6 +447,67 @@ class EnhancedChatPromptsBottomSheet extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Map category to display title
+  String _getCategoryTitle(String category) {
+    switch (category.toLowerCase()) {
+      case 'explanation':
+        return contentType == 'report' ? 'Explain my report in simple terms' : 'Explain my results in simple terms';
+      case 'doctor_discussion':
+        return 'What should I discuss with my doctor?';
+      case 'concerning_values':
+        return 'Are there any concerning values?';
+      case 'normal_ranges':
+        return 'How do these compare to normal ranges?';
+      case 'next_steps':
+        return 'What are my next steps?';
+      case 'lifestyle':
+        return 'Lifestyle recommendations';
+      default:
+        return category.replaceAll('_', ' ').split(' ')
+            .map((word) => word[0].toUpperCase() + word.substring(1)).join(' ');
+    }
+  }
+
+  /// Map category to display subtitle
+  String _getCategorySubtitle(String category) {
+    switch (category.toLowerCase()) {
+      case 'explanation':
+        return contentType == 'report' ? 'Get a clear overview of your report' : 'Get a clear overview of your test results';
+      case 'doctor_discussion':
+        return 'Prepare for your next appointment';
+      case 'concerning_values':
+        return 'Identify values that need attention';
+      case 'normal_ranges':
+        return 'Understand if your values are within expected ranges';
+      case 'next_steps':
+        return 'Learn about recommended follow-up actions';
+      case 'lifestyle':
+        return 'Get personalized health recommendations';
+      default:
+        return 'Get more information about this topic';
+    }
+  }
+
+  /// Map category to display icon
+  IconData _getCategoryIcon(String category) {
+    switch (category.toLowerCase()) {
+      case 'explanation':
+        return Icons.lightbulb_outline;
+      case 'doctor_discussion':
+        return Icons.medical_services_outlined;
+      case 'concerning_values':
+        return Icons.warning_amber_outlined;
+      case 'normal_ranges':
+        return Icons.compare_arrows_outlined;
+      case 'next_steps':
+        return Icons.forward_outlined;
+      case 'lifestyle':
+        return Icons.favorite_outline;
+      default:
+        return Icons.help_outline;
+    }
   }
 }
 

@@ -14,6 +14,8 @@ import '../core/database/health_data_repository.dart';
 import '../services/unified_polling_service.dart';
 import '../features/chat/providers/chat_provider.dart';
 import '../features/chat/widgets/enhanced_chat_prompts.dart';
+import '../services/pdf_generation_service.dart';
+import '../services/exceptions/pdf_exceptions.dart';
 
 /// Updated Results Screen with integrated chat functionality
 /// Addresses CTO Fix #3: Complete results screen integration
@@ -26,7 +28,7 @@ class ResultsScreen extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  _ResultsScreenState createState() => _ResultsScreenState();
+  State<ResultsScreen> createState() => _ResultsScreenState();
 }
 
 class _ResultsScreenState extends State<ResultsScreen>
@@ -96,7 +98,7 @@ class _ResultsScreenState extends State<ResultsScreen>
         backgroundColor: HealthcareColors.backgroundPrimary,
         appBar: AppBar(
           title: Text(
-            'Results Analysis',
+            _selectedDocument!.contentType == ContentType.report ? 'Report' : 'Result',
             style: HealthcareTypography.headingH3.copyWith(
               color: HealthcareColors.serenyaWhite,
             ),
@@ -218,7 +220,7 @@ class _ResultsScreenState extends State<ResultsScreen>
           const SizedBox(height: HealthcareSpacing.lg),
 
           // AI Analysis section
-          if (_selectedDocument!.aiConfidenceScore != null) ...[
+          if (_selectedDocument!.confidenceScore > 0) ...[
             Text(
               'AI Analysis',
               style: HealthcareTypography.headingH3.copyWith(
@@ -228,8 +230,8 @@ class _ResultsScreenState extends State<ResultsScreen>
             const SizedBox(height: HealthcareSpacing.md),
             
             ConfidenceCard(
-              confidenceScore: _selectedDocument!.aiConfidenceScore!,
-              message: _selectedDocument!.interpretationText ?? 'Analysis complete.',
+              confidenceScore: _selectedDocument!.confidenceScore,
+              message: _selectedDocument!.summary ?? 'Analysis complete.',
               onConsultDoctor: () => _showDoctorConsultationInfo(),
             ),
             const SizedBox(height: HealthcareSpacing.lg),
@@ -342,8 +344,8 @@ class _ResultsScreenState extends State<ResultsScreen>
           ),
           const SizedBox(height: HealthcareSpacing.md),
           
-          if (_selectedDocument!.aiConfidenceScore != null && 
-              _selectedDocument!.aiConfidenceScore! < AppConstants.moderateConfidenceThreshold)
+          if (_selectedDocument!.confidenceScore > 0 && 
+              _selectedDocument!.confidenceScore < AppConstants.moderateConfidenceThreshold)
             const MedicalDisclaimer(
               type: DisclaimerType.consultation,
               isCompact: false,
@@ -611,12 +613,87 @@ class _ResultsScreenState extends State<ResultsScreen>
       backgroundColor: Colors.transparent,
       builder: (context) => EnhancedChatPromptsBottomSheet(
         contentId: _selectedDocument!.id,
+        contentType: _selectedDocument!.contentType.name,
         onClose: () => Navigator.of(context).pop(),
       ),
     );
   }
   
   void _shareResults() async {
+    if (_selectedDocument == null) return;
+    
+    // Show sharing options dialog
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: HealthcareColors.surfaceCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(HealthcareSpacing.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Share Results',
+              style: HealthcareTypography.headingH4.copyWith(
+                color: HealthcareColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: HealthcareSpacing.lg),
+            
+            // Text sharing option
+            ListTile(
+              leading: const Icon(Icons.text_fields, color: HealthcareColors.serenyaBluePrimary),
+              title: Text(
+                'Share as Text',
+                style: HealthcareTypography.bodyMedium.copyWith(
+                  color: HealthcareColors.textPrimary,
+                ),
+              ),
+              subtitle: Text(
+                'Simple text format for quick sharing',
+                style: HealthcareTypography.bodySmall.copyWith(
+                  color: HealthcareColors.textSecondary,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _shareAsText();
+              },
+            ),
+            
+            const Divider(color: HealthcareColors.surfaceBorder),
+            
+            // PDF sharing option
+            ListTile(
+              leading: const Icon(Icons.picture_as_pdf, color: HealthcareColors.serenyaGreenPrimary),
+              title: Text(
+                'Share as PDF',
+                style: HealthcareTypography.bodyMedium.copyWith(
+                  color: HealthcareColors.textPrimary,
+                ),
+              ),
+              subtitle: Text(
+                'Formatted PDF with analysis and chat history',
+                style: HealthcareTypography.bodySmall.copyWith(
+                  color: HealthcareColors.textSecondary,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _shareAsPdf();
+              },
+            ),
+            
+            const SizedBox(height: HealthcareSpacing.sm),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  void _shareAsText() async {
     if (_selectedDocument == null) return;
     
     try {
@@ -626,14 +703,181 @@ class _ResultsScreenState extends State<ResultsScreen>
         subject: 'Health Analysis Results - ${_selectedDocument!.title}',
       );
     } catch (e) {
+      _showError('Error sharing as text: $e');
+    }
+  }
+  
+  void _shareAsPdf() async {
+    if (_selectedDocument == null) return;
+    
+    // Track if we're showing loading
+    bool isShowingLoading = false;
+    File? generatedFile;
+    
+    try {
+      // Show loading indicator
       if (mounted) {
+        isShowingLoading = true;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error sharing results: $e'),
-            backgroundColor: HealthcareColors.error,
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Text('Generating PDF...'),
+              ],
+            ),
+            backgroundColor: HealthcareColors.serenyaBluePrimary,
+            duration: Duration(seconds: 30), // Longer duration to account for generation time
           ),
         );
       }
+      
+      // Generate PDF with comprehensive error handling
+      try {
+        generatedFile = await PdfGenerationService.generateResultsPdf(
+          content: _selectedDocument!,
+          chatMessages: _chatProvider.messages,
+          interpretations: _interpretations,
+        );
+      } on PdfException catch (pdfError) {
+        // Handle our custom PDF exceptions with user-friendly messages
+        _showUserFriendlyError(pdfError);
+        return;
+      } catch (e) {
+        // Handle any unexpected errors during PDF generation
+        _showUserFriendlyError(UnknownPdfException(
+          technicalDetails: 'Unexpected PDF generation error: $e',
+        ));
+        return;
+      }
+      
+      // Update loading message for sharing phase
+      if (mounted && isShowingLoading) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Text('Preparing to share...'),
+              ],
+            ),
+            backgroundColor: HealthcareColors.serenyaBluePrimary,
+            duration: Duration(seconds: 10),
+          ),
+        );
+      }
+      
+      // Share PDF file with error handling
+      try {
+        await Share.shareXFiles(
+          [XFile(generatedFile.path)],
+          text: 'Serenya Health Analysis Results',
+          subject: 'Health Analysis Results - ${_selectedDocument!.title}',
+        );
+        
+        // Show success message
+        if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 12),
+                  Text('PDF shared successfully'),
+                ],
+              ),
+              backgroundColor: HealthcareColors.successPrimary,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        
+      } catch (shareError) {
+        // Handle sharing errors separately
+        _showUserFriendlyError(PdfSharingException(
+          technicalDetails: 'Share operation failed: $shareError',
+        ));
+        return;
+      }
+      
+    } finally {
+      // GUARANTEED CLEANUP - Always hide loading indicator
+      if (mounted && isShowingLoading) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      }
+      
+      // The generated file will be cleaned up by the app-level cleanup service
+      // We don't clean it up immediately here since sharing might still be in progress
+    }
+  }
+  
+  /// Show user-friendly error messages for PDF operations
+  /// 
+  /// This method ensures that users never see technical details or stack traces
+  /// All errors are converted to user-friendly messages as per CTO security hardening
+  void _showUserFriendlyError(PdfException error) {
+    if (!mounted) return;
+    
+    // Always hide loading indicator first
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    
+    // Show user-friendly error message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                error.userMessage, // Only show user-friendly message
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: HealthcareColors.error,
+        duration: const Duration(seconds: 5),
+        action: error.isRetryable
+            ? SnackBarAction(
+                label: 'Retry',
+                textColor: Colors.white,
+                onPressed: () => _shareAsPdf(), // Retry the operation
+              )
+            : null,
+      ),
+    );
+    
+    // Log technical details for debugging (never shown to user)
+    print('PDF Error [${error.errorCode}]: ${error.technicalDetails}');
+  }
+  
+  void _showError(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: HealthcareColors.error,
+        ),
+      );
     }
   }
   
@@ -646,8 +890,8 @@ class _ResultsScreenState extends State<ResultsScreen>
     buffer.writeln('Document: ${_selectedDocument!.title}');
     buffer.writeln('Date: ${_formatDate(_selectedDocument!.createdAt)}');
     
-    if (_selectedDocument!.aiConfidenceScore != null) {
-      buffer.writeln('AI Confidence: ${(_selectedDocument!.aiConfidenceScore! * 100).toStringAsFixed(1)}%');
+    if (_selectedDocument!.confidenceScore > 0) {
+      buffer.writeln('AI Confidence: ${(_selectedDocument!.confidenceScore * 100).toStringAsFixed(1)}%');
     }
     
     buffer.writeln();

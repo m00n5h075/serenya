@@ -297,6 +297,34 @@ class ChatApi {
     }
   }
 
+  /// GET /chat/prompts?content_type={type}
+  /// Get predefined chat prompts for specific content type
+  Future<ApiResult<ChatPromptsResponse>> getChatPrompts({
+    required String contentType,
+  }) async {
+    try {
+      final response = await _dio.get(
+        '/chat/prompts',
+        queryParameters: {
+          'content_type': contentType,
+        },
+      );
+
+      await _logChatOperation('prompts_fetched', {
+        'content_type': contentType,
+      });
+
+      return ApiResult.success(
+        ChatPromptsResponse.fromJson(response.data),
+        statusCode: response.statusCode,
+      );
+    } on DioException catch (e) {
+      return await _errorHandler.handleDioError(e, 'Get chat prompts');
+    } catch (e) {
+      return ApiResult.failed('Unexpected error getting chat prompts: $e');
+    }
+  }
+
   /// Log chat operation for audit trail
   Future<void> _logChatOperation(String operation, Map<String, dynamic> context) async {
     await LocalAuditLogger.logSecurityEvent(
@@ -484,5 +512,71 @@ class MessageListResponse {
       hasMore: json['has_more'] as bool,
       totalCount: json['total_count'] as int,
     );
+  }
+}
+
+/// Chat prompts response model
+class ChatPromptsResponse {
+  final bool success;
+  final String contentType;
+  final List<ChatPrompt> prompts;
+  final int ttlSeconds;
+  final DateTime generatedAt;
+
+  ChatPromptsResponse({
+    required this.success,
+    required this.contentType,
+    required this.prompts,
+    required this.ttlSeconds,
+    required this.generatedAt,
+  });
+
+  factory ChatPromptsResponse.fromJson(Map<String, dynamic> json) {
+    return ChatPromptsResponse(
+      success: json['success'] as bool,
+      contentType: json['content_type'] as String,
+      prompts: (json['prompts'] as List)
+          .map((item) => ChatPrompt.fromJson(item))
+          .toList(),
+      ttlSeconds: json['ttl_seconds'] as int,
+      generatedAt: DateTime.parse(json['generated_at'] as String),
+    );
+  }
+}
+
+/// Chat prompt model
+class ChatPrompt {
+  final String id;
+  final String contentType;
+  final String category;
+  final String promptText;
+  final int displayOrder;
+
+  ChatPrompt({
+    required this.id,
+    required this.contentType,
+    required this.category,
+    required this.promptText,
+    required this.displayOrder,
+  });
+
+  factory ChatPrompt.fromJson(Map<String, dynamic> json) {
+    return ChatPrompt(
+      id: json['id'] as String,
+      contentType: json['content_type'] as String,
+      category: json['category'] as String,
+      promptText: json['prompt_text'] as String,
+      displayOrder: json['display_order'] as int,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'content_type': contentType,
+      'category': category,
+      'prompt_text': promptText,
+      'display_order': displayOrder,
+    };
   }
 }

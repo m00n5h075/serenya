@@ -9,7 +9,7 @@ const { auditService } = require('../shared/audit-service');
 
 /**
  * Chat Prompts API - Retrieve predefined conversation starters
- * GET /api/chat/prompts?content_type=results|reports
+ * GET /api/chat/prompts?content_type=result|report
  */
 exports.handler = async (event) => {
   try {
@@ -23,11 +23,11 @@ exports.handler = async (event) => {
     const contentType = event.queryStringParameters?.content_type;
     
     if (!contentType) {
-      return createErrorResponse(400, 'MISSING_CONTENT_TYPE', 'Missing content_type parameter', 'Please specify content_type as "results" or "reports"');
+      return createErrorResponse(400, 'MISSING_CONTENT_TYPE', 'Missing content_type parameter', 'Please specify content_type as "result" or "report"');
     }
 
-    if (!['results', 'reports'].includes(contentType)) {
-      return createErrorResponse(400, 'INVALID_CONTENT_TYPE', 'Invalid content_type parameter', 'content_type must be "results" or "reports"');
+    if (!['result', 'report'].includes(contentType)) {
+      return createErrorResponse(400, 'INVALID_CONTENT_TYPE', 'Invalid content_type parameter', 'content_type must be "result" or "report"');
     }
 
     // Enhanced audit logging
