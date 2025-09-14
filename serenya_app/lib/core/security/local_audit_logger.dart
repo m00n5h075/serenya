@@ -457,16 +457,8 @@ class LocalAuditLogger {
 
     return {
       'total_events': totalEvents,
-      'events_by_category': Map.fromIterable(
-        categoryResult,
-        key: (item) => item['category'],
-        value: (item) => item['count'],
-      ),
-      'events_by_severity': Map.fromIterable(
-        severityResult,
-        key: (item) => item['severity'],
-        value: (item) => item['count'],
-      ),
+      'events_by_category': { for (var item in categoryResult) item['category'] : item['count'] },
+      'events_by_severity': { for (var item in severityResult) item['severity'] : item['count'] },
       'query_period': {
         'start_date': startDate?.toIso8601String(),
         'end_date': endDate?.toIso8601String(),

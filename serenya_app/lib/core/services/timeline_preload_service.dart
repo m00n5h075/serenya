@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../models/local_database_models.dart';
 import '../providers/health_data_provider.dart';
@@ -54,7 +53,7 @@ class TimelinePreloadService {
     // Cancel any pending preload
     _preloadTimer?.cancel();
     
-    _preloadTimer = Timer(Duration(milliseconds: 300), () async {
+    _preloadTimer = Timer(const Duration(milliseconds: 300), () async {
       await _executePreload(contentType, scrollMetrics);
     });
   }
@@ -89,7 +88,7 @@ class TimelinePreloadService {
       // Adjust threshold based on performance
       _adjustThresholdBasedOnPerformance(preloadTime);
       
-      debugPrint('Preload completed: ${contentLoaded} items in ${preloadTime.inMilliseconds}ms');
+      debugPrint('Preload completed: $contentLoaded items in ${preloadTime.inMilliseconds}ms');
       
     } catch (e) {
       stopwatch.stop();

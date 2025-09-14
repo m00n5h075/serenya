@@ -30,9 +30,13 @@ class HealthcareColors {
   
   // Semantic Colors
   static const Color success = Color(0xFF4CAF50);
+  static const Color successPrimary = Color(0xFF4CAF50); // Alias for success
+  static const Color successLight = Color(0xFFE8F5E8);
   static const Color warning = Color(0xFFFF9800);
   static const Color error = Color(0xFFFF5252);
   static const Color info = Color(0xFF2196F3);
+  static const Color infoPrimary = Color(0xFF2196F3); // Alias for info
+  static const Color infoLight = Color(0xFFE3F2FD);
   
   // Confidence Scoring Colors (Traffic Light System)
   static const Color confidenceLow = Color(0xFFFF5252);      // Red
@@ -58,6 +62,7 @@ class HealthcareColors {
   static const Color surfaceElevated = Color(0xFFFFFFFF);
   static const Color surfaceCard = Color(0xFFF8F9FA);
   static const Color surfaceBorder = Color(0xFFE0E0E0);
+  static const Color borderColor = Color(0xFFE0E0E0); // Alias for surfaceBorder
 }
 
 class HealthcareTypography {

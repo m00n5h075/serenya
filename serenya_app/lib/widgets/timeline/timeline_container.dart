@@ -39,7 +39,7 @@ class _TimelineContainerState extends State<TimelineContainer> {
   late final ScrollController _scrollController;
   late final TimelinePreloadService _preloadService;
   late final TimelinePerformanceMonitor _performanceMonitor;
-  bool _hasTriggeredPreload = false;
+  // Preload tracking managed by TimelinePreloadService
 
   @override
   void initState() {
@@ -165,8 +165,8 @@ class _TimelineContainerState extends State<TimelineContainer> {
     return RefreshIndicator(
       onRefresh: _loadInitialContent,
       child: SingleChildScrollView(
-        physics: AlwaysScrollableScrollPhysics(),
-        child: Container(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: SizedBox(
           height: 400,
           child: Center(
             child: Column(
@@ -177,7 +177,7 @@ class _TimelineContainerState extends State<TimelineContainer> {
                   size: 64, 
                   color: Colors.red[400],
                 ),
-                SizedBox(height: AppConstants.defaultPadding),
+                const SizedBox(height: AppConstants.defaultPadding),
                 Text(
                   'Unable to load documents',
                   style: TextStyle(
@@ -186,9 +186,9 @@ class _TimelineContainerState extends State<TimelineContainer> {
                     color: Colors.grey[800],
                   ),
                 ),
-                SizedBox(height: AppConstants.smallPadding),
+                const SizedBox(height: AppConstants.smallPadding),
                 Container(
-                  constraints: BoxConstraints(maxWidth: 280),
+                  constraints: const BoxConstraints(maxWidth: 280),
                   child: Text(
                     error,
                     style: TextStyle(
@@ -198,11 +198,11 @@ class _TimelineContainerState extends State<TimelineContainer> {
                     textAlign: TextAlign.center,
                   ),
                 ),
-                SizedBox(height: AppConstants.largePadding),
+                const SizedBox(height: AppConstants.largePadding),
                 ElevatedButton.icon(
                   onPressed: _loadInitialContent,
-                  icon: Icon(Icons.refresh),
-                  label: Text('Try Again'),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Try Again'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue[600],
                     foregroundColor: Colors.white,
@@ -221,10 +221,10 @@ class _TimelineContainerState extends State<TimelineContainer> {
     return RefreshIndicator(
       onRefresh: _loadInitialContent,
       child: SingleChildScrollView(
-        physics: AlwaysScrollableScrollPhysics(),
-        child: Container(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: SizedBox(
           height: MediaQuery.of(context).size.height - 200,
-          child: TimelineEmptyState(),
+          child: const TimelineEmptyState(),
         ),
       ),
     );
@@ -233,9 +233,9 @@ class _TimelineContainerState extends State<TimelineContainer> {
   /// Build loading state with skeleton cards
   Widget _buildLoadingState() {
     return Container(
-      color: Color(0xFFF8F9FA),
+      color: const Color(0xFFF8F9FA),
       child: ListView.builder(
-        padding: EdgeInsets.only(
+        padding: const EdgeInsets.only(
           top: 72,
           left: AppConstants.defaultPadding,
           right: AppConstants.defaultPadding,
@@ -244,7 +244,7 @@ class _TimelineContainerState extends State<TimelineContainer> {
         itemCount: 3, // Show 3 loading cards
         itemBuilder: (context, index) {
           return Padding(
-            padding: EdgeInsets.only(bottom: AppConstants.smallPadding),
+            padding: const EdgeInsets.only(bottom: AppConstants.smallPadding),
             child: _buildLoadingCard(),
           );
         },
@@ -257,10 +257,10 @@ class _TimelineContainerState extends State<TimelineContainer> {
     return RefreshIndicator(
       onRefresh: _loadInitialContent,
       child: Container(
-        color: Color(0xFFF8F9FA), // Timeline background from UI specs
+        color: const Color(0xFFF8F9FA), // Timeline background from UI specs
         child: ListView.builder(
           controller: _scrollController,
-          padding: EdgeInsets.only(
+          padding: const EdgeInsets.only(
             top: 72, // Top padding from UI specs
             left: AppConstants.defaultPadding,
             right: AppConstants.defaultPadding,
@@ -276,7 +276,7 @@ class _TimelineContainerState extends State<TimelineContainer> {
 
             final document = documents[index];
             return Padding(
-              padding: EdgeInsets.only(bottom: AppConstants.smallPadding),
+              padding: const EdgeInsets.only(bottom: AppConstants.smallPadding),
               child: _buildOptimizedDocumentCard(document, index),
             );
           },
@@ -304,7 +304,7 @@ class _TimelineContainerState extends State<TimelineContainer> {
   /// Build loading indicator for infinite scroll
   Widget _buildLoadMoreIndicator() {
     return Container(
-      padding: EdgeInsets.all(AppConstants.defaultPadding),
+      padding: const EdgeInsets.all(AppConstants.defaultPadding),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -317,7 +317,7 @@ class _TimelineContainerState extends State<TimelineContainer> {
                 valueColor: AlwaysStoppedAnimation<Color>(Colors.blue[600]!),
               ),
             ),
-            SizedBox(height: AppConstants.smallPadding),
+            const SizedBox(height: AppConstants.smallPadding),
             Text(
               'Loading more...',
               style: TextStyle(
@@ -338,7 +338,7 @@ class _TimelineContainerState extends State<TimelineContainer> {
         borderRadius: BorderRadius.circular(AppConstants.borderRadius),
       ),
       child: Padding(
-        padding: EdgeInsets.all(AppConstants.defaultPadding),
+        padding: const EdgeInsets.all(AppConstants.defaultPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -352,7 +352,7 @@ class _TimelineContainerState extends State<TimelineContainer> {
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
-                SizedBox(width: AppConstants.smallPadding),
+                const SizedBox(width: AppConstants.smallPadding),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -365,7 +365,7 @@ class _TimelineContainerState extends State<TimelineContainer> {
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
-                      SizedBox(height: 4),
+                      const SizedBox(height: 4),
                       Container(
                         width: 100,
                         height: 12,
@@ -387,7 +387,7 @@ class _TimelineContainerState extends State<TimelineContainer> {
                 ),
               ],
             ),
-            SizedBox(height: AppConstants.smallPadding),
+            const SizedBox(height: AppConstants.smallPadding),
             Row(
               children: [
                 Container(
@@ -398,7 +398,7 @@ class _TimelineContainerState extends State<TimelineContainer> {
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
-                Spacer(),
+                const Spacer(),
                 Container(
                   width: 40,
                   height: 16,

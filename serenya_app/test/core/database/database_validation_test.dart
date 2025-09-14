@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:serenya_app/core/database/encrypted_database_service.dart';
 import 'package:serenya_app/models/local_database_models.dart';
 
 /// Database Validation Test - Task 10 Completion Verification

@@ -110,8 +110,14 @@ exports.handler = async (event) => {
     // Transform Bedrock result to legacy format for compatibility
     const aiResult = transformBedrockToLegacyFormat(bedrockResult);
 
-    // Store results using PostgreSQL service
-    await DocumentJobService.storeResults(jobId, aiResult, jobRecord.userId);
+    // Store only non-medical metadata (no medical content stored server-side)
+    await DocumentJobService.storeResultsToS3(jobId, {
+      confidenceScore: aiResult.confidenceScore,
+      aiModelUsed: aiResult.ai_model_used,
+      processingTimeMs: aiResult.processing_time_ms,
+      extractedTextLength: extractedText?.length || 0,
+      textExtractionMethod: jobRecord.fileType === 'pdf' ? 'pdf_text_extraction' : 'image_metadata'
+    }, jobRecord.userId);
 
     // Update job status to completed
     await DocumentJobService.updateJobStatus(jobId, 'completed', {

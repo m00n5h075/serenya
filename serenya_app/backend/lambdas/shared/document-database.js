@@ -51,7 +51,7 @@ const DocumentJobService = {
 
       // Create job record using stored procedure
       const result = await query(`
-        SELECT create_processing_job($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) as job_uuid
+        SELECT create_processing_job($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) as job_uuid
       `, [
         jobId,
         userId,
@@ -61,8 +61,12 @@ const DocumentJobService = {
         fileSize,
         s3Bucket,
         s3Key,
+        fileChecksum,
+        encryptionKeyId,
         userAgent,
-        sourceIp
+        sourceIp,
+        jobData.sessionId,
+        jobData.correlationId
       ]);
 
       const jobUuid = result.rows[0].job_uuid;
@@ -250,9 +254,9 @@ const DocumentJobService = {
   },
 
   /**
-   * Store processing results with encryption
+   * Store processing results in S3 (no database storage per architecture)
    */
-  async storeResults(jobId, results, userId = null) {
+  async storeResultsToS3(jobId, results, userId = null) {
     try {
       // Get job record
       const job = await this.getJob(jobId, userId);
@@ -260,58 +264,31 @@ const DocumentJobService = {
         throw new Error('Job not found');
       }
 
-      // Create encryption context for results
-      const encryptionContext = {
-        userId: job.user_id,
-        jobId: jobId,
-        dataType: 'processing_results'
-      };
-
-      // Encrypt sensitive result data
-      const encryptedResults = await encryptFields({
-        interpretation_text: results.interpretationText,
-        detailed_interpretation: results.detailedInterpretation,
-        medical_flags: JSON.stringify(results.medicalFlags || []),
-        recommendations: JSON.stringify(results.recommendations || []),
-        disclaimers: JSON.stringify(results.disclaimers || []),
-        safety_warnings: JSON.stringify(results.safetyWarnings || [])
-      }, [
-        'interpretation_text',
-        'detailed_interpretation', 
-        'medical_flags',
-        'recommendations',
-        'disclaimers',
-        'safety_warnings'
-      ], process.env.KMS_KEY_ID, encryptionContext);
-
-      // Store results
-      const resultRecord = await query(`
-        INSERT INTO processing_results (
-          job_id, confidence_score, interpretation_text, detailed_interpretation,
-          medical_flags, recommendations, disclaimers, safety_warnings,
-          ai_model_used, ai_processing_time_ms, ai_token_usage, ai_cost_estimate,
-          extracted_text_length, text_extraction_method, text_extraction_confidence,
-          data_classification
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-        RETURNING id
+      // Results are stored in S3 by the processing service
+      // This method is for updating job status with S3 location
+      const s3ResultKey = `results/${job.user_id}/${jobId}/result.json`;
+      
+      // Update job record with S3 result location
+      await query(`
+        UPDATE processing_jobs 
+        SET 
+          s3_result_bucket = $1,
+          s3_result_key = $2,
+          confidence_score = $3,
+          ai_model_used = $4,
+          ai_processing_time_ms = $5,
+          extracted_text_length = $6,
+          text_extraction_method = $7
+        WHERE job_id = $8
       `, [
-        job.id, // Use internal UUID
+        process.env.TEMP_BUCKET_NAME,
+        s3ResultKey,
         results.confidenceScore,
-        encryptedResults.interpretation_text,
-        encryptedResults.detailed_interpretation,
-        encryptedResults.medical_flags,
-        encryptedResults.recommendations,
-        encryptedResults.disclaimers,
-        encryptedResults.safety_warnings,
         results.aiModelUsed || 'claude-3-sonnet-20240229',
         results.processingTimeMs,
-        JSON.stringify(results.tokenUsage || {}),
-        results.costEstimate || 0,
         results.extractedTextLength,
         results.textExtractionMethod,
-        results.textExtractionConfidence,
-        'medical_phi'
+        jobId
       ]);
 
       // Log result storage event
@@ -320,64 +297,50 @@ const DocumentJobService = {
         eventType: 'processing',
         eventSubtype: 'results_stored',
         eventStatus: 'success',
-        eventMessage: 'Processing results stored successfully',
+        eventMessage: 'Processing results stored in S3',
         eventDetails: {
           confidenceScore: results.confidenceScore,
+          s3ResultKey: s3ResultKey,
           flagsCount: (results.medicalFlags || []).length,
           recommendationsCount: (results.recommendations || []).length
         },
         userId: job.user_id
       });
 
-      return resultRecord.rows[0].id;
+      return s3ResultKey;
 
     } catch (error) {
-      throw new Error(`Failed to store results: ${error.message}`);
+      throw new Error(`Failed to store results to S3: ${error.message}`);
     }
   },
 
   /**
-   * Get processing results with decryption
+   * Get S3 location for processing results (client fetches from S3 directly)
    */
-  async getResults(jobId, userId = null) {
+  async getResultsLocation(jobId, userId = null) {
     try {
       const job = await this.getJob(jobId, userId);
       if (!job) {
         throw new Error('Job not found');
       }
 
-      const result = await query(`
-        SELECT * FROM processing_results 
-        WHERE job_id = $1
-      `, [job.id]);
-
-      if (!result.rows[0]) {
-        return null;
+      // Return S3 location for client to fetch results
+      if (job.s3_result_bucket && job.s3_result_key) {
+        return {
+          bucket: job.s3_result_bucket,
+          key: job.s3_result_key,
+          confidenceScore: job.confidence_score,
+          aiModelUsed: job.ai_model_used,
+          processingTimeMs: job.ai_processing_time_ms,
+          extractedTextLength: job.extracted_text_length,
+          textExtractionMethod: job.text_extraction_method
+        };
       }
 
-      const encryptedResults = result.rows[0];
-
-      // Decrypt sensitive fields
-      const decryptedResults = await decryptFields(encryptedResults, [
-        'interpretation_text',
-        'detailed_interpretation',
-        'medical_flags', 
-        'recommendations',
-        'disclaimers',
-        'safety_warnings'
-      ]);
-
-      return {
-        ...decryptedResults,
-        medicalFlags: JSON.parse(decryptedResults.medical_flags || '[]'),
-        recommendations: JSON.parse(decryptedResults.recommendations || '[]'),
-        disclaimers: JSON.parse(decryptedResults.disclaimers || '[]'),
-        safetyWarnings: JSON.parse(decryptedResults.safety_warnings || '[]'),
-        aiTokenUsage: JSON.parse(encryptedResults.ai_token_usage || '{}')
-      };
+      return null;
 
     } catch (error) {
-      throw new Error(`Failed to retrieve results: ${error.message}`);
+      throw new Error(`Failed to get results location: ${error.message}`);
     }
   },
 

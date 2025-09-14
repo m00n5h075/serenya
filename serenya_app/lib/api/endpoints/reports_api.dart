@@ -288,10 +288,14 @@ class ReportsApi {
   String? _extractFileName(Headers headers) {
     final contentDisposition = headers.value('content-disposition');
     if (contentDisposition != null) {
-      final regex = RegExp(r'filename[^;=\n]*=(([\'"]).*?\2|[^;\n]*)');
-      final match = regex.firstMatch(contentDisposition);
-      if (match != null) {
-        return match.group(1)?.replaceAll(RegExp(r'[\'"]'), '');
+      final filenameIndex = contentDisposition.indexOf('filename=');
+      if (filenameIndex != -1) {
+        var filename = contentDisposition.substring(filenameIndex + 9);
+        final semicolonIndex = filename.indexOf(';');
+        if (semicolonIndex != -1) {
+          filename = filename.substring(0, semicolonIndex);
+        }
+        return filename.replaceAll('"', '').replaceAll("'", '').trim();
       }
     }
     return null;

@@ -1,20 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import '../../../lib/api/offline/connectivity_service.dart';
+import 'package:serenya_app/api/offline/connectivity_service.dart';
 
 // Generate mocks
 @GenerateMocks([Connectivity])
-import 'connectivity_service_test.mocks.dart';
 
 void main() {
   group('ConnectivityService', () {
     late ConnectivityService connectivityService;
-    late MockConnectivity mockConnectivity;
 
     setUp(() {
-      mockConnectivity = MockConnectivity();
       connectivityService = ConnectivityService();
       
       // Replace the connectivity instance with mock
@@ -102,7 +98,7 @@ void main() {
 
     group('Network Quality', () {
       test('should have correct quality enum values', () {
-        final qualities = NetworkQuality.values;
+        const qualities = NetworkQuality.values;
         
         expect(qualities, contains(NetworkQuality.excellent));
         expect(qualities, contains(NetworkQuality.good));
@@ -147,7 +143,7 @@ void main() {
     group('Connection Testing', () {
       test('should test connectivity with timeout', () async {
         // Test the method exists and handles timeouts properly
-        final timeout = const Duration(seconds: 1);
+        const timeout = Duration(seconds: 1);
         
         try {
           final result = await connectivityService.testConnectivity(timeout: timeout);
@@ -160,7 +156,7 @@ void main() {
 
       test('should wait for connection with optional timeout', () async {
         // Test the wait functionality
-        final timeout = const Duration(milliseconds: 100);
+        const timeout = Duration(milliseconds: 100);
         
         try {
           final result = await connectivityService.waitForConnection(timeout: timeout);
@@ -207,7 +203,7 @@ void main() {
 
   group('ConnectivityStatus enum', () {
     test('should have expected values', () {
-      final values = ConnectivityStatus.values;
+      const values = ConnectivityStatus.values;
       
       expect(values, contains(ConnectivityStatus.connected));
       expect(values, contains(ConnectivityStatus.disconnected));
@@ -218,7 +214,7 @@ void main() {
 
   group('NetworkQuality enum', () {
     test('should have expected values', () {
-      final values = NetworkQuality.values;
+      const values = NetworkQuality.values;
       
       expect(values, contains(NetworkQuality.excellent));
       expect(values, contains(NetworkQuality.good));

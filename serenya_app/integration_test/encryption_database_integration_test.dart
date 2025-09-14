@@ -257,7 +257,7 @@ void main() {
           title: 'Blood Test Analysis',
           content: 'Your blood glucose levels are normal at 95 mg/dL.',
           confidenceScore: 8.5,
-          medicalFlags: ['normal_glucose', 'healthy_range'],
+          medicalFlags: const ['normal_glucose', 'healthy_range'],
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );

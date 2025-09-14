@@ -57,5 +57,10 @@ dev_dependencies:
   # Code Generation
   json_annotation: ^4.8.1
   json_serializable: ^6.7.1
+  local_auth_android: any
+  local_auth_darwin: any
+  local_auth_windows: any
+  connectivity_plus_platform_interface: any
+  google_sign_in_platform_interface: any
 flutter:
   uses-material-design: true

@@ -102,7 +102,7 @@ class ConfidenceCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Text(
+                const Text(
                   'AI Confidence',
                   style: HealthcareTypography.headingH4,
                 ),
@@ -128,7 +128,7 @@ class ConfidenceCard extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.medical_services,
                       color: HealthcareColors.cautionOrange,
                       size: 20,

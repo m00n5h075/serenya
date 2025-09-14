@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/services.dart';
 
 /// Timeline Performance Monitor
 /// 
@@ -26,7 +25,7 @@ class TimelinePerformanceMonitor {
   // Performance targets
   static const Duration _targetFrameTime = Duration(microseconds: 16667); // 60 FPS
   static const int _maxMemoryMB = 100; // 100MB memory target
-  static const double _maxScrollSpeed = 5000.0; // Max scroll pixels/second
+  // Note: Max scroll speed threshold - could be used for scroll velocity warnings
   
   Timer? _monitoringTimer;
   bool _isMonitoring = false;
@@ -42,7 +41,7 @@ class TimelinePerformanceMonitor {
     SchedulerBinding.instance.addPostFrameCallback(_onFrameRendered);
     
     // Monitor memory usage every 5 seconds
-    _monitoringTimer = Timer.periodic(Duration(seconds: 5), (_) {
+    _monitoringTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _recordMemorySnapshot();
     });
     
@@ -239,9 +238,7 @@ class TimelinePerformanceMonitor {
         ? Duration.zero 
         : _scrollResponseTimes.reduce((a, b) => a + b) ~/ _scrollResponseTimes.length;
     final currentMemory = _memorySnapshots.isNotEmpty ? _memorySnapshots.last : 0;
-    final avgMemory = _memorySnapshots.isEmpty 
-        ? 0 
-        : _memorySnapshots.reduce((a, b) => a + b) ~/ _memorySnapshots.length;
+    // Calculate average memory for potential future monitoring
     final isPerformingWell = avgFrameRate >= 55 && droppedPercentage <= 5 && _peakMemoryUsage <= _maxMemoryMB && avgScrollTime.inMilliseconds <= 16;
     
     return {

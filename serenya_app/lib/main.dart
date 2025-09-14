@@ -5,36 +5,46 @@ import 'core/providers/health_data_provider.dart';
 import 'core/theme/healthcare_theme.dart';
 import 'core/navigation/app_router.dart';
 import 'services/auth_service.dart';
+import 'services/unified_polling_service.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatefulWidget {
+  const MyApp({super.key});
+
   @override
   _MyAppState createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   final AuthService _authService = AuthService();
+  final UnifiedPollingService _pollingService = UnifiedPollingService();
   late AppStateProvider _appStateProvider;
+  late HealthDataProvider _healthDataProvider;
   
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _appStateProvider = AppStateProvider();
+    _healthDataProvider = HealthDataProvider();
     _initializeApp();
   }
   
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _pollingService.dispose();
     super.dispose();
   }
   
   Future<void> _initializeApp() async {
     await _appStateProvider.initialize();
+    
+    // Initialize the unified polling service for job monitoring
+    await _pollingService.initialize(_healthDataProvider);
   }
   
   @override
@@ -86,7 +96,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: _appStateProvider),
-        ChangeNotifierProvider(create: (_) => HealthDataProvider()),
+        ChangeNotifierProvider.value(value: _healthDataProvider),
       ],
       child: MaterialApp.router(
         title: 'Serenya',

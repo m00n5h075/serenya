@@ -2,8 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
 import 'package:dio/dio.dart';
-import '../../lib/api/error_handler.dart';
-import '../../lib/api/api_client.dart';
+import 'package:serenya_app/api/error_handler.dart';
 
 // Generate mocks
 @GenerateMocks([Dio, RequestOptions, Response])
@@ -12,13 +11,11 @@ import 'error_handler_test.mocks.dart';
 void main() {
   group('ApiErrorHandler', () {
     late ApiErrorHandler errorHandler;
-    late MockDio mockDio;
     late MockRequestOptions mockRequestOptions;
 
     setUp(() {
-      mockDio = MockDio();
       mockRequestOptions = MockRequestOptions();
-      errorHandler = ApiErrorHandler(mockDio);
+      errorHandler = ApiErrorHandler();
 
       // Setup default mock behaviors
       when(mockRequestOptions.uri).thenReturn(Uri.parse('https://api.example.com/test'));
@@ -360,7 +357,7 @@ void main() {
 
   group('HealthcareApiError', () {
     test('should create healthcare error with all properties', () {
-      final error = HealthcareApiError(
+      const error = HealthcareApiError(
         type: HealthcareErrorType.medicalDataSafety,
         userMessage: 'Your medical data is secure',
         technicalDetails: 'Encryption verification failed',
@@ -376,7 +373,7 @@ void main() {
     });
 
     test('should serialize to JSON correctly', () {
-      final error = HealthcareApiError(
+      const error = HealthcareApiError(
         type: HealthcareErrorType.authentication,
         userMessage: 'Please sign in again',
         technicalDetails: 'JWT token expired',

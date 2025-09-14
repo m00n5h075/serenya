@@ -12,7 +12,7 @@ class TimelineEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: EdgeInsets.all(AppConstants.largePadding),
+        padding: const EdgeInsets.all(AppConstants.largePadding),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min, // Allow column to shrink
@@ -32,7 +32,7 @@ class TimelineEmptyState extends StatelessWidget {
                 color: Colors.blue[400],
               ),
             ),
-            SizedBox(height: AppConstants.largePadding),
+            const SizedBox(height: AppConstants.largePadding),
             
             // Title: "Your Health Journey Starts Here"
             Text(
@@ -44,11 +44,11 @@ class TimelineEmptyState extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
-            SizedBox(height: AppConstants.defaultPadding),
+            const SizedBox(height: AppConstants.defaultPadding),
             
             // Description from UI specs
             Container(
-              constraints: BoxConstraints(maxWidth: 280),
+              constraints: const BoxConstraints(maxWidth: 280),
               child: Text(
                 'Upload your first lab results or medical document to get personalized insights from Serenya',
                 style: TextStyle(
@@ -59,11 +59,11 @@ class TimelineEmptyState extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
             ),
-            SizedBox(height: AppConstants.largePadding),
+            const SizedBox(height: AppConstants.largePadding),
             
             // Encouraging call-to-action
             Container(
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               decoration: BoxDecoration(
                 color: Colors.green[50],
                 borderRadius: BorderRadius.circular(8),
@@ -77,7 +77,7 @@ class TimelineEmptyState extends StatelessWidget {
                     color: Colors.green[600],
                     size: 20,
                   ),
-                  SizedBox(width: 12),
+                  const SizedBox(width: 12),
                   Text(
                     'Your health data stays on your device',
                     style: TextStyle(

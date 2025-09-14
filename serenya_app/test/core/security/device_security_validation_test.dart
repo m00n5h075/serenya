@@ -1,6 +1,4 @@
-import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/mockito.dart';
 import 'package:flutter/services.dart';
 import 'package:serenya_app/core/security/biometric_auth_service.dart';
 import 'package:serenya_app/core/security/secure_storage.dart';
@@ -25,8 +23,10 @@ void main() {
     group('Biometric Authentication', () {
       test('should check biometric availability correctly', () async {
         // Mock the channel to simulate device with biometrics
-        const MethodChannel('plugins.flutter.io/local_auth')
-            .setMockMethodCallHandler((MethodCall methodCall) async {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/local_auth'),
+          (MethodCall methodCall) async {
           switch (methodCall.method) {
             case 'isDeviceSupported':
               return true;
@@ -43,8 +43,10 @@ void main() {
 
       test('should handle biometric authentication failure gracefully', () async {
         // Mock authentication failure
-        const MethodChannel('plugins.flutter.io/local_auth')
-            .setMockMethodCallHandler((MethodCall methodCall) async {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/local_auth'),
+          (MethodCall methodCall) async {
           if (methodCall.method == 'authenticate') {
             throw PlatformException(code: 'NotAvailable');
           }
@@ -370,7 +372,7 @@ void main() {
         expect(config.hostPins, isNotEmpty);
 
         // Test error handling system
-        final errorResult = SecurityErrorResult(
+        const errorResult = SecurityErrorResult(
           handled: true,
           canRetry: false,
           userMessage: 'Test validation complete',
@@ -380,7 +382,7 @@ void main() {
 
       test('should validate security error types', () {
         // Test all security error types are defined
-        final errorTypes = SecurityErrorType.values;
+        const errorTypes = SecurityErrorType.values;
         
         expect(errorTypes.contains(SecurityErrorType.authentication), isTrue);
         expect(errorTypes.contains(SecurityErrorType.certificatePinning), isTrue);

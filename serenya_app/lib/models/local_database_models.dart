@@ -68,9 +68,11 @@ enum TestCategoryType {
 /// Processing status for uploaded documents
 enum ProcessingStatus {
   pending,
+  uploaded,
   processing,
   completed,
   failed,
+  timeout,
   retrying;
   
   String get value => toString().split('.').last;
@@ -166,7 +168,6 @@ class SerenyaContent extends Equatable {
   // Processing metadata
   final String? encryptionVersion;    // Encryption version (default: 'v1')
   final String? tableKeyId;           // Table key ID (default: 'serenya_content')
-  final String? processingJobId;      // Reference to original job_id
   final int? processingTimeSeconds;   // Processing time in seconds
   final String? modelVersion;         // AI model version used
   
@@ -190,7 +191,6 @@ class SerenyaContent extends Equatable {
     this.processingStatus,
     this.encryptionVersion,
     this.tableKeyId,
-    this.processingJobId,
     this.processingTimeSeconds,
     this.modelVersion,
     required this.createdAt,
@@ -224,7 +224,6 @@ class SerenyaContent extends Equatable {
           : null,
       encryptionVersion: json['encryption_version'],
       tableKeyId: json['table_key_id'],
-      processingJobId: json['processing_job_id'],
       processingTimeSeconds: json['processing_time_seconds'],
       modelVersion: json['model_version'],
       createdAt: DateTime.parse(json['created_at']),
@@ -257,7 +256,6 @@ class SerenyaContent extends Equatable {
       'processing_status': processingStatus?.value,
       'encryption_version': encryptionVersion,
       'table_key_id': tableKeyId,
-      'processing_job_id': processingJobId,
       'processing_time_seconds': processingTimeSeconds,
       'model_version': modelVersion,
       'created_at': createdAt.toIso8601String(),
@@ -293,7 +291,6 @@ class SerenyaContent extends Equatable {
           : null,
       encryptionVersion: baseJson['encryption_version'],
       tableKeyId: baseJson['table_key_id'],
-      processingJobId: baseJson['processing_job_id'],
       processingTimeSeconds: baseJson['processing_time_seconds'],
       modelVersion: baseJson['model_version'],
       createdAt: DateTime.parse(baseJson['created_at']),
@@ -319,7 +316,6 @@ class SerenyaContent extends Equatable {
     ProcessingStatus? processingStatus,
     String? encryptionVersion,
     String? tableKeyId,
-    String? processingJobId,
     int? processingTimeSeconds,
     String? modelVersion,
     DateTime? createdAt,
@@ -342,7 +338,6 @@ class SerenyaContent extends Equatable {
       processingStatus: processingStatus ?? this.processingStatus,
       encryptionVersion: encryptionVersion ?? this.encryptionVersion,
       tableKeyId: tableKeyId ?? this.tableKeyId,
-      processingJobId: processingJobId ?? this.processingJobId,
       processingTimeSeconds: processingTimeSeconds ?? this.processingTimeSeconds,
       modelVersion: modelVersion ?? this.modelVersion,
       createdAt: createdAt ?? this.createdAt,
@@ -368,7 +363,6 @@ class SerenyaContent extends Equatable {
         processingStatus,
         encryptionVersion,
         tableKeyId,
-        processingJobId,
         processingTimeSeconds,
         modelVersion,
         createdAt,

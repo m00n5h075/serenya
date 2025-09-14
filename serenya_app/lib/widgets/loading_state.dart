@@ -19,7 +19,7 @@ class LoadingState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: EdgeInsets.all(AppConstants.largePadding),
+        padding: const EdgeInsets.all(AppConstants.largePadding),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -35,7 +35,7 @@ class LoadingState extends StatelessWidget {
                 strokeWidth: 3,
                 valueColor: AlwaysStoppedAnimation<Color>(Colors.blue[600]!),
               ),
-            SizedBox(height: AppConstants.defaultPadding),
+            const SizedBox(height: AppConstants.defaultPadding),
             Text(
               message,
               style: TextStyle(
@@ -46,7 +46,7 @@ class LoadingState extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             if (subMessage != null) ...[
-              SizedBox(height: AppConstants.smallPadding),
+              const SizedBox(height: AppConstants.smallPadding),
               Text(
                 subMessage!,
                 style: TextStyle(
@@ -111,7 +111,7 @@ class _ProcessingLoadingStateState extends State<ProcessingLoadingState>
     
     return Center(
       child: Padding(
-        padding: EdgeInsets.all(AppConstants.largePadding),
+        padding: const EdgeInsets.all(AppConstants.largePadding),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -137,7 +137,7 @@ class _ProcessingLoadingStateState extends State<ProcessingLoadingState>
                 },
               ),
             ),
-            SizedBox(height: AppConstants.largePadding),
+            const SizedBox(height: AppConstants.largePadding),
             Text(
               stageInfo.title,
               style: TextStyle(
@@ -147,7 +147,7 @@ class _ProcessingLoadingStateState extends State<ProcessingLoadingState>
               ),
               textAlign: TextAlign.center,
             ),
-            SizedBox(height: AppConstants.smallPadding),
+            const SizedBox(height: AppConstants.smallPadding),
             Text(
               stageInfo.description,
               style: TextStyle(
@@ -157,12 +157,12 @@ class _ProcessingLoadingStateState extends State<ProcessingLoadingState>
               ),
               textAlign: TextAlign.center,
             ),
-            SizedBox(height: AppConstants.largePadding),
+            const SizedBox(height: AppConstants.largePadding),
             LinearProgressIndicator(
               backgroundColor: Colors.grey[300],
               valueColor: AlwaysStoppedAnimation<Color>(Colors.blue[600]!),
             ),
-            SizedBox(height: AppConstants.defaultPadding),
+            const SizedBox(height: AppConstants.defaultPadding),
             Text(
               stageInfo.progressText,
               style: TextStyle(
@@ -171,7 +171,7 @@ class _ProcessingLoadingStateState extends State<ProcessingLoadingState>
               ),
             ),
             if (widget.onCancel != null) ...[
-              SizedBox(height: AppConstants.largePadding),
+              const SizedBox(height: AppConstants.largePadding),
               TextButton(
                 onPressed: widget.onCancel,
                 child: Text(

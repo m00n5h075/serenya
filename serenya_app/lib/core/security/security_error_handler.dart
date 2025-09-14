@@ -26,21 +26,27 @@ class SecurityErrorHandler {
 
     switch (authResult.failureReason) {
       case 'biometric_not_available':
+        if (context == null || !context.mounted) return const SecurityErrorResult(handled: false, canRetry: false, userMessage: 'Session expired');
         return await _handleBiometricUnavailable(context, showUserDialog);
 
       case 'biometric_not_enrolled':
+        if (context == null || !context.mounted) return const SecurityErrorResult(handled: false, canRetry: false, userMessage: 'Session expired');
         return await _handleBiometricNotEnrolled(context, showUserDialog);
 
       case 'biometric_locked_out':
+        if (context == null || !context.mounted) return const SecurityErrorResult(handled: false, canRetry: false, userMessage: 'Session expired');
         return await _handleBiometricLockedOut(context, showUserDialog);
 
       case 'biometric_permanently_locked_out':
+        if (context == null || !context.mounted) return const SecurityErrorResult(handled: false, canRetry: false, userMessage: 'Session expired');
         return await _handleBiometricPermanentlyLocked(context, showUserDialog);
 
       case 'invalid_pin':
+        if (context == null || !context.mounted) return const SecurityErrorResult(handled: false, canRetry: false, userMessage: 'Session expired');
         return await _handleInvalidPin(context, showUserDialog);
 
       case 'temporarily_locked_out':
+        if (context == null || !context.mounted) return const SecurityErrorResult(handled: false, canRetry: false, userMessage: 'Session expired');
         return await _handleTemporaryLockout(context, showUserDialog);
 
       case 'no_auth_methods_available':
@@ -67,7 +73,7 @@ class SecurityErrorHandler {
       severity: 'high',
     );
 
-    if (showUserDialog && context != null) {
+    if (showUserDialog && context != null && context.mounted) {
       final result = await _showCertificateErrorDialog(context, error);
       return SecurityErrorResult(
         handled: true,
@@ -77,7 +83,7 @@ class SecurityErrorHandler {
       );
     }
 
-    return SecurityErrorResult(
+    return const SecurityErrorResult(
       handled: false,
       canRetry: false,
       requiresAppUpdate: true,
@@ -98,7 +104,7 @@ class SecurityErrorHandler {
     );
 
     if (error.contains('user_cancel') || error.contains('authentication_failed')) {
-      return SecurityErrorResult(
+      return const SecurityErrorResult(
         handled: true,
         canRetry: true,
         userMessage: 'Authentication required to access secure data',
@@ -106,10 +112,11 @@ class SecurityErrorHandler {
     }
 
     if (error.contains('hardware_not_available') || error.contains('keystore_error')) {
+      if (context == null || !context.mounted) return const SecurityErrorResult(handled: false, canRetry: false, userMessage: 'Session expired');
       return await _handleHardwareSecurityError(context, showUserDialog);
     }
 
-    return SecurityErrorResult(
+    return const SecurityErrorResult(
       handled: false,
       canRetry: true,
       userMessage: 'Secure storage error. Please try again.',
@@ -131,18 +138,21 @@ class SecurityErrorHandler {
     );
 
     if (error.contains('device_binding_violation')) {
+      if (context == null || !context.mounted) return const SecurityErrorResult(handled: false, canRetry: false, userMessage: 'Session expired');
       return await _handleDeviceBindingViolation(context, showUserDialog);
     }
 
     if (error.contains('key_derivation_failed')) {
+      if (context == null || !context.mounted) return const SecurityErrorResult(handled: false, canRetry: false, userMessage: 'Session expired');
       return await _handleKeyDerivationError(context, showUserDialog);
     }
 
     if (error.contains('biometric_enrollment_change')) {
+      if (context == null || !context.mounted) return const SecurityErrorResult(handled: false, canRetry: false, userMessage: 'Session expired');
       return await _handleBiometricEnrollmentChange(context, showUserDialog);
     }
 
-    return SecurityErrorResult(
+    return const SecurityErrorResult(
       handled: false,
       canRetry: false,
       userMessage: 'Security key error. Please restart the app.',
@@ -163,6 +173,7 @@ class SecurityErrorHandler {
     );
 
     if (error.contains('certificate') || error.contains('ssl') || error.contains('tls')) {
+      if (context == null || !context.mounted) return const SecurityErrorResult(handled: false, canRetry: false, userMessage: 'Session expired');
       return await _handleNetworkCertificateError(context, showUserDialog);
     }
 
@@ -170,7 +181,7 @@ class SecurityErrorHandler {
       return await _handlePotentialMITMError(context, showUserDialog);
     }
 
-    return SecurityErrorResult(
+    return const SecurityErrorResult(
       handled: false,
       canRetry: true,
       userMessage: 'Network security error. Please check your connection.',
@@ -183,10 +194,10 @@ class SecurityErrorHandler {
     BuildContext? context,
     bool showDialog,
   ) async {
-    if (showDialog && context != null) {
+    if (showDialog && context != null && context.mounted) {
       final hasPin = await BiometricAuthService.isPinSet();
       
-      if (hasPin) {
+      if (hasPin && context.mounted) {
         await _showErrorDialog(
           context,
           'Biometric Authentication Unavailable',
@@ -198,8 +209,9 @@ class SecurityErrorHandler {
             ),
           ],
         );
-        return SecurityErrorResult(handled: true, canRetry: true);
+        return const SecurityErrorResult(handled: true, canRetry: true);
       } else {
+        if (!context.mounted) return const SecurityErrorResult(handled: false, canRetry: false);
         final setupPin = await _showSetupPinDialog(context);
         return SecurityErrorResult(
           handled: setupPin,
@@ -209,7 +221,7 @@ class SecurityErrorHandler {
       }
     }
 
-    return SecurityErrorResult(handled: false, canRetry: true);
+    return const SecurityErrorResult(handled: false, canRetry: true);
   }
 
   static Future<SecurityErrorResult> _handleBiometricNotEnrolled(
@@ -230,7 +242,7 @@ class SecurityErrorHandler {
       );
     }
 
-    return SecurityErrorResult(
+    return const SecurityErrorResult(
       handled: true,
       canRetry: false,
       userMessage: 'Biometric authentication needs to be set up on your device',
@@ -249,7 +261,7 @@ class SecurityErrorHandler {
       );
     }
 
-    return SecurityErrorResult(
+    return const SecurityErrorResult(
       handled: true,
       canRetry: true,
       userMessage: 'Biometric authentication temporarily locked',
@@ -269,7 +281,7 @@ class SecurityErrorHandler {
       );
     }
 
-    return SecurityErrorResult(
+    return const SecurityErrorResult(
       handled: true,
       canRetry: false,
       userMessage: 'Biometric authentication permanently disabled',
@@ -281,7 +293,7 @@ class SecurityErrorHandler {
     BuildContext? context,
     bool showDialog,
   ) async {
-    return SecurityErrorResult(
+    return const SecurityErrorResult(
       handled: true,
       canRetry: true,
       userMessage: 'Incorrect PIN entered',
@@ -306,7 +318,7 @@ class SecurityErrorHandler {
       );
     }
 
-    return SecurityErrorResult(
+    return const SecurityErrorResult(
       handled: true,
       canRetry: false,
       userMessage: 'Authentication temporarily locked',
@@ -326,7 +338,7 @@ class SecurityErrorHandler {
       );
     }
 
-    return SecurityErrorResult(handled: false, canRetry: false);
+    return const SecurityErrorResult(handled: false, canRetry: false);
   }
 
   static Future<SecurityErrorResult> _handleSystemError(
@@ -342,7 +354,7 @@ class SecurityErrorHandler {
       );
     }
 
-    return SecurityErrorResult(
+    return const SecurityErrorResult(
       handled: true,
       canRetry: false,
       requiresRestart: true,
@@ -363,7 +375,7 @@ class SecurityErrorHandler {
       );
     }
 
-    return SecurityErrorResult(
+    return const SecurityErrorResult(
       handled: true,
       canRetry: true,
       userMessage: 'Authentication error occurred',
@@ -383,7 +395,7 @@ class SecurityErrorHandler {
       );
     }
 
-    return SecurityErrorResult(
+    return const SecurityErrorResult(
       handled: true,
       canRetry: false,
       userMessage: 'Hardware security not available',
@@ -403,7 +415,7 @@ class SecurityErrorHandler {
       );
     }
 
-    return SecurityErrorResult(
+    return const SecurityErrorResult(
       handled: true,
       canRetry: false,
       requiresReinstall: true,
@@ -424,7 +436,7 @@ class SecurityErrorHandler {
       );
     }
 
-    return SecurityErrorResult(
+    return const SecurityErrorResult(
       handled: true,
       canRetry: false,
       requiresReauth: true,
@@ -445,7 +457,7 @@ class SecurityErrorHandler {
       );
     }
 
-    return SecurityErrorResult(
+    return const SecurityErrorResult(
       handled: true,
       canRetry: false,
       requiresReauth: true,
@@ -466,7 +478,7 @@ class SecurityErrorHandler {
       );
     }
 
-    return SecurityErrorResult(
+    return const SecurityErrorResult(
       handled: true,
       canRetry: true,
       userMessage: 'Network certificate error',
@@ -486,7 +498,7 @@ class SecurityErrorHandler {
       );
     }
 
-    return SecurityErrorResult(
+    return const SecurityErrorResult(
       handled: true,
       canRetry: false,
       userMessage: 'Potential network security threat detected',

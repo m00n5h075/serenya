@@ -8,10 +8,15 @@ import '../core/constants/design_tokens.dart';
 import '../widgets/timeline/timeline_card.dart';
 import '../widgets/confidence_indicator.dart';
 import '../widgets/medical_disclaimer.dart';
-import '../widgets/buttons/floating_action_buttons.dart';
 import '../models/local_database_models.dart';
 import '../api/endpoints/chat_api.dart';
+import '../core/database/health_data_repository.dart';
+import '../services/unified_polling_service.dart';
+import '../features/chat/providers/chat_provider.dart';
+import '../features/chat/widgets/enhanced_chat_prompts.dart';
 
+/// Updated Results Screen with integrated chat functionality
+/// Addresses CTO Fix #3: Complete results screen integration
 class ResultsScreen extends StatefulWidget {
   final String? documentId;
 
@@ -28,16 +33,22 @@ class _ResultsScreenState extends State<ResultsScreen>
     with TickerProviderStateMixin {
   SerenyaContent? _selectedDocument;
   List<SerenyaContent> _interpretations = [];
-  List<ChatMessageResponse> _chatHistory = [];
-  bool _isLoadingChat = false;
-  String? _chatError;
   
   late TabController _tabController;
+  late ChatProvider _chatProvider;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    
+    // Initialize chat provider
+    _chatProvider = ChatProvider(
+      chatApi: context.read<ChatApi>(),
+      repository: context.read<HealthDataRepository>(),
+      pollingService: context.read<UnifiedPollingService>(),
+    );
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadResults();
     });
@@ -46,6 +57,7 @@ class _ResultsScreenState extends State<ResultsScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _chatProvider.dispose();
     super.dispose();
   }
 
@@ -68,120 +80,93 @@ class _ResultsScreenState extends State<ResultsScreen>
     if (_selectedDocument != null) {
       await dataProvider.loadInterpretations();
       _interpretations = dataProvider.interpretations;
-      await _loadChatHistory();
+      
+      // Load chat history for this document
+      await _chatProvider.loadConversation(_selectedDocument!.id);
     }
 
     setState(() {});
   }
-  
-  Future<void> _loadChatHistory() async {
-    if (_selectedDocument == null) return;
-    
-    setState(() {
-      _isLoadingChat = true;
-      _chatError = null;
-    });
-    
-    try {
-      // TODO: Replace with actual chat API call once API client is available
-      // This is a placeholder for chat history loading
-      await Future.delayed(const Duration(milliseconds: 500)); // Simulate API call
-      
-      // Mock chat data for demonstration - replace with actual API call
-      _chatHistory = [
-        ChatMessageResponse(
-          messageId: '1',
-          conversationId: 'conv_${_selectedDocument!.id}',
-          role: 'user',
-          content: 'Can you explain my test results?',
-          createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-        ),
-        ChatMessageResponse(
-          messageId: '2',
-          conversationId: 'conv_${_selectedDocument!.id}',
-          role: 'assistant',
-          content: '''Based on your uploaded health document, I can see several key findings. Let me break down the most important aspects for you:
-
-## Key Results
-
-**Blood Glucose**: Your levels are within normal range
-**Cholesterol**: Slightly elevated - consider dietary changes
-**Blood Pressure**: Normal readings
-
-### Recommendations
-
-1. **Diet**: Focus on low-cholesterol foods
-2. **Exercise**: 30 minutes daily walking
-3. **Follow-up**: Schedule appointment in 3 months
-
-> **Important**: This analysis is for informational purposes only. Please consult your healthcare provider for professional medical advice.''',
-          createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-        ),
-      ];
-    } catch (e) {
-      _chatError = 'Failed to load chat history: $e';
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingChat = false;
-        });
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: HealthcareColors.backgroundPrimary,
-      appBar: AppBar(
-        title: Text(
-          'Results Analysis',
-          style: HealthcareTypography.headingH3.copyWith(
-            color: HealthcareColors.serenyaWhite,
+    return ChangeNotifierProvider.value(
+      value: _chatProvider,
+      child: Scaffold(
+        backgroundColor: HealthcareColors.backgroundPrimary,
+        appBar: AppBar(
+          title: Text(
+            'Results Analysis',
+            style: HealthcareTypography.headingH3.copyWith(
+              color: HealthcareColors.serenyaWhite,
+            ),
           ),
+          backgroundColor: HealthcareColors.serenyaBluePrimary,
+          elevation: 0,
+          iconTheme: const IconThemeData(color: HealthcareColors.serenyaWhite),
+          actions: [
+            if (_selectedDocument != null)
+              IconButton(
+                icon: const Icon(Icons.share),
+                onPressed: _shareResults,
+                tooltip: 'Share Results',
+              ),
+          ],
+          bottom: _selectedDocument != null
+              ? TabBar(
+                  controller: _tabController,
+                  indicatorColor: HealthcareColors.serenyaWhite,
+                  labelColor: HealthcareColors.serenyaWhite,
+                  unselectedLabelColor: HealthcareColors.serenyaBlueLight,
+                  labelStyle: HealthcareTypography.labelLarge,
+                  unselectedLabelStyle: HealthcareTypography.labelMedium,
+                  tabs: [
+                    const Tab(
+                      text: 'Analysis',
+                      icon: Icon(Icons.assignment, size: 20),
+                    ),
+                    Tab(
+                      child: Consumer<ChatProvider>(
+                        builder: (context, chatProvider, child) {
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.chat_bubble_outline, size: 20),
+                              const SizedBox(width: 4),
+                              const Text('Chat'),
+                              // Dot indicator for new messages or processing
+                              if (chatProvider.isSending || chatProvider.messages.isNotEmpty)
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  margin: const EdgeInsets.only(left: 4),
+                                  decoration: BoxDecoration(
+                                    color: chatProvider.isSending
+                                        ? HealthcareColors.cautionOrange
+                                        : HealthcareColors.successPrimary,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                )
+              : null,
         ),
-        backgroundColor: HealthcareColors.serenyaBluePrimary,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: HealthcareColors.serenyaWhite),
-        actions: [
-          if (_selectedDocument != null)
-            IconButton(
-              icon: const Icon(Icons.share),
-              onPressed: _shareResults,
-              tooltip: 'Share Results',
-            ),
-        ],
-        bottom: _selectedDocument != null
-            ? TabBar(
+        body: _selectedDocument == null
+            ? _buildNoResults()
+            : TabBarView(
                 controller: _tabController,
-                indicatorColor: HealthcareColors.serenyaWhite,
-                labelColor: HealthcareColors.serenyaWhite,
-                unselectedLabelColor: HealthcareColors.serenyaBlueLight,
-                labelStyle: HealthcareTypography.labelLarge,
-                unselectedLabelStyle: HealthcareTypography.labelMedium,
-                tabs: const [
-                  Tab(
-                    text: 'Analysis',
-                    icon: Icon(Icons.assignment, size: 20),
-                  ),
-                  Tab(
-                    text: 'Chat History', 
-                    icon: Icon(Icons.chat_bubble_outline, size: 20),
-                  ),
+                children: [
+                  _buildAnalysisTab(),
+                  _buildChatTab(),
                 ],
-              )
-            : null,
+              ),
+        floatingActionButton: _buildFloatingActionButton(),
       ),
-      body: _selectedDocument == null
-          ? _buildNoResults()
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildAnalysisTab(),
-                _buildChatHistoryTab(),
-              ],
-            ),
-      floatingActionButton: _buildFloatingActionButton(),
     );
   }
 
@@ -192,7 +177,7 @@ class _ResultsScreenState extends State<ResultsScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
+            const Icon(
               Icons.assignment_outlined,
               size: 64,
               color: HealthcareColors.textDisabled,
@@ -351,7 +336,7 @@ class _ResultsScreenState extends State<ResultsScreen>
           ],
 
           // Medical disclaimers
-          MedicalDisclaimer(
+          const MedicalDisclaimer(
             type: DisclaimerType.general,
             isCompact: false,
           ),
@@ -359,7 +344,7 @@ class _ResultsScreenState extends State<ResultsScreen>
           
           if (_selectedDocument!.aiConfidenceScore != null && 
               _selectedDocument!.aiConfidenceScore! < AppConstants.moderateConfidenceThreshold)
-            MedicalDisclaimer(
+            const MedicalDisclaimer(
               type: DisclaimerType.consultation,
               isCompact: false,
             ),
@@ -377,102 +362,113 @@ class _ResultsScreenState extends State<ResultsScreen>
     }
   }
   
-  Widget _buildChatHistoryTab() {
-    if (_isLoadingChat) {
-      return const Center(
-        child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(HealthcareColors.serenyaBluePrimary),
-        ),
-      );
-    }
-    
-    if (_chatError != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(HealthcareSpacing.lg),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.chat_bubble_outline,
-                size: 48,
-                color: HealthcareColors.textSecondary,
+  Widget _buildChatTab() {
+    return Consumer<ChatProvider>(
+      builder: (context, chatProvider, child) {
+        // Show loading state
+        if (chatProvider.isLoading) {
+          return const Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(HealthcareColors.serenyaBluePrimary),
+            ),
+          );
+        }
+        
+        // Show error state
+        if (chatProvider.error != null) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(HealthcareSpacing.lg),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    size: 48,
+                    color: HealthcareColors.error,
+                  ),
+                  const SizedBox(height: HealthcareSpacing.md),
+                  Text(
+                    'Chat Error',
+                    style: HealthcareTypography.headingH4.copyWith(
+                      color: HealthcareColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: HealthcareSpacing.sm),
+                  Text(
+                    chatProvider.error!,
+                    style: HealthcareTypography.bodyMedium.copyWith(
+                      color: HealthcareColors.textSecondary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: HealthcareSpacing.lg),
+                  ElevatedButton(
+                    onPressed: () {
+                      chatProvider.clearError();
+                      chatProvider.loadConversation(_selectedDocument!.id);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: HealthcareColors.serenyaBluePrimary,
+                      foregroundColor: HealthcareColors.serenyaWhite,
+                    ),
+                    child: const Text('Retry'),
+                  ),
+                ],
               ),
-              const SizedBox(height: HealthcareSpacing.md),
-              Text(
-                'Chat History',
-                style: HealthcareTypography.headingH4.copyWith(
-                  color: HealthcareColors.textPrimary,
-                ),
+            ),
+          );
+        }
+        
+        // Show empty state
+        if (chatProvider.messages.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(HealthcareSpacing.lg),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.chat_bubble_outline,
+                    size: 64,
+                    color: HealthcareColors.textDisabled,
+                  ),
+                  const SizedBox(height: HealthcareSpacing.lg),
+                  Text(
+                    'No Conversation Yet',
+                    style: HealthcareTypography.headingH3.copyWith(
+                      color: HealthcareColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: HealthcareSpacing.md),
+                  Text(
+                    'Ask Serenya about your results using the chat button below.',
+                    style: HealthcareTypography.bodyMedium.copyWith(
+                      color: HealthcareColors.textSecondary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
-              const SizedBox(height: HealthcareSpacing.sm),
-              Text(
-                _chatError!,
-                style: HealthcareTypography.bodyMedium.copyWith(
-                  color: HealthcareColors.textSecondary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: HealthcareSpacing.lg),
-              ElevatedButton(
-                onPressed: _loadChatHistory,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: HealthcareColors.serenyaBluePrimary,
-                  foregroundColor: HealthcareColors.serenyaWhite,
-                ),
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-    
-    if (_chatHistory.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(HealthcareSpacing.lg),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.chat_bubble_outline,
-                size: 64,
-                color: HealthcareColors.textDisabled,
-              ),
-              const SizedBox(height: HealthcareSpacing.lg),
-              Text(
-                'No Chat History',
-                style: HealthcareTypography.headingH3.copyWith(
-                  color: HealthcareColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: HealthcareSpacing.md),
-              Text(
-                'Start a conversation about your results using the chat button below.',
-                style: HealthcareTypography.bodyMedium.copyWith(
-                  color: HealthcareColors.textSecondary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-    
-    return ListView.builder(
-      padding: const EdgeInsets.all(HealthcareSpacing.md),
-      itemCount: _chatHistory.length,
-      itemBuilder: (context, index) {
-        final message = _chatHistory[index];
-        return _buildChatMessage(message);
+            ),
+          );
+        }
+        
+        // Show chat messages
+        return ListView.builder(
+          padding: const EdgeInsets.all(HealthcareSpacing.md),
+          itemCount: chatProvider.messages.length,
+          itemBuilder: (context, index) {
+            final message = chatProvider.messages[index];
+            return _buildChatMessage(message);
+          },
+        );
       },
     );
   }
   
-  Widget _buildChatMessage(ChatMessageResponse message) {
-    final isUser = message.role == 'user';
+  Widget _buildChatMessage(ChatMessage message) {
+    final isUser = message.sender == MessageSenderType.user;
     
     return Container(
       margin: const EdgeInsets.only(bottom: HealthcareSpacing.md),
@@ -480,10 +476,10 @@ class _ResultsScreenState extends State<ResultsScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isUser) ...[
-            CircleAvatar(
+            const CircleAvatar(
               radius: 16,
               backgroundColor: HealthcareColors.serenyaBluePrimary,
-              child: const Icon(
+              child: Icon(
                 Icons.smart_toy,
                 size: 16,
                 color: HealthcareColors.serenyaWhite,
@@ -512,13 +508,13 @@ class _ResultsScreenState extends State<ResultsScreen>
                   ),
                   child: isUser 
                       ? Text(
-                          message.content,
+                          message.message,
                           style: HealthcareTypography.bodyMedium.copyWith(
                             color: HealthcareColors.serenyaWhite,
                           ),
                         )
                       : MarkdownBody(
-                          data: message.content,
+                          data: message.message,
                           styleSheet: MarkdownStyleSheet(
                             p: HealthcareTypography.bodyMedium.copyWith(
                               color: HealthcareColors.textPrimary,
@@ -557,10 +553,10 @@ class _ResultsScreenState extends State<ResultsScreen>
           ),
           if (isUser) ...[
             const SizedBox(width: HealthcareSpacing.sm),
-            CircleAvatar(
+            const CircleAvatar(
               radius: 16,
               backgroundColor: HealthcareColors.serenyaGreenPrimary,
-              child: const Icon(
+              child: Icon(
                 Icons.person,
                 size: 16,
                 color: HealthcareColors.serenyaWhite,
@@ -588,140 +584,34 @@ class _ResultsScreenState extends State<ResultsScreen>
   }
   
   Widget _buildFloatingActionButton() {
-    return SerenyaFAB(
-      context: FABContext.results,
-      onUpload: () {
-        // Handle upload navigation
-        // Use existing app navigation - redirect to home with upload FAB
-        Navigator.of(context).pop(); // Return to home where upload FAB is available
+    return Consumer<ChatProvider>(
+      builder: (context, chatProvider, child) {
+        return SerenyaEnhancedFAB(
+          context: FABContext.results,
+          isProcessing: chatProvider.isSending,
+          hasNewResponse: chatProvider.messages.isNotEmpty && _tabController.index != 1,
+          onUpload: () {
+            // Handle upload navigation
+            Navigator.of(context).pop(); // Return to home where upload FAB is available
+          },
+          onChat: _selectedDocument != null ? _showEnhancedChatPrompts : null,
+          onViewAnswer: () {
+            // Switch to chat tab to view new response
+            _tabController.animateTo(1);
+          },
+        );
       },
-      onChat: _selectedDocument != null ? _showChatPrompts : null,
     );
   }
   
-  void _showChatPrompts() {
+  void _showEnhancedChatPrompts() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _buildChatPromptsBottomSheet(),
-    );
-  }
-  
-  Widget _buildChatPromptsBottomSheet() {
-    final predefinedPrompts = [
-      'Explain my test results in simple terms',
-      'What should I discuss with my doctor?',
-      'Are there any concerning values in my results?',
-      'What lifestyle changes might help?',
-      'What do these medical terms mean?',
-    ];
-    
-    return Container(
-      decoration: const BoxDecoration(
-        color: HealthcareColors.backgroundPrimary,
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(HealthcareBorderRadius.modal),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle bar
-          Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.only(top: HealthcareSpacing.md),
-            decoration: BoxDecoration(
-              color: HealthcareColors.textDisabled,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(HealthcareSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Ask about your results',
-                  style: HealthcareTypography.headingH3.copyWith(
-                    color: HealthcareColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: HealthcareSpacing.md),
-                Text(
-                  'Choose a quick prompt or start typing your own question:',
-                  style: HealthcareTypography.bodyMedium.copyWith(
-                    color: HealthcareColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: HealthcareSpacing.lg),
-                ...predefinedPrompts.map((prompt) => 
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(bottom: HealthcareSpacing.sm),
-                    child: OutlinedButton(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        _startChatWithPrompt(prompt);
-                      },
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: HealthcareColors.serenyaBluePrimary,
-                        side: const BorderSide(
-                          color: HealthcareColors.serenyaBluePrimary,
-                        ),
-                        padding: const EdgeInsets.all(HealthcareSpacing.md),
-                        alignment: Alignment.centerLeft,
-                      ),
-                      child: Text(
-                        prompt,
-                        style: HealthcareTypography.bodyMedium,
-                      ),
-                    ),
-                  ),
-                ).toList(),
-                const SizedBox(height: HealthcareSpacing.lg),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      _startNewChat();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: HealthcareColors.serenyaBluePrimary,
-                      foregroundColor: HealthcareColors.serenyaWhite,
-                      padding: const EdgeInsets.all(HealthcareSpacing.md),
-                    ),
-                    icon: const Icon(Icons.chat_bubble),
-                    label: const Text('Start New Chat'),
-                  ),
-                ),
-                SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-  
-  void _startChatWithPrompt(String prompt) {
-    // TODO: Implement chat with predefined prompt
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Starting chat with: "$prompt"'),
-        backgroundColor: HealthcareColors.serenyaBluePrimary,
-      ),
-    );
-  }
-  
-  void _startNewChat() {
-    // TODO: Navigate to chat screen or implement inline chat
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Opening new chat...'),
-        backgroundColor: HealthcareColors.serenyaBluePrimary,
+      builder: (context) => EnhancedChatPromptsBottomSheet(
+        contentId: _selectedDocument!.id,
+        onClose: () => Navigator.of(context).pop(),
       ),
     );
   }
@@ -791,18 +681,91 @@ class _ResultsScreenState extends State<ResultsScreen>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Healthcare Provider Consultation'),
-        content: Text(
+        title: const Text('Healthcare Provider Consultation'),
+        content: const Text(
           'Based on your results, we recommend discussing these findings with a healthcare provider. '
           'They can provide proper medical evaluation and next steps based on your complete health history.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Got it'),
+            child: const Text('Got it'),
           ),
         ],
       ),
     );
   }
+}
+
+/// Enhanced FAB widget with context-aware states
+class SerenyaEnhancedFAB extends StatelessWidget {
+  final FABContext context;
+  final bool isProcessing;
+  final bool hasNewResponse;
+  final VoidCallback? onUpload;
+  final VoidCallback? onChat;
+  final VoidCallback? onViewAnswer;
+
+  const SerenyaEnhancedFAB({
+    Key? key,
+    required this.context,
+    this.isProcessing = false,
+    this.hasNewResponse = false,
+    this.onUpload,
+    this.onChat,
+    this.onViewAnswer,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    // Processing state - disabled with spinner
+    if (isProcessing) {
+      return FloatingActionButton.extended(
+        onPressed: null,
+        backgroundColor: HealthcareColors.textDisabled,
+        icon: const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(HealthcareColors.serenyaWhite),
+          ),
+        ),
+        label: const Text(
+          'Processing...',
+          style: TextStyle(color: HealthcareColors.serenyaWhite),
+        ),
+      );
+    }
+    
+    // Response ready state - show "View Answer"
+    if (hasNewResponse) {
+      return FloatingActionButton.extended(
+        onPressed: onViewAnswer,
+        backgroundColor: HealthcareColors.successPrimary,
+        icon: const Icon(Icons.visibility, color: HealthcareColors.serenyaWhite),
+        label: const Text(
+          'View Answer',
+          style: TextStyle(color: HealthcareColors.serenyaWhite),
+        ),
+      );
+    }
+    
+    // Default state - Ask Question
+    return FloatingActionButton.extended(
+      onPressed: onChat,
+      backgroundColor: HealthcareColors.serenyaBluePrimary,
+      icon: const Icon(Icons.psychology, color: HealthcareColors.serenyaWhite),
+      label: const Text(
+        'Ask Question',
+        style: TextStyle(color: HealthcareColors.serenyaWhite),
+      ),
+    );
+  }
+}
+
+enum FABContext {
+  results,
+  reports,
+  timeline,
 }

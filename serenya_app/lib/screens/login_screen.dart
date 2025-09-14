@@ -31,7 +31,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (result.success) {
         // Navigate to home screen
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => HomeScreen()),
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
         );
       } else if (result.cancelled) {
         _showErrorDialog('Sign in was cancelled. Please try again to access your medical data securely.');
@@ -52,12 +52,12 @@ class _LoginScreenState extends State<LoginScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Authentication Error'),
+        title: const Text('Authentication Error'),
         content: Text(message),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text('OK'),
+            child: const Text('OK'),
           ),
         ],
       ),
@@ -70,7 +70,7 @@ class _LoginScreenState extends State<LoginScreen> {
     List<Widget> actions = [
       TextButton(
         onPressed: () => Navigator.of(context).pop(),
-        child: Text('OK'),
+        child: const Text('OK'),
       ),
     ];
 
@@ -82,7 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
           Navigator.of(context).pop();
           _handleGoogleSignIn(); // Retry
         },
-        child: Text('Retry'),
+        child: const Text('Retry'),
       ));
     } else if (result.errorCode == 'MISSING_CONSENT') {
       title = 'Medical Access Agreement';
@@ -99,7 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
           children: [
             Text(message),
             if (result.isNetworkError) ...[
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               Text(
                 'Please check your internet connection and try again.',
                 style: TextStyle(
@@ -121,7 +121,7 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 24.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -136,7 +136,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 textAlign: TextAlign.center,
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               
               // Subtitle
               Text(
@@ -147,11 +147,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 textAlign: TextAlign.center,
               ),
-              SizedBox(height: 48),
+              const SizedBox(height: 48),
               
               // Disclaimer
               Container(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.blue[50],
                   borderRadius: BorderRadius.circular(8),
@@ -166,13 +166,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   textAlign: TextAlign.center,
                 ),
               ),
-              SizedBox(height: 32),
+              const SizedBox(height: 32),
               
               // Google Sign In Button
               ElevatedButton.icon(
                 onPressed: _isLoading ? null : _handleGoogleSignIn,
                 icon: _isLoading 
-                  ? SizedBox(
+                  ? const SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
@@ -180,10 +180,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     )
-                  : Icon(Icons.login, color: Colors.white),
+                  : const Icon(Icons.login, color: Colors.white),
                 label: Text(
                   _isLoading ? 'Signing in...' : 'Sign in with Google',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: Colors.white,
@@ -191,13 +191,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue[600],
-                  padding: EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
               ),
-              SizedBox(height: 24),
+              const SizedBox(height: 24),
               
               // Privacy note
               Text(

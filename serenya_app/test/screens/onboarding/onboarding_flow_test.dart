@@ -8,7 +8,7 @@ void main() {
   group('OnboardingFlow', () {
     testWidgets('displays progress dots and first slide', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: OnboardingFlow(),
         ),
       );
@@ -24,7 +24,7 @@ void main() {
 
     testWidgets('navigates through all slides', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: OnboardingFlow(),
         ),
       );
@@ -56,7 +56,7 @@ void main() {
 
     testWidgets('swipe navigation works', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: OnboardingFlow(),
         ),
       );
@@ -67,7 +67,7 @@ void main() {
       // Swipe left to go to slide 2
       await tester.drag(
         find.text('Welcome to Serenya'),
-        Offset(-400, 0),
+        const Offset(-400, 0),
       );
       await tester.pumpAndSettle();
 
@@ -77,7 +77,7 @@ void main() {
 
     testWidgets('accessibility semantics are present', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: OnboardingFlow(),
         ),
       );
@@ -91,7 +91,7 @@ void main() {
   group('ProgressDots', () {
     testWidgets('displays correct number of dots', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: ProgressDots(
               currentIndex: 0,
@@ -111,7 +111,7 @@ void main() {
 
     testWidgets('highlights current dot', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: ProgressDots(
               currentIndex: 1,
@@ -180,7 +180,7 @@ void main() {
 
     testWidgets('is disabled when onPressed is null', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: OnboardingButton(
               text: 'Test Button',

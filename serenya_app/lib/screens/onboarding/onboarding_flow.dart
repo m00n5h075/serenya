@@ -6,6 +6,7 @@ import 'slides/privacy_slide.dart';
 import 'slides/disclaimer_slide.dart';
 import 'slides/consent_slide.dart';
 import 'widgets/progress_dots.dart';
+import 'widgets/biometric_setup_dialog.dart';
 
 class OnboardingFlow extends StatefulWidget {
   final VoidCallback? onComplete;
@@ -84,16 +85,14 @@ class _OnboardingFlowState extends State<OnboardingFlow>
     await _consentService.recordConsent(agreedToTerms, understoodDisclaimer);
     
     if (authSuccess) {
-      // Authentication was successful - proceed to home screen
-      if (widget.onAuthenticationSuccess != null) {
-        widget.onAuthenticationSuccess!();
-      }
+      // Authentication was successful - show biometric setup
+      _showBiometricSetup();
     } else {
       // Authentication failed - show error
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Row(
+            content: const Row(
               children: [
                 Icon(Icons.error_outline, color: Colors.white),
                 SizedBox(width: 8),
@@ -101,7 +100,7 @@ class _OnboardingFlowState extends State<OnboardingFlow>
               ],
             ),
             backgroundColor: Colors.red[600],
-            duration: Duration(seconds: 4),
+            duration: const Duration(seconds: 4),
             action: SnackBarAction(
               label: 'Dismiss',
               textColor: Colors.white,
@@ -120,6 +119,30 @@ class _OnboardingFlowState extends State<OnboardingFlow>
     }
   }
 
+  /// Show biometric setup dialog after successful authentication
+  Future<void> _showBiometricSetup() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return BiometricSetupDialog(
+          onSetupComplete: () {
+            // Biometric setup completed successfully
+            if (widget.onAuthenticationSuccess != null) {
+              widget.onAuthenticationSuccess!();
+            }
+          },
+          onSkipped: () {
+            // User skipped biometric setup - still proceed
+            if (widget.onAuthenticationSuccess != null) {
+              widget.onAuthenticationSuccess!();
+            }
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -133,6 +156,7 @@ class _OnboardingFlowState extends State<OnboardingFlow>
               child: ProgressDots(
                 currentIndex: _currentIndex,
                 totalCount: _totalSlides,
+                slideNames: _slideNames,
               ),
             ),
           ),

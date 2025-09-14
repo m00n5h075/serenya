@@ -25,7 +25,7 @@ class AuthService {
       storageCipherAlgorithm: StorageCipherAlgorithm.AES_GCM_NoPadding,
     ),
     iOptions: IOSOptions(
-      accessibility: IOSAccessibility.unlocked,
+      accessibility: KeychainAccessibility.unlocked,
       accountName: 'serenya_health_auth',
     ),
   );
@@ -40,7 +40,6 @@ class AuthService {
   static const String _offlineAuthKey = 'serenya_offline_auth_cache';
   
   // Healthcare session configuration
-  static const Duration _accessTokenExpiry = Duration(minutes: 15);
   static const Duration _healthcareSessionTimeout = Duration(hours: 1);
   static const Duration _biometricReauthInterval = Duration(minutes: 30);
   
@@ -50,12 +49,12 @@ class AuthService {
   
   final Dio _dio = Dio(BaseOptions(
     baseUrl: AppConstants.baseApiUrl,
-    connectTimeout: Duration(seconds: ApiConstants.connectTimeoutSeconds),
-    receiveTimeout: Duration(seconds: ApiConstants.receiveTimeoutSeconds),
+    connectTimeout: const Duration(seconds: ApiConstants.connectTimeoutSeconds),
+    receiveTimeout: const Duration(seconds: ApiConstants.receiveTimeoutSeconds),
     headers: ApiConstants.defaultHeaders,
   ));
 
-  final BiometricAuthService _biometricAuth = BiometricAuthService();
+  // Note: BiometricAuthService uses static methods, no instance needed
 
   AuthService() {
     _setupDioInterceptors();
@@ -150,8 +149,8 @@ class AuthService {
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       
       // Step 2: Biometric authentication (if enabled and supported)
-      if (requireBiometric && await _biometricAuth.isAvailable()) {
-        final biometricResult = await _biometricAuth.authenticate(
+      if (requireBiometric && await BiometricAuthService.isBiometricAvailable()) {
+        final biometricResult = await BiometricAuthService.authenticate(
           reason: 'Authenticate to access your medical data securely',
         );
         
@@ -168,7 +167,7 @@ class AuthService {
       );
       
       // Step 4: Backend authentication
-      final response = await _dio.post('/auth/google', data: authRequest);
+      final response = await _dio.post('/auth/google-onboarding', data: authRequest); // FIXED: Changed from '/auth/google' to '/auth/google-onboarding' to match backend endpoint
       
       if (response.statusCode == 200 && response.data['success'] == true) {
         final authData = response.data['data'];
@@ -177,7 +176,7 @@ class AuthService {
         await _storeAuthenticationData(authData);
         
         // Step 6: Mark biometric session if used
-        if (requireBiometric && await _biometricAuth.isAvailable()) {
+        if (requireBiometric && await BiometricAuthService.isBiometricAvailable()) {
           await _markBiometricSession();
         }
         
@@ -212,18 +211,19 @@ class AuthService {
     final deviceId = await _getDeviceId();
     
     final request = {
-      'google_token': googleAuth.accessToken,
-      'id_token': googleAuth.idToken,
+      // FIXED: Match actual backend implementation (auth.js lines 36, 44)
+      'google_token': googleAuth.accessToken, // Backend expects 'google_token' at root level
+      'id_token': googleAuth.idToken, // Backend expects 'id_token' at root level
       'device_info': {
         'platform': Platform.operatingSystem.toLowerCase(),
-        'device_id': deviceId,
+        'app_installation_id': deviceId, // Backend expects 'app_installation_id'
         'app_version': AppConstants.appVersion,
       },
     };
     
-    // Add consent data if provided
+    // Add consent data if provided - backend expects 'consent_acknowledgments' (auth.js line 38)
     if (consentData != null) {
-      request['consent_acknowledgments'] = consentData;
+      request['consent_acknowledgments'] = consentData; // FIXED: Match actual backend implementation
     }
     
     // Add encryption context for field-level encryption
@@ -242,13 +242,14 @@ class AuthService {
   /// Build encryption context for field-level encryption
   Future<Map<String, dynamic>> _buildEncryptionContext() async {
     // Get device key material for server integration
-    final deviceKeyInfo = await DeviceKeyManager.getDeviceKeyInfo();
+    // Note: Using initialize to ensure device key system is ready
+    await DeviceKeyManager.initialize();
     
+    // FIXED: Match backend API contract exactly
     return {
+      'encrypted_key_material': 'device_key_material_placeholder', // Placeholder for actual encrypted key material
       'key_derivation_version': 'v1',
-      'supported_tables': ['serenya_content', 'chat_messages'],
-      'device_key_hash': deviceKeyInfo['keyHash'], // For key verification
-      'encryption_capabilities': ['AES-256-GCM'],
+      'supported_tables': ['users', 'user_consents', 'local_medical_data'], // FIXED: Match backend expectations
     };
   }
 
@@ -351,8 +352,8 @@ class AuthService {
       // Sign out from Google
       await _googleSignIn.signOut();
       
-      // Clear biometric session
-      await BiometricAuthService.clearSession();
+      // Clear biometric session and authentication data
+      await BiometricAuthService.clearAuthData();
       
       // Clear all authentication data
       await _clearAllAuthData();
@@ -486,10 +487,10 @@ class AuthService {
       final timeDiff = DateTime.now().difference(cachedTime);
       
       // Allow offline authentication for up to 24 hours
-      if (timeDiff <= Duration(hours: 24)) {
+      if (timeDiff <= const Duration(hours: 24)) {
         // Require biometric authentication for offline access
-        if (await _biometricAuth.isAvailable()) {
-          final biometricResult = await _biometricAuth.authenticate(
+        if (await BiometricAuthService.isBiometricAvailable()) {
+          final biometricResult = await BiometricAuthService.authenticate(
             reason: 'Authenticate for offline access to your medical data',
           );
           return biometricResult.success;
@@ -525,10 +526,6 @@ class AuthService {
     }
   }
 
-  /// Clear offline authentication cache
-  Future<void> _clearOfflineAuthCache() async {
-    await _storage.delete(key: _offlineAuthKey);
-  }
 
   /// Enhanced network resilience check
   Future<bool> isNetworkAvailable() async {
@@ -538,6 +535,31 @@ class AuthService {
     } on SocketException catch (_) {
       return false;
     }
+  }
+
+  /// Refresh access token using refresh token
+  Future<bool> refreshToken() async {
+    return await _refreshTokenSilently();
+  }
+
+  /// Clear all stored tokens
+  Future<void> clearTokens() async {
+    await _clearAllAuthData();
+  }
+
+  /// Get device identifier for tracking
+  Future<String?> getDeviceId() async {
+    return await _getDeviceId();
+  }
+
+  /// Get current session ID
+  Future<String?> getSessionId() async {
+    final sessionData = await _storage.read(key: _sessionDataKey);
+    if (sessionData != null) {
+      final data = jsonDecode(sessionData);
+      return data['session_id'] as String?;
+    }
+    return null;
   }
 }
 

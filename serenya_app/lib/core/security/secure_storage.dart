@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:crypto/crypto.dart';
@@ -337,7 +336,7 @@ class SecureStorageService {
 
       // Validate data integrity
       if (retrieveResult.data != testValue) {
-        return SecureStorageTestResult(
+        return const SecureStorageTestResult(
           success: false,
           message: 'Data integrity test failed: values do not match',
         );
@@ -353,7 +352,7 @@ class SecureStorageService {
         );
       }
 
-      return SecureStorageTestResult(
+      return const SecureStorageTestResult(
         success: true,
         message: 'All secure storage tests passed',
       );
@@ -424,7 +423,7 @@ class SecureStorageService {
       if (validateIntegrity) {
         final currentChecksum = sha256.convert(utf8.encode(value)).toString();
         if (currentChecksum != storedChecksum) {
-          return ValueExtractionResult(
+          return const ValueExtractionResult(
             success: false,
             error: 'Data integrity validation failed',
           );
@@ -459,7 +458,7 @@ class SecureStorageService {
         );
 
       case StorageSecurityLevel.high:
-        return StorageOptions(
+        return const StorageOptions(
           androidOptions: _androidOptions,
           iOSOptions: _iOSOptions,
         );
@@ -507,7 +506,7 @@ class SecureStorageService {
 
     // Console logging for development
     if (kDebugMode) {
-      print('$_logPrefix: $eventType - Key: ${key != null ? key.substring(0, 8) + '...' : 'N/A'}, Success: ${success ?? 'N/A'}');
+      print('$_logPrefix: $eventType - Key: ${key != null ? '${key.substring(0, 8)}...' : 'N/A'}, Success: ${success ?? 'N/A'}');
       if (error != null) {
         print('$_logPrefix: Error - $error');
       }

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import '../../../services/auth_service.dart';
+import '../widgets/legal_document_viewer.dart';
+import '../widgets/auth_error_handler.dart';
 
 class ConsentSlide extends StatefulWidget {
   final Function(bool agreedToTerms, bool understoodDisclaimer, bool authSuccess) onAgree;
@@ -29,45 +32,144 @@ class _ConsentSlideState extends State<ConsentSlide> {
     });
 
     try {
-      // Prepare consent data to send with authentication
+      // Prepare consent data matching API contract - 2 checkboxes map to 5 consent types
       final consentData = {
-        'agreed_to_terms': _agreedToTerms,
-        'understood_disclaimer': _understoodDisclaimer,
+        // Checkbox 1 - Legal & Processing Bundle maps to 3 consent types
+        'terms_of_service': _agreedToTerms,
+        'privacy_policy': _agreedToTerms,
+        'healthcare_consultation': _agreedToTerms,
+        
+        // Checkbox 2 - Medical Disclaimers Bundle maps to 2 consent types
+        'medical_disclaimers': _understoodDisclaimer, // FIXED: Changed from 'medical_disclaimer' to 'medical_disclaimers' to match backend
+        'emergency_care_limitation': _understoodDisclaimer,
+        
         'timestamp': DateTime.now().toIso8601String(),
         'version': '1.0',
+        'consent_method': 'bundled_consent',
       };
       
-      final success = await _authService.signInWithGoogle(consentData: consentData);
-      widget.onAgree(_agreedToTerms, _understoodDisclaimer, success);
+      final result = await _authService.signInWithGoogle(consentData: consentData);
+      widget.onAgree(_agreedToTerms, _understoodDisclaimer, result.success);
     } catch (e) {
-      // Handle error
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.error_outline, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Sign in failed. Please try again.'),
-              ],
-            ),
-            backgroundColor: Colors.red[600],
-            duration: Duration(seconds: 4),
-            action: SnackBarAction(
-              label: 'Retry',
-              textColor: Colors.white,
-              onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                _handleGoogleSignIn();
-              },
-            ),
-          ),
-        );
-      }
+      // Enhanced healthcare-compliant error handling
       setState(() {
         _isLoading = false;
       });
+      
+      if (mounted) {
+        final errorInfo = _categorizeError(e);
+        AuthErrorHandler.showError(
+          context,
+          errorCode: errorInfo['error_code'],
+          userMessage: errorInfo['user_message'],
+          technicalDetails: errorInfo['technical_details'],
+          onRetry: _handleGoogleSignIn,
+          onSettings: _showBiometricGuidance,
+          onSupport: _contactSupport,
+        );
+      }
     }
+  }
+
+  /// Categorize error for healthcare-appropriate error handling
+  Map<String, dynamic> _categorizeError(dynamic error) {
+    String errorCode = 'UNKNOWN_ERROR';
+    String userMessage = 'Something went wrong. Please try again.';
+    String recoveryAction = 'retry';
+    String technicalDetails = error.toString();
+    
+    if (error.toString().contains('network') || 
+        error.toString().contains('timeout') ||
+        error.toString().contains('connection')) {
+      errorCode = 'NETWORK_ERROR';
+      userMessage = 'Connection issue. Check your internet and try again.';
+      recoveryAction = 'retry';
+    } else if (error.toString().contains('cancelled')) {
+      errorCode = 'USER_CANCELLED';
+      userMessage = 'Sign-in was cancelled. Tap to try again.';
+      recoveryAction = 'retry';
+    } else if (error.toString().contains('google')) {
+      errorCode = 'GOOGLE_AUTH_ERROR';
+      userMessage = 'Google sign-in failed. Please try again.';
+      recoveryAction = 'retry';
+    } else if (error.toString().contains('biometric')) {
+      errorCode = 'BIOMETRIC_ERROR';
+      userMessage = 'Biometric authentication required for medical data access.';
+      recoveryAction = 'settings';
+    }
+    
+    return {
+      'error_code': errorCode,
+      'user_message': userMessage,
+      'recovery_action': recoveryAction,
+      'technical_details': technicalDetails,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+  }
+
+
+  void _showBiometricGuidance() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Biometric Setup Required'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'For secure access to your medical data, please enable biometric authentication:',
+              style: TextStyle(fontSize: 14),
+            ),
+            SizedBox(height: 12),
+            Text('• Go to device Settings'),
+            Text('• Find Security or Biometrics'),
+            Text('• Enable Face ID/Touch ID/Fingerprint'),
+            Text('• Return to Serenya to continue'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _contactSupport() {
+    // In a real app, this would open email or support chat
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Contact Support'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Need help? Get in touch with us:'),
+            const SizedBox(height: 12),
+            const Text('📧 support@serenya.ai'),
+            const Text('💬 Chat support in app'),
+            const SizedBox(height: 8),
+            Text(
+              'We typically respond within 4 hours.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -190,18 +292,105 @@ class _ConsentSlideState extends State<ConsentSlide> {
             ),
           ),
           const SizedBox(height: 16),
-          _buildCheckboxItem(
-            value: _understoodDisclaimer,
-            onChanged: (value) => setState(() => _understoodDisclaimer = value ?? false),
-            text: 'I understand Serenya provides medical interpretation assistance (not medical advice), that I should always consult healthcare professionals for medical decisions, and that this is not a medical device or diagnostic tool',
+          _buildLegalCheckboxItem(
+            value: _agreedToTerms,
+            onChanged: (value) => setState(() => _agreedToTerms = value ?? false),
           ),
           const SizedBox(height: 16),
           _buildCheckboxItem(
-            value: _agreedToTerms,
-            onChanged: (value) => setState(() => _agreedToTerms = value ?? false),
-            text: 'I agree to the Terms of Service and Privacy Policy',
+            value: _understoodDisclaimer,
+            onChanged: (value) => setState(() => _understoodDisclaimer = value ?? false),
+            text: 'I understand that Serenya is not a medical device and has limitations in emergency situations. I will always consult healthcare professionals for medical decisions.',
+            isMedicalBundle: true,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLegalCheckboxItem({
+    required bool value,
+    required ValueChanged<bool?> onChanged,
+  }) {
+    return Semantics(
+      container: true,
+      label: '${value ? 'Checked' : 'Unchecked'} checkbox: Legal agreement and consent',
+      hint: 'Tap to ${value ? 'uncheck' : 'check'}',
+      child: InkWell(
+        onTap: () => onChanged(!value),
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.all(4.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: Checkbox(
+                  value: value,
+                  onChanged: onChanged,
+                  activeColor: Colors.blue[600],
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ExcludeSemantics(
+                      child: RichText(
+                        text: TextSpan(
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[700],
+                            height: 1.4,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          children: [
+                            const TextSpan(text: 'I agree to the '),
+                            TextSpan(
+                              text: 'Terms of Service',
+                              style: TextStyle(
+                                color: Colors.blue[600],
+                                decoration: TextDecoration.underline,
+                              ),
+                              recognizer: TapGestureRecognizer()
+                                ..onTap = () => LegalDocumentViewer.showTerms(context),
+                            ),
+                            const TextSpan(text: ' and '),
+                            TextSpan(
+                              text: 'Privacy Policy',
+                              style: TextStyle(
+                                color: Colors.blue[600],
+                                decoration: TextDecoration.underline,
+                              ),
+                              recognizer: TapGestureRecognizer()
+                                ..onTap = () => LegalDocumentViewer.showPrivacy(context),
+                            ),
+                            const TextSpan(text: ', and consent to AI processing of my medical data'),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Includes: Terms, Privacy Policy, Healthcare Consultation Agreement',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.blue[600],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -210,6 +399,8 @@ class _ConsentSlideState extends State<ConsentSlide> {
     required bool value,
     required ValueChanged<bool?> onChanged,
     required String text,
+    bool isLegalBundle = false,
+    bool isMedicalBundle = false,
   }) {
     return Semantics(
       container: true,
@@ -237,15 +428,43 @@ class _ConsentSlideState extends State<ConsentSlide> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: ExcludeSemantics(
-                  child: Text(
-                    text,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[700],
-                      height: 1.4,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ExcludeSemantics(
+                      child: Text(
+                        text,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[700],
+                          height: 1.4,
+                          fontWeight: (isLegalBundle || isMedicalBundle) ? FontWeight.w500 : FontWeight.normal,
+                        ),
+                      ),
                     ),
-                  ),
+                    if (isLegalBundle) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Includes: Terms, Privacy Policy, Healthcare Consultation Agreement',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.blue[600],
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                    if (isMedicalBundle) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Includes: Medical Disclaimer, Emergency Care Limitations',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.orange[600],
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ],
@@ -352,7 +571,7 @@ class _ConsentSlideState extends State<ConsentSlide> {
                       ),
                       child: CustomPaint(
                         painter: GoogleLogoPainter(),
-                        size: Size(18, 18),
+                        size: const Size(18, 18),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -382,7 +601,7 @@ class GoogleLogoPainter extends CustomPainter {
     
     // Google "G" logo simplified implementation
     // Blue
-    paint.color = Color(0xFF4285F4);
+    paint.color = const Color(0xFF4285F4);
     canvas.drawPath(
       Path()
         ..moveTo(size.width * 0.4, size.height * 0.5)
@@ -396,7 +615,7 @@ class GoogleLogoPainter extends CustomPainter {
     );
     
     // Red
-    paint.color = Color(0xFFEA4335);
+    paint.color = const Color(0xFFEA4335);
     canvas.drawArc(
       Rect.fromLTWH(0, 0, size.width, size.height),
       -0.5,
@@ -406,7 +625,7 @@ class GoogleLogoPainter extends CustomPainter {
     );
     
     // Yellow
-    paint.color = Color(0xFFFFBC04);
+    paint.color = const Color(0xFFFFBC04);
     canvas.drawArc(
       Rect.fromLTWH(0, 0, size.width, size.height),
       0.5,
@@ -416,7 +635,7 @@ class GoogleLogoPainter extends CustomPainter {
     );
     
     // Green
-    paint.color = Color(0xFF34A853);
+    paint.color = const Color(0xFF34A853);
     canvas.drawArc(
       Rect.fromLTWH(0, 0, size.width, size.height),
       1.5,

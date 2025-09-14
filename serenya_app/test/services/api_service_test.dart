@@ -4,8 +4,8 @@ import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
 import 'package:dio/dio.dart';
 
-import '../../lib/services/api_service.dart';
-import '../../lib/services/auth_service.dart';
+import 'package:serenya_app/services/api_service.dart';
+import 'package:serenya_app/services/auth_service.dart';
 
 // Generate mocks for testing
 @GenerateMocks([
@@ -118,9 +118,7 @@ void main() {
           requestOptions: RequestOptions(path: '/upload'),
         ));
 
-        var progressCalled = false;
         void progressCallback(int sent, int total) {
-          progressCalled = true;
           expect(sent, lessThanOrEqualTo(total));
         }
 
@@ -350,6 +348,7 @@ void main() {
         verify(mockDio.post(
           '/api/v1/process/retry/$jobId',
           data: argThat(predicate((data) => 
+            data is Map &&
             data['attempt_number'] == attemptNumber &&
             data['retry_timestamp'] != null
           ), named: 'data'),

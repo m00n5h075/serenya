@@ -19,7 +19,6 @@ import 'package:google_sign_in_platform_interface/google_sign_in_platform_interf
     as _i10;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i12;
-import 'package:serenya_app/core/security/biometric_auth_service.dart' as _i15;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -1378,14 +1377,4 @@ class MockDio extends _i1.Mock implements _i9.Dio {
           ),
         ),
       ) as _i9.Dio);
-}
-
-/// A class which mocks [BiometricAuthService].
-///
-/// See the documentation for Mockito's code generation for more information.
-class MockBiometricAuthService extends _i1.Mock
-    implements _i15.BiometricAuthService {
-  MockBiometricAuthService() {
-    _i1.throwOnMissingStub(this);
-  }
 }

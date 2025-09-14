@@ -1,10 +1,7 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import '../core/constants/app_constants.dart';
 import '../core/security/certificate_pinning.dart';
-import '../services/auth_service.dart';
 import 'interceptors/auth_interceptor.dart';
 import 'interceptors/encryption_interceptor.dart';
 import 'interceptors/logging_interceptor.dart';
@@ -45,7 +42,7 @@ class ApiClient {
 
   ApiClient._internal() {
     _setupDioClient();
-    _errorHandler = ApiErrorHandler(_dio);
+    _errorHandler = ApiErrorHandler();
     
     // Initialize endpoint-specific services
     auth = AuthApi(_dio, _errorHandler);
@@ -59,9 +56,9 @@ class ApiClient {
   void _setupDioClient() {
     _dio = Dio(BaseOptions(
       baseUrl: AppConstants.baseApiUrl,
-      connectTimeout: Duration(seconds: ApiConstants.connectTimeoutSeconds),
-      receiveTimeout: Duration(seconds: ApiConstants.receiveTimeoutSeconds),
-      sendTimeout: Duration(seconds: ApiConstants.sendTimeoutSeconds),
+      connectTimeout: const Duration(seconds: ApiConstants.connectTimeoutSeconds),
+      receiveTimeout: const Duration(seconds: ApiConstants.receiveTimeoutSeconds),
+      sendTimeout: const Duration(seconds: ApiConstants.sendTimeoutSeconds),
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -125,7 +122,7 @@ class ApiClient {
   /// Clear all cached data and reset client state
   Future<void> reset() async {
     // Clear Dio cache if any
-    await _dio.close(force: true);
+    _dio.close(force: true);
     
     // Reinitialize client
     _setupDioClient();

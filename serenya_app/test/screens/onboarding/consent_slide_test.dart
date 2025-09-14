@@ -130,7 +130,7 @@ void main() {
       await tester.pump();
 
       // Wait for loading delay
-      await tester.pump(Duration(milliseconds: 600));
+      await tester.pump(const Duration(milliseconds: 600));
 
       expect(agreedToTerms, isTrue);
       expect(understoodDisclaimer, isTrue);
@@ -142,7 +142,7 @@ void main() {
           home: ConsentSlide(
             onAgree: (terms, disclaimer, authSuccess) async {
               // Simulate async operation
-              await Future.delayed(Duration(seconds: 1));
+              await Future.delayed(const Duration(seconds: 1));
             },
           ),
         ),

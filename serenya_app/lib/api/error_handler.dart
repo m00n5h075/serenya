@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../core/security/local_audit_logger.dart';
@@ -12,9 +11,7 @@ import 'api_client.dart';
 /// - Network-aware error classification
 /// - Retry decision logic for different error types
 class ApiErrorHandler {
-  final Dio _dio;
-  
-  ApiErrorHandler(this._dio);
+  ApiErrorHandler();
 
   /// Handle Dio errors with healthcare-specific messaging
   Future<ApiResult<T>> handleDioError<T>(
@@ -216,7 +213,7 @@ class ApiErrorHandler {
     }
 
     // Exponential backoff with jitter
-    final baseDelay = Duration(seconds: 1);
+    const baseDelay = Duration(seconds: 1);
     final exponentialDelay = Duration(
       milliseconds: baseDelay.inMilliseconds * (1 << (attemptCount - 1))
     );

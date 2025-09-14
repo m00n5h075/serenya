@@ -190,15 +190,12 @@ exports.handler = async (event) => {
     });
 
     return createResponse(200, {
-      success: true,
-      job_id: jobId,
-      message: 'File uploaded successfully',
-      file_info: {
-        name: sanitizedFileName,
-        type: fileType,
-        size: fileSize,
-      },
-      processing_status: 'uploaded',
+      document_id: jobResult.jobId,
+      file_name: sanitizedFileName,
+      mime_type: getMimeType(fileType),
+      file_size_bytes: fileSize,
+      status: 'uploaded',
+      uploaded_at: new Date().toISOString(),
     });
 
   } catch (error) {

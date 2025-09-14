@@ -26,7 +26,7 @@ class CommonButton extends StatelessWidget {
     final buttonStyle = _getButtonStyle(type);
     
     return Container(
-      margin: margin ?? EdgeInsets.symmetric(horizontal: AppConstants.defaultPadding),
+      margin: margin ?? const EdgeInsets.symmetric(horizontal: AppConstants.defaultPadding),
       width: width ?? double.infinity,
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
@@ -48,11 +48,11 @@ class CommonButton extends StatelessWidget {
                 children: [
                   if (icon != null) ...[
                     Icon(icon, size: 18),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                   ],
                   Text(
                     text,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
@@ -69,44 +69,44 @@ class CommonButton extends StatelessWidget {
         return ElevatedButton.styleFrom(
           backgroundColor: Colors.blue[600],
           foregroundColor: Colors.white,
-          padding: EdgeInsets.symmetric(vertical: AppConstants.defaultPadding),
+          padding: const EdgeInsets.symmetric(vertical: AppConstants.defaultPadding),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppConstants.borderRadius),
           ),
           elevation: 2,
-          minimumSize: Size(double.infinity, 48),
+          minimumSize: const Size(double.infinity, 48),
         );
       case ButtonType.secondary:
         return ElevatedButton.styleFrom(
           backgroundColor: Colors.grey[200],
           foregroundColor: Colors.grey[800],
-          padding: EdgeInsets.symmetric(vertical: AppConstants.defaultPadding),
+          padding: const EdgeInsets.symmetric(vertical: AppConstants.defaultPadding),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppConstants.borderRadius),
           ),
           elevation: 0,
-          minimumSize: Size(double.infinity, 48),
+          minimumSize: const Size(double.infinity, 48),
         );
       case ButtonType.danger:
         return ElevatedButton.styleFrom(
           backgroundColor: Colors.red[600],
           foregroundColor: Colors.white,
-          padding: EdgeInsets.symmetric(vertical: AppConstants.defaultPadding),
+          padding: const EdgeInsets.symmetric(vertical: AppConstants.defaultPadding),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppConstants.borderRadius),
           ),
           elevation: 2,
-          minimumSize: Size(double.infinity, 48),
+          minimumSize: const Size(double.infinity, 48),
         );
       case ButtonType.outline:
         return OutlinedButton.styleFrom(
           foregroundColor: Colors.blue[600],
-          padding: EdgeInsets.symmetric(vertical: AppConstants.defaultPadding),
+          padding: const EdgeInsets.symmetric(vertical: AppConstants.defaultPadding),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppConstants.borderRadius),
           ),
           side: BorderSide(color: Colors.blue[600]!),
-          minimumSize: Size(double.infinity, 48),
+          minimumSize: const Size(double.infinity, 48),
         );
     }
   }

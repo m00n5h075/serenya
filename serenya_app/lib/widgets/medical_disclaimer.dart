@@ -18,8 +18,8 @@ class MedicalDisclaimer extends StatelessWidget {
     final disclaimerInfo = _getDisclaimerInfo(type);
     
     return Container(
-      padding: EdgeInsets.all(AppConstants.defaultPadding),
-      margin: EdgeInsets.symmetric(horizontal: AppConstants.defaultPadding),
+      padding: const EdgeInsets.all(AppConstants.defaultPadding),
+      margin: const EdgeInsets.symmetric(horizontal: AppConstants.defaultPadding),
       decoration: BoxDecoration(
         color: disclaimerInfo.backgroundColor,
         borderRadius: BorderRadius.circular(AppConstants.borderRadius),
@@ -35,7 +35,7 @@ class MedicalDisclaimer extends StatelessWidget {
                 color: disclaimerInfo.iconColor,
                 size: 20,
               ),
-              SizedBox(width: AppConstants.smallPadding),
+              const SizedBox(width: AppConstants.smallPadding),
               Expanded(
                 child: Text(
                   disclaimerInfo.title,
@@ -48,7 +48,7 @@ class MedicalDisclaimer extends StatelessWidget {
               ),
             ],
           ),
-          SizedBox(height: AppConstants.smallPadding),
+          const SizedBox(height: AppConstants.smallPadding),
           Text(
             isCompact ? disclaimerInfo.shortText : disclaimerInfo.fullText,
             style: TextStyle(
@@ -58,14 +58,14 @@ class MedicalDisclaimer extends StatelessWidget {
             ),
           ),
           if (onLearnMore != null) ...[
-            SizedBox(height: AppConstants.smallPadding),
+            const SizedBox(height: AppConstants.smallPadding),
             TextButton(
               onPressed: onLearnMore,
               style: TextButton.styleFrom(
                 foregroundColor: disclaimerInfo.iconColor,
                 padding: EdgeInsets.zero,
               ),
-              child: Text(
+              child: const Text(
                 'Learn more',
                 style: TextStyle(
                   fontSize: 13,

@@ -3,12 +3,13 @@ import 'dart:io';
 import '../models/local_database_models.dart';
 import '../core/constants/app_constants.dart';
 import '../core/providers/health_data_provider.dart';
+import '../core/database/processing_job_repository.dart';
 import 'api_service.dart';
+import 'notification_service.dart';
 
 class ProcessingService {
   final ApiService _apiService = ApiService();
-  final Map<String, Timer> _retryTimers = {};
-  final Map<String, int> _retryAttempts = {};
+  final NotificationService _notificationService = NotificationService();
 
   Future<ProcessingResult> processDocument({
     required File file,
@@ -16,15 +17,18 @@ class ProcessingService {
     required HealthDataProvider dataProvider,
   }) async {
     try {
-      // Create initial document record
+      // Phase P0: Create processing job record in database
+      // This replaces the timer-based approach with persistent tracking
+      
+      // Create initial document record with pending status
       final document = SerenyaContent(
         id: DateTime.now().millisecondsSinceEpoch.toString(), // Temporary ID until server assigns one
         userId: 'current_user', // This should come from auth service
         contentType: ContentType.result,
-        title: 'Processing ${fileName}',
+        title: 'Processing $fileName',
         content: '', // Will be filled when processing completes
         confidenceScore: 0.0, // Will be filled when processing completes
-        medicalFlags: [],
+        medicalFlags: const [],
         fileName: fileName,
         fileType: _extractFileType(fileName),
         fileSize: await file.length(),
@@ -36,14 +40,27 @@ class ProcessingService {
 
       await dataProvider.addDocument(document);
 
-      // Start upload process
-      final uploadResult = await _apiService.uploadDocument(
-        file: file,
+      // Start upload process using three-layer error handling
+      final uploadResult = await _executeWithErrorHandling(
+        operation: () => _apiService.uploadDocument(
+          file: file,
+          fileName: fileName,
+          fileType: document.fileType ?? 'unknown',
+        ),
+        context: 'document_upload',
         fileName: fileName,
-        fileType: document.fileType ?? 'unknown',
       );
 
       if (!uploadResult.success || uploadResult.data == null) {
+        // Update document status to failed
+        await dataProvider.updateDocument(
+          document.copyWith(
+            processingStatus: ProcessingStatus.failed,
+            content: 'Upload failed: ${uploadResult.message}',
+            updatedAt: DateTime.now(),
+          )
+        );
+        
         return ProcessingResult(
           success: false,
           message: uploadResult.message,
@@ -52,25 +69,41 @@ class ProcessingService {
       }
 
       final jobId = uploadResult.data!['job_id'] as String;
+      final estimatedSeconds = uploadResult.data!['estimated_completion_seconds'] as int?;
       
-      // Update document with processing status
+      // Create persistent processing job record (replaces timer approach)
+      final processingJob = await ProcessingJobRepository.createJob(
+        jobId: jobId,
+        jobType: JobType.documentUpload,
+        status: JobStatus.processing,
+        estimatedCompletionSeconds: estimatedSeconds,
+      );
+
+      // Update document with processing status and link to job
       final updatedDocument = document.copyWith(
         processingStatus: ProcessingStatus.processing,
         updatedAt: DateTime.now(),
       );
       await dataProvider.updateDocument(updatedDocument);
 
-      // Start monitoring processing
-      _startProcessingMonitor(jobId, updatedDocument, dataProvider);
+      // Send notification about upload success
+      await _notificationService.showNotification(
+        title: 'Upload Complete',
+        body: 'Your document $fileName is now being processed.',
+      );
 
       return ProcessingResult(
         success: true,
         jobId: jobId,
         document: updatedDocument,
+        processingJob: processingJob,
         message: 'Document uploaded successfully. Processing started.',
       );
 
     } catch (e) {
+      // Handle unexpected errors with comprehensive logging
+      await _logProcessingError('document_upload_failed', fileName, e);
+      
       return ProcessingResult(
         success: false,
         message: 'Upload failed: ${e.toString()}',
@@ -79,225 +112,399 @@ class ProcessingService {
     }
   }
 
-  void _startProcessingMonitor(
-    String jobId,
-    SerenyaContent document,
-    HealthDataProvider dataProvider,
-  ) {
-    Timer.periodic(Duration(seconds: 10), (timer) async {
-      try {
-        final statusResult = await _apiService.getProcessingStatus(jobId);
-        if (statusResult.success && statusResult.data != null) {
-          await _handleProcessingUpdate(
-            jobId,
-            statusResult.data!,
-            document,
-            dataProvider,
-            timer,
-          );
-        }
-      } catch (e) {
-        print('Error checking processing status: $e');
-        // Continue monitoring - temporary network issues shouldn't stop monitoring
+  /// Poll processing status for a specific job
+  /// 
+  /// This method is called by the polling service to check job status
+  /// Replaces timer-based monitoring with database-driven polling
+  Future<ProcessingJobPollResult> pollJobStatus(
+    String jobId, {
+    required HealthDataProvider dataProvider,
+  }) async {
+    try {
+      // Get current job from database
+      final job = await ProcessingJobRepository.getJob(jobId);
+      if (job == null) {
+        return ProcessingJobPollResult(
+          jobId: jobId,
+          success: false,
+          errorMessage: 'Job not found in database',
+          shouldContinuePolling: false,
+        );
       }
-    });
+
+      // Check server status using three-layer error handling
+      final statusResult = await _executeWithErrorHandling(
+        operation: () => _apiService.getProcessingStatus(jobId),
+        context: 'status_poll',
+        jobId: jobId,
+      );
+
+      if (!statusResult.success || statusResult.data == null) {
+        // Update retry count and schedule next poll
+        final updatedJob = await ProcessingJobRepository.updatePollingMetadata(
+          jobId, 
+          job.retryCount + 1,
+        );
+        
+        return ProcessingJobPollResult(
+          jobId: jobId,
+          success: false,
+          errorMessage: statusResult.message,
+          shouldContinuePolling: updatedJob.retryCount < AppConstants.maxRetryAttempts,
+          nextPollAt: updatedJob.nextPollAt,
+        );
+      }
+
+      final statusData = statusResult.data!;
+      final status = statusData['status'] as String;
+
+      return await _handlePollingStatusUpdate(
+        job,
+        status,
+        statusData,
+        dataProvider,
+      );
+
+    } catch (e) {
+      await _logProcessingError('job_polling_failed', jobId, e);
+      
+      return ProcessingJobPollResult(
+        jobId: jobId,
+        success: false,
+        errorMessage: 'Polling failed: ${e.toString()}',
+        shouldContinuePolling: false,
+      );
+    }
   }
 
-  Future<void> _handleProcessingUpdate(
-    String jobId,
+  /// Handle status update from polling
+  /// 
+  /// Processes different status transitions and updates database accordingly
+  Future<ProcessingJobPollResult> _handlePollingStatusUpdate(
+    ProcessingJob job,
+    String status,
     Map<String, dynamic> statusData,
-    SerenyaContent document,
     HealthDataProvider dataProvider,
-    Timer timer,
   ) async {
-    final status = statusData['status'] as String;
-    final currentTime = DateTime.now();
-
     switch (status) {
       case 'completed':
-        timer.cancel();
-        _retryTimers.remove(jobId);
-        _retryAttempts.remove(jobId);
-        
-        try {
-          final interpretationResult = await _apiService.getInterpretation(jobId);
-          if (!interpretationResult.success || interpretationResult.data == null) {
-            await _markDocumentFailed(document, dataProvider, 'Failed to retrieve interpretation');
-            return;
-          }
-
-          final interpretation = interpretationResult.data!;
-          final updatedDocument = document.copyWith(
-            processingStatus: ProcessingStatus.completed,
-            confidenceScore: interpretation['confidence_score']?.toDouble() ?? 0.0,
-            content: interpretation['interpretation_text'] ?? '',
-            title: 'Analysis Complete - ${document.fileName ?? 'Document'}',
-            updatedAt: currentTime,
-          );
-          
-          await dataProvider.updateDocument(updatedDocument);
-          
-          // Update with detailed interpretation and medical flags
-          if (interpretation['detailed_interpretation'] != null) {
-            final finalDocument = updatedDocument.copyWith(
-              content: interpretation['detailed_interpretation'],
-              medicalFlags: _extractMedicalFlags(interpretation),
-              updatedAt: currentTime,
-            );
-            
-            await dataProvider.updateDocument(finalDocument);
-          }
-          
-        } catch (e) {
-          print('Error getting interpretation: $e');
-          await _markDocumentFailed(document, dataProvider, 'Failed to retrieve interpretation');
-        }
-        break;
+        return await _handleJobCompletion(job, statusData, dataProvider);
 
       case 'failed':
-        timer.cancel();
-        await _handleProcessingFailure(jobId, document, dataProvider, statusData);
-        break;
+        return await _handleJobFailure(job, statusData, dataProvider);
 
       case 'processing':
-        // Continue monitoring - update timestamp to show it's still active
-        final updatedDocument = document.copyWith(
-          processingStatus: ProcessingStatus.processing,
-          updatedAt: currentTime,
-        );
-        await dataProvider.updateDocument(updatedDocument);
-        break;
+        return await _handleJobStillProcessing(job, dataProvider);
 
       case 'timeout':
-        timer.cancel();
-        await _handleProcessingTimeout(jobId, document, dataProvider);
-        break;
-    }
-  }
+        return await _handleJobTimeout(job, dataProvider);
 
-  Future<void> _handleProcessingFailure(
-    String jobId,
-    SerenyaContent document,
-    HealthDataProvider dataProvider,
-    Map<String, dynamic> statusData,
-  ) async {
-    final currentAttempt = _retryAttempts[jobId] ?? 0;
-    final errorMessage = statusData['error_message'] as String?;
-    
-    if (currentAttempt < AppConstants.maxRetryAttempts) {
-      await _scheduleRetry(jobId, document, dataProvider, currentAttempt);
-    } else {
-      _retryAttempts.remove(jobId);
-      await _markDocumentFailed(
-        document,
-        dataProvider,
-        errorMessage ?? 'Processing failed after ${AppConstants.maxRetryAttempts} attempts',
-      );
-    }
-  }
-
-  Future<void> _handleProcessingTimeout(
-    String jobId,
-    SerenyaContent document,
-    HealthDataProvider dataProvider,
-  ) async {
-    final currentAttempt = _retryAttempts[jobId] ?? 0;
-    
-    if (currentAttempt < AppConstants.maxRetryAttempts) {
-      await _scheduleRetry(jobId, document, dataProvider, currentAttempt);
-    } else {
-      _retryAttempts.remove(jobId);
-      await _markDocumentFailed(
-        document,
-        dataProvider,
-        'Processing timeout after ${AppConstants.processingTimeoutMinutes} minutes',
-      );
-    }
-  }
-
-  Future<void> _scheduleRetry(
-    String jobId,
-    SerenyaContent document,
-    HealthDataProvider dataProvider,
-    int attemptNumber,
-  ) async {
-    _retryAttempts[jobId] = attemptNumber + 1;
-    
-    // Update document status to retrying
-    final updatedDocument = document.copyWith(
-      processingStatus: ProcessingStatus.retrying,
-      updatedAt: DateTime.now(),
-    );
-    await dataProvider.updateDocument(updatedDocument);
-    
-    // Schedule retry based on attempt number
-    final retryDelay = Duration(seconds: AppConstants.retryDelaySeconds[attemptNumber]);
-    
-    _retryTimers[jobId] = Timer(retryDelay, () async {
-      try {
-        await _apiService.retryProcessing(jobId);
-        
-        // Update status back to processing
-        final processingDocument = updatedDocument.copyWith(
-          processingStatus: ProcessingStatus.processing,
-          updatedAt: DateTime.now(),
+      default:
+        await _logProcessingError('unknown_job_status', job.jobId, 'Unknown status: $status');
+        return ProcessingJobPollResult(
+          jobId: job.jobId,
+          success: false,
+          errorMessage: 'Unknown job status: $status',
+          shouldContinuePolling: false,
         );
-        await dataProvider.updateDocument(processingDocument);
-        
-        // Resume monitoring
-        _startProcessingMonitor(jobId, processingDocument, dataProvider);
-        
-      } catch (e) {
-        print('Retry failed: $e');
-        await _markDocumentFailed(
-          document,
+    }
+  }
+
+  /// Handle job completion
+  Future<ProcessingJobPollResult> _handleJobCompletion(
+    ProcessingJob job,
+    Map<String, dynamic> statusData,
+    HealthDataProvider dataProvider,
+  ) async {
+    try {
+      // Get interpretation results
+      final interpretationResult = await _executeWithErrorHandling(
+        operation: () => _apiService.getInterpretation(job.jobId),
+        context: 'interpretation_retrieval',
+        jobId: job.jobId,
+      );
+
+      if (!interpretationResult.success || interpretationResult.data == null) {
+        return await _handleJobFailure(
+          job, 
+          {'error_message': 'Failed to retrieve interpretation: ${interpretationResult.message}'}, 
           dataProvider,
-          'Retry attempt ${attemptNumber + 1} failed: ${e.toString()}',
         );
       }
-    });
+
+      final interpretation = interpretationResult.data!;
+      final resultContentId = interpretation['content_id'] as String?;
+      
+      if (resultContentId == null) {
+        return await _handleJobFailure(
+          job,
+          {'error_message': 'No content ID in interpretation response'},
+          dataProvider,
+        );
+      }
+
+      // Mark job as completed in database
+      await ProcessingJobRepository.completeJob(job.jobId, resultContentId);
+
+      // Update document in UI database
+      await _updateDocumentWithResults(
+        resultContentId,
+        interpretation,
+        dataProvider,
+      );
+
+      // Send completion notification
+      await _notificationService.showNotification(
+        title: 'Processing Complete',
+        body: 'Your document analysis is ready to view.',
+      );
+
+      return ProcessingJobPollResult(
+        jobId: job.jobId,
+        success: true,
+        shouldContinuePolling: false,
+        resultContentId: resultContentId,
+      );
+
+    } catch (e) {
+      await _logProcessingError('job_completion_failed', job.jobId, e);
+      return await _handleJobFailure(
+        job,
+        {'error_message': 'Completion handling failed: ${e.toString()}'},
+        dataProvider,
+      );
+    }
   }
 
-  Future<void> _markDocumentFailed(
-    SerenyaContent document,
+  /// Handle job failure
+  Future<ProcessingJobPollResult> _handleJobFailure(
+    ProcessingJob job,
+    Map<String, dynamic> statusData,
     HealthDataProvider dataProvider,
-    String errorMessage,
   ) async {
-    final failedDocument = document.copyWith(
-      processingStatus: ProcessingStatus.failed,
-      content: 'Processing failed: $errorMessage',
+    final errorMessage = statusData['error_message'] as String? ?? 'Processing failed';
+    
+    // Mark job as failed in database
+    await ProcessingJobRepository.failJob(job.jobId, errorMessage);
+
+    // Update document to show failure
+    await _updateDocumentWithFailure(job.jobId, errorMessage, dataProvider);
+
+    // Send failure notification
+    await _notificationService.showNotification(
+      title: 'Processing Failed',
+      body: 'Document processing failed: $errorMessage',
+    );
+
+    return ProcessingJobPollResult(
+      jobId: job.jobId,
+      success: false,
+      errorMessage: errorMessage,
+      shouldContinuePolling: false,
+    );
+  }
+
+  /// Handle job still processing
+  Future<ProcessingJobPollResult> _handleJobStillProcessing(
+    ProcessingJob job,
+    HealthDataProvider dataProvider,
+  ) async {
+    // Update polling metadata for next check
+    final updatedJob = await ProcessingJobRepository.updatePollingMetadata(
+      job.jobId,
+      job.retryCount,
+    );
+
+    return ProcessingJobPollResult(
+      jobId: job.jobId,
+      success: true,
+      shouldContinuePolling: true,
+      nextPollAt: updatedJob.nextPollAt,
+    );
+  }
+
+  /// Handle job timeout
+  Future<ProcessingJobPollResult> _handleJobTimeout(
+    ProcessingJob job,
+    HealthDataProvider dataProvider,
+  ) async {
+    if (job.retryCount < AppConstants.maxRetryAttempts) {
+      // Schedule retry
+      final updatedJob = await ProcessingJobRepository.updatePollingMetadata(
+        job.jobId,
+        job.retryCount + 1,
+      );
+
+      return ProcessingJobPollResult(
+        jobId: job.jobId,
+        success: true,
+        shouldContinuePolling: true,
+        nextPollAt: updatedJob.nextPollAt,
+        message: 'Job timed out, retrying...',
+      );
+    } else {
+      // Max retries exceeded
+      return await _handleJobFailure(
+        job,
+        {'error_message': 'Processing timeout after ${AppConstants.maxRetryAttempts} retry attempts'},
+        dataProvider,
+      );
+    }
+  }
+
+  /// Update document with successful processing results
+  Future<void> _updateDocumentWithResults(
+    String contentId,
+    Map<String, dynamic> interpretation,
+    HealthDataProvider dataProvider,
+  ) async {
+    // This would normally find and update the existing document
+    // For now, we'll create a new document record with the results
+    // In a full implementation, this would link to the original upload
+    
+    final document = SerenyaContent(
+      id: contentId,
+      userId: 'current_user', // This should come from auth service
+      contentType: ContentType.result,
+      title: interpretation['title'] ?? 'Analysis Complete',
+      summary: interpretation['summary'],
+      content: interpretation['detailed_interpretation'] ?? interpretation['interpretation_text'] ?? '',
+      confidenceScore: (interpretation['confidence_score'] as num?)?.toDouble() ?? 0.0,
+      documentDate: interpretation['document_date'] != null 
+          ? DateTime.parse(interpretation['document_date'])
+          : null,
+      medicalFlags: _extractMedicalFlags(interpretation),
+      processingStatus: ProcessingStatus.completed,
+      createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
-    await dataProvider.updateDocument(failedDocument);
+
+    await dataProvider.addDocument(document);
   }
 
+  /// Update document to show processing failure
+  Future<void> _updateDocumentWithFailure(
+    String jobId,
+    String errorMessage,
+    HealthDataProvider dataProvider,
+  ) async {
+    // In a full implementation, this would find the document by job ID
+    // and update it to show the failure status
+    // For now, we log the failure
+    await _logProcessingError('document_processing_failed', jobId, errorMessage);
+  }
+
+  /// Three-layer error handling wrapper
+  /// 
+  /// Implements the error handling strategy from dev rules:
+  /// Layer 1: Network/connectivity errors
+  /// Layer 2: API response validation
+  /// Layer 3: Unexpected exceptions
+  Future<T> _executeWithErrorHandling<T>({
+    required Future<T> Function() operation,
+    required String context,
+    String? fileName,
+    String? jobId,
+  }) async {
+    try {
+      // Layer 1: Execute operation with network error handling
+      final result = await operation();
+      
+      // Layer 2: Validate result (this is operation-specific)
+      // For now, we just return the result
+      return result;
+      
+    } on SocketException catch (e) {
+      // Layer 1: Network connectivity errors
+      await _logProcessingError('network_error', context, e);
+      rethrow;
+    } on TimeoutException catch (e) {
+      // Layer 1: Request timeout errors
+      await _logProcessingError('timeout_error', context, e);
+      rethrow;
+    } catch (e) {
+      // Layer 3: Unexpected exceptions
+      await _logProcessingError('unexpected_error', context, e);
+      rethrow;
+    }
+  }
+
+  /// Extract medical flags from API response
   List<String> _extractMedicalFlags(Map<String, dynamic> interpretation) {
     final flags = interpretation['medical_flags'] as List?;
     if (flags == null) return [];
     
     return flags
-        .where((flag) => flag is String)
+        .whereType<String>()
         .cast<String>()
         .toList();
   }
 
+  /// Extract file type from filename
   String _extractFileType(String fileName) {
     final extension = fileName.toLowerCase().split('.').last;
     return extension;
   }
 
-  void cancelProcessing(String jobId) {
-    _retryTimers[jobId]?.cancel();
-    _retryTimers.remove(jobId);
-    _retryAttempts.remove(jobId);
+  /// Cancel processing for a specific job
+  /// 
+  /// Marks job as failed in database instead of canceling timers
+  Future<void> cancelProcessing(String jobId) async {
+    try {
+      await ProcessingJobRepository.failJob(
+        jobId, 
+        'Processing cancelled by user',
+      );
+      
+      await _logProcessingError('job_cancelled', jobId, 'User requested cancellation');
+    } catch (e) {
+      await _logProcessingError('job_cancellation_failed', jobId, e);
+    }
   }
 
-  void dispose() {
-    for (final timer in _retryTimers.values) {
-      timer.cancel();
+  /// Get all active processing jobs
+  /// 
+  /// Used by polling service and UI to show current processing status
+  Future<List<ProcessingJob>> getActiveJobs() async {
+    try {
+      return await ProcessingJobRepository.getActiveJobs();
+    } catch (e) {
+      await _logProcessingError('active_jobs_retrieval_failed', 'service', e);
+      return [];
     }
-    _retryTimers.clear();
-    _retryAttempts.clear();
+  }
+
+  /// Clean up old completed jobs
+  /// 
+  /// Should be called periodically to prevent database growth
+  Future<void> cleanupOldJobs() async {
+    try {
+      final deletedCount = await ProcessingJobRepository.cleanupOldJobs();
+      if (deletedCount > 0) {
+        print('ProcessingService: Cleaned up $deletedCount old jobs');
+      }
+    } catch (e) {
+      await _logProcessingError('job_cleanup_failed', 'service', e);
+    }
+  }
+
+  /// Log processing errors with comprehensive context
+  Future<void> _logProcessingError(String event, String context, dynamic error) async {
+    print('PROCESSING_SERVICE_ERROR: $event in $context - $error');
+    
+    // TODO: Integrate with comprehensive audit logging system
+    // This should include:
+    // - User context
+    // - Device information 
+    // - Network conditions
+    // - Error categorization
+    // - Automatic retry recommendations
+  }
+
+  /// Dispose resources (no longer needed without timers)
+  void dispose() {
+    // No timer cleanup needed in database-driven approach
+    // Resources are managed by the database connection
   }
 }
 
@@ -305,6 +512,7 @@ class ProcessingResult {
   final bool success;
   final String? jobId;
   final SerenyaContent? document;
+  final ProcessingJob? processingJob;
   final String message;
   final dynamic error;
 
@@ -312,7 +520,29 @@ class ProcessingResult {
     required this.success,
     this.jobId,
     this.document,
+    this.processingJob,
     required this.message,
     this.error,
+  });
+}
+
+/// Result of polling a processing job
+class ProcessingJobPollResult {
+  final String jobId;
+  final bool success;
+  final bool shouldContinuePolling;
+  final String? errorMessage;
+  final String? message;
+  final DateTime? nextPollAt;
+  final String? resultContentId;
+
+  ProcessingJobPollResult({
+    required this.jobId,
+    required this.success,
+    required this.shouldContinuePolling,
+    this.errorMessage,
+    this.message,
+    this.nextPollAt,
+    this.resultContentId,
   });
 }

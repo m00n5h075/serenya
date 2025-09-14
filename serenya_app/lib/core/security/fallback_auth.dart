@@ -587,6 +587,7 @@ class FallbackAuthUtils {
       
       // If biometric failed, show PIN fallback
       if (await BiometricAuthService.isPinSet()) {
+        if (!context.mounted) return AuthResult(success: false, method: AuthMethod.none, failureReason: 'context_no_longer_mounted');
         return await FallbackAuthService.showFallbackAuthDialog(
           context,
           title: 'Biometric authentication failed',
@@ -596,6 +597,7 @@ class FallbackAuthUtils {
       }
     } else if (await BiometricAuthService.isPinSet()) {
       // Only PIN available
+      if (!context.mounted) return AuthResult(success: false, method: AuthMethod.none, failureReason: 'context_no_longer_mounted');
       return await FallbackAuthService.showFallbackAuthDialog(
         context,
         title: 'Authenticate',

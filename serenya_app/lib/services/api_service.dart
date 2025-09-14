@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -32,8 +31,8 @@ class ApiService {
   void _setupDioClient() {
     _dio = Dio(BaseOptions(
       baseUrl: AppConstants.baseApiUrl,
-      connectTimeout: Duration(seconds: ApiConstants.connectTimeoutSeconds),
-      receiveTimeout: Duration(seconds: ApiConstants.receiveTimeoutSeconds),
+      connectTimeout: const Duration(seconds: ApiConstants.connectTimeoutSeconds),
+      receiveTimeout: const Duration(seconds: ApiConstants.receiveTimeoutSeconds),
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -92,7 +91,6 @@ class ApiService {
     // Add retry interceptor for network resilience
     _dio.interceptors.add(RetryInterceptor(
       dio: _dio,
-      logPrint: debugPrint,
       retries: 3,
       retryDelays: const [
         Duration(seconds: 1),   // First retry after 1s
@@ -101,19 +99,11 @@ class ApiService {
       ],
       retryEvaluator: (error, attempt) {
         // Retry on network errors and server errors (5xx)
-        if (error.type == DioExceptionType.connectionTimeout ||
-            error.type == DioExceptionType.sendTimeout ||
-            error.type == DioExceptionType.receiveTimeout ||
-            error.type == DioExceptionType.connectionError) {
-          return true;
-        }
-        
-        final statusCode = error.response?.statusCode;
-        if (statusCode != null && statusCode >= 500) {
-          return true;
-        }
-        
-        return false;
+        return error.type == DioExceptionType.connectionTimeout ||
+               error.type == DioExceptionType.sendTimeout ||
+               error.type == DioExceptionType.receiveTimeout ||
+               error.type == DioExceptionType.connectionError ||
+               (error.response?.statusCode != null && error.response!.statusCode! >= 500);
       },
     ));
 

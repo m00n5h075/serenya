@@ -41,7 +41,7 @@ class _UploadButtonState extends State<UploadButton>
   void initState() {
     super.initState();
     _spinController = AnimationController(
-      duration: Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 1000),
       vsync: this,
     );
     _spinAnimation = Tween<double>(
@@ -128,11 +128,11 @@ class _UploadButtonState extends State<UploadButton>
   Future<FileSource?> _showFileSourceDialog() async {
     return showModalBottomSheet<FileSource>(
       context: context,
-      shape: RoundedRectangleBorder(
+      shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => Container(
-        padding: EdgeInsets.all(AppConstants.defaultPadding),
+        padding: const EdgeInsets.all(AppConstants.defaultPadding),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -144,7 +144,7 @@ class _UploadButtonState extends State<UploadButton>
                 color: Colors.grey[800],
               ),
             ),
-            SizedBox(height: AppConstants.defaultPadding),
+            const SizedBox(height: AppConstants.defaultPadding),
             _buildSourceOption(
               icon: Icons.camera_alt,
               title: 'Take Photo',
@@ -163,7 +163,7 @@ class _UploadButtonState extends State<UploadButton>
               subtitle: 'Select PDF or image file',
               onTap: () => Navigator.pop(context, FileSource.files),
             ),
-            SizedBox(height: AppConstants.smallPadding),
+            const SizedBox(height: AppConstants.smallPadding),
           ],
         ),
       ),
@@ -178,7 +178,7 @@ class _UploadButtonState extends State<UploadButton>
   }) {
     return ListTile(
       leading: Container(
-        padding: EdgeInsets.all(8),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: Colors.blue[50],
           borderRadius: BorderRadius.circular(8),
@@ -213,7 +213,7 @@ class _UploadButtonState extends State<UploadButton>
   void _startMonitoringProcessing(String documentId) {
     final dataProvider = context.read<HealthDataProvider>();
     
-    Timer.periodic(Duration(seconds: 5), (timer) async {
+    Timer.periodic(const Duration(seconds: 5), (timer) async {
       try {
         await dataProvider.loadDocuments();
         final document = dataProvider.documents
@@ -254,7 +254,7 @@ class _UploadButtonState extends State<UploadButton>
         title: 'Results Ready',
         content: 'Your analysis is complete',
         confidenceScore: 0.0,
-        medicalFlags: [],
+        medicalFlags: const [],
         fileName: 'results',
         fileType: 'pdf',
         fileSize: 0,
@@ -361,7 +361,7 @@ class _UploadButtonState extends State<UploadButton>
 
     final fileSize = await file.length();
     if (!EncryptionUtils.isValidFileSize(fileSize)) {
-      final maxSizeMB = AppConstants.maxFileSizeBytes / (1024 * 1024);
+      const maxSizeMB = AppConstants.maxFileSizeBytes / (1024 * 1024);
       return _ValidationResult(
         isValid: false,
         errorMessage: 'File too large. Maximum size is ${maxSizeMB.toInt()}MB.',
@@ -385,13 +385,13 @@ class _UploadButtonState extends State<UploadButton>
         content: Row(
           children: [
             Icon(Icons.error, color: Colors.red[600]),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Expanded(child: Text(message)),
           ],
         ),
         backgroundColor: Colors.red[50],
         behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 3),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -428,7 +428,7 @@ class _UploadButtonState extends State<UploadButton>
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: 64,
       height: 64,
       child: FloatingActionButton(
@@ -446,7 +446,7 @@ class _UploadButtonState extends State<UploadButton>
   Widget _buildButtonIcon() {
     switch (_currentState) {
       case UploadButtonState.idle:
-        return Icon(
+        return const Icon(
           Icons.upload,
           color: Colors.white,
           size: 28,
@@ -458,7 +458,7 @@ class _UploadButtonState extends State<UploadButton>
           builder: (context, child) {
             return Transform.rotate(
               angle: _spinAnimation.value * 2 * 3.14159,
-              child: Icon(
+              child: const Icon(
                 Icons.sync,
                 color: Colors.white,
                 size: 28,
@@ -468,7 +468,7 @@ class _UploadButtonState extends State<UploadButton>
           },
         );
       case UploadButtonState.resultsReady:
-        return Icon(
+        return const Icon(
           Icons.assignment,
           color: Colors.white,
           size: 28,

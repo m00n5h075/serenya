@@ -172,13 +172,13 @@ class HealthcareTheme {
       
       // Checkbox Theme
       checkboxTheme: CheckboxThemeData(
-        fillColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
             return HealthcareColors.serenyaBluePrimary;
           }
           return HealthcareColors.serenyaWhite;
         }),
-        checkColor: MaterialStateProperty.all(HealthcareColors.serenyaWhite),
+        checkColor: WidgetStateProperty.all(HealthcareColors.serenyaWhite),
         side: const BorderSide(
           color: HealthcareColors.surfaceBorder,
           width: 2,
@@ -254,7 +254,7 @@ class HealthcareTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: lightTheme.elevatedButtonTheme.style?.copyWith(
-          backgroundColor: MaterialStateProperty.all(
+          backgroundColor: WidgetStateProperty.all(
             HealthcareColors.serenyaGreenPrimary,
           ),
         ),

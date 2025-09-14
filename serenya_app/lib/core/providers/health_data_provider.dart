@@ -14,9 +14,9 @@ class HealthDataProvider extends ChangeNotifier {
   final HealthDataRepository _repository = HealthDataRepository();
   
   List<SerenyaContent> _content = [];
-  Map<String, List<LabResult>> _labResults = {};
-  Map<String, List<Vital>> _vitals = {};
-  Map<String, List<ChatMessage>> _chatMessages = {};
+  final Map<String, List<LabResult>> _labResults = {};
+  final Map<String, List<Vital>> _vitals = {};
+  final Map<String, List<ChatMessage>> _chatMessages = {};
   bool _isLoading = false;
   String? _error;
   
@@ -419,7 +419,7 @@ class HealthDataProvider extends ChangeNotifier {
     
     final cacheAge = _lastCacheRefresh != null 
         ? DateTime.now().difference(_lastCacheRefresh!)
-        : Duration(hours: 1);
+        : const Duration(hours: 1);
     
     // Cache is considered fresh for 30 minutes
     return cacheAge.inMinutes < 30;

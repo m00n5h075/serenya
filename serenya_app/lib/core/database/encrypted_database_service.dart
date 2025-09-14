@@ -173,7 +173,6 @@ class EncryptedDatabaseService {
           processing_status TEXT CHECK(processing_status IN ('pending', 'processing', 'completed', 'failed', 'retrying')),
           encryption_version TEXT DEFAULT 'v1',
           table_key_id TEXT DEFAULT 'serenya_content',
-          processing_job_id TEXT,
           processing_time_seconds INTEGER,
           model_version TEXT,
           created_at TEXT NOT NULL,

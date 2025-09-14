@@ -78,7 +78,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Onboarding flow should be displayed
-      expect(GoRouter.of(tester.element(find.byType(MaterialApp))).location, equals('/onboarding'));
+      expect(GoRouter.of(tester.element(find.byType(MaterialApp))).routeInformationProvider.value.uri.path, equals('/onboarding'));
     });
 
     testWidgets('should redirect to login when not logged in', (tester) async {
@@ -90,7 +90,7 @@ void main() {
       await tester.pumpWidget(createTestWidget(child: Container()));
       await tester.pumpAndSettle();
 
-      expect(GoRouter.of(tester.element(find.byType(MaterialApp))).location, equals('/login'));
+      expect(GoRouter.of(tester.element(find.byType(MaterialApp))).routeInformationProvider.value.uri.path, equals('/login'));
     });
 
     testWidgets('should show home when logged in', (tester) async {
@@ -102,7 +102,7 @@ void main() {
       await tester.pumpWidget(createTestWidget(child: Container()));
       await tester.pumpAndSettle();
 
-      expect(GoRouter.of(tester.element(find.byType(MaterialApp))).location, equals('/home'));
+      expect(GoRouter.of(tester.element(find.byType(MaterialApp))).routeInformationProvider.value.uri.path, equals('/home'));
     });
   });
 

@@ -41,7 +41,7 @@ class DocumentsApi {
       });
 
       final response = await _dio.post(
-        '/documents/upload',
+        '/api/v1/process/upload',
         data: formData,
       );
 
@@ -96,7 +96,7 @@ class DocumentsApi {
       }
 
       final response = await _dio.post(
-        '/documents/batch-upload',
+        '/api/v1/process/batch-upload',
         data: formData,
       );
 

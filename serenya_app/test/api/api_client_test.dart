@@ -1,13 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/mockito.dart';
-import 'package:mockito/annotations.dart';
-import 'package:dio/dio.dart';
-import '../../lib/api/api_client.dart';
-import '../../lib/core/constants/app_constants.dart';
+import 'package:serenya_app/api/api_client.dart';
+import 'package:serenya_app/core/constants/app_constants.dart';
 
 // Generate mocks
-@GenerateMocks([Dio])
-import 'api_client_test.mocks.dart';
 
 void main() {
   group('ApiClient', () {

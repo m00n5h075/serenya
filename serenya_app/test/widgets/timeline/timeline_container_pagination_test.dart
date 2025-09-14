@@ -5,10 +5,24 @@ import 'package:mockito/annotations.dart';
 import 'package:serenya_app/widgets/timeline/timeline_container.dart';
 import 'package:serenya_app/core/providers/health_data_provider.dart';
 import 'package:serenya_app/models/local_database_models.dart';
+import 'package:serenya_app/core/theme/healthcare_theme.dart';
 
 import 'timeline_container_pagination_test.mocks.dart';
 
 @GenerateMocks([HealthDataProvider])
+
+Widget createTestWidget(Widget child) {
+  return MaterialApp(
+    theme: HealthcareTheme.lightTheme.copyWith(
+      extensions: <ThemeExtension<dynamic>>[
+        HealthcareThemeExtensions.confidenceTheme,
+        HealthcareThemeExtensions.medicalSafetyTheme,
+      ],
+    ),
+    home: Scaffold(body: child),
+  );
+}
+
 void main() {
   group('TimelineContainer Pagination Tests', () {
     late MockHealthDataProvider mockProvider;
@@ -351,10 +365,16 @@ void main() {
         when(mockProvider.isLoadingMore).thenReturn(false);
         when(mockProvider.hasMoreData).thenReturn(true);
         when(mockProvider.error).thenReturn(null);
-        when(mockProvider.loadContentByType(any<ContentType>())).thenAnswer((_) async {});
+        when(mockProvider.loadContentByType(ContentType.result)).thenAnswer((_) async {});
 
         await tester.pumpWidget(
           MaterialApp(
+            theme: HealthcareTheme.lightTheme.copyWith(
+              extensions: <ThemeExtension<dynamic>>[
+                HealthcareThemeExtensions.confidenceTheme,
+                HealthcareThemeExtensions.medicalSafetyTheme,
+              ],
+            ),
             home: Scaffold(
               body: TimelineContainer(
                 provider: mockProvider,
@@ -393,6 +413,9 @@ List<SerenyaContent> _generateTestContent(
       contentType: contentType,
       content: 'Test interpretation $index',
       confidenceScore: 0.85,
+      title: 'Test Document $index',
+      userId: 'test-user',
+      medicalFlags: const [],
     );
   });
 }

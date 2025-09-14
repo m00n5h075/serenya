@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
-import '../../lib/services/auth_service.dart';
-import '../../lib/services/api_service.dart';
+import 'package:serenya_app/services/auth_service.dart';
+import 'package:serenya_app/services/api_service.dart';
 
 /// Performance tests for authentication flows
 /// Validates authentication performance meets healthcare application requirements
@@ -82,7 +82,7 @@ void main() {
     test('Concurrent authentication requests handling', () async {
       // Arrange
       when(mockAuthService.isLoggedIn()).thenAnswer((_) async {
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(const Duration(milliseconds: 100));
         return true;
       });
 
@@ -182,7 +182,7 @@ void main() {
       // Simulate 1 minute of background operations
       for (int i = 0; i < 60; i++) {
         backgroundTasks.add(
-          Future.delayed(Duration(seconds: 1), () async {
+          Future.delayed(const Duration(seconds: 1), () async {
             await mockAuthService.isLoggedIn();
           })
         );

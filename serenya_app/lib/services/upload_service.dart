@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -8,14 +7,12 @@ import '../models/local_database_models.dart';
 import '../core/constants/app_constants.dart';
 import '../core/utils/encryption_utils.dart';
 import '../core/providers/health_data_provider.dart';
-import '../core/database/health_data_repository.dart';
 import 'processing_service.dart';
-import 'notification_service.dart';
+import 'unified_polling_service.dart';
 
 class UploadService {
   final ProcessingService _processingService = ProcessingService();
-  final NotificationService _notificationService = NotificationService();
-  final HealthDataRepository _repository = HealthDataRepository();
+  final UnifiedPollingService _pollingService = UnifiedPollingService();
   final ImagePicker _imagePicker = ImagePicker();
 
   Future<UploadResult> selectAndUploadFile(HealthDataProvider dataProvider) async {
@@ -78,12 +75,8 @@ class UploadService {
       );
 
       if (processingResult.success) {
-        // Start monitoring for completion
-        _startProcessingMonitor(
-          processingResult.jobId!,
-          processingResult.document!,
-          dataProvider,
-        );
+        // Start monitoring using UnifiedPollingService instead of timer-based approach
+        await _pollingService.startMonitoringJob(processingResult.jobId!);
 
         return UploadResult(
           success: true,
@@ -210,7 +203,7 @@ class UploadService {
     // Check file size
     final fileSize = await file.length();
     if (!EncryptionUtils.isValidFileSize(fileSize)) {
-      final maxSizeMB = AppConstants.maxFileSizeBytes / (1024 * 1024);
+      const maxSizeMB = AppConstants.maxFileSizeBytes / (1024 * 1024);
       return _ValidationResult(
         isValid: false,
         errorMessage: 'File too large. Maximum size is ${maxSizeMB.toInt()}MB.',
@@ -228,76 +221,8 @@ class UploadService {
     return _ValidationResult(isValid: true);
   }
 
-  void _startProcessingMonitor(
-    String jobId,
-    SerenyaContent document,
-    HealthDataProvider dataProvider,
-  ) {
-    Timer.periodic(Duration(seconds: 15), (timer) async {
-      try {
-        // Check if document is still processing
-        final currentDoc = await _repository.getContentById(document.id);
-        if (currentDoc == null) {
-          timer.cancel();
-          return;
-        }
-
-        // Stop monitoring if processing is complete or failed
-        if (currentDoc.processingStatus == ProcessingStatus.completed ||
-            currentDoc.processingStatus == ProcessingStatus.failed) {
-          timer.cancel();
-          
-          // Trigger notifications and vibration
-          await _handleProcessingComplete(currentDoc);
-        }
-
-        // Check for timeout (3 minutes)
-        if (currentDoc.uploadDate != null) {
-          final processingDuration = DateTime.now().difference(currentDoc.uploadDate!);
-          if (processingDuration.inMinutes >= AppConstants.processingTimeoutMinutes) {
-            timer.cancel();
-            await _handleProcessingTimeout(currentDoc, dataProvider);
-          }
-        }
-      } catch (e) {
-        print('Error monitoring processing: $e');
-      }
-    });
-  }
-
-  Future<void> _handleProcessingComplete(SerenyaContent document) async {
-    // Trigger vibration
-    HapticFeedback.mediumImpact();
-
-    // Send notification based on status
-    if (document.processingStatus == ProcessingStatus.completed) {
-      await _notificationService.showResultsReadyNotification(document);
-    } else {
-      await _notificationService.showProcessingErrorNotification(
-        'We were unable to process your file',
-      );
-    }
-  }
-
-  Future<void> _handleProcessingTimeout(
-    SerenyaContent document,
-    HealthDataProvider dataProvider,
-  ) async {
-    // Mark document as failed due to timeout
-    final timeoutDocument = document.copyWith(
-      processingStatus: ProcessingStatus.failed,
-      content: 'Processing timeout after ${AppConstants.processingTimeoutMinutes} minutes',
-      updatedAt: DateTime.now(),
-    );
-
-    await dataProvider.updateDocument(timeoutDocument);
-
-    // Trigger vibration and notification
-    HapticFeedback.mediumImpact();
-    await _notificationService.showProcessingErrorNotification(
-      'We were unable to process your file - timeout',
-    );
-  }
+  // Removed duplicate processing monitor code - now handled by UnifiedPollingService
+  // The timer-based approach has been replaced with database-driven polling
 
   void dispose() {
     _processingService.dispose();

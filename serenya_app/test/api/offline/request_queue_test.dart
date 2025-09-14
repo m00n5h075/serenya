@@ -1,8 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
-import '../../../lib/api/offline/request_queue.dart';
-import '../../../lib/api/api_client.dart';
+import 'package:serenya_app/api/offline/request_queue.dart';
 
 // Generate mocks
 @GenerateMocks([])
@@ -64,12 +62,6 @@ void main() {
 
       test('should order requests by priority', () {
         // Test priority ordering logic
-        final priorities = [
-          RequestPriority.low,
-          RequestPriority.normal,
-          RequestPriority.high,
-          RequestPriority.urgent,
-        ];
         
         // Higher priority should have higher index
         expect(RequestPriority.urgent.index, greaterThan(RequestPriority.high.index));
@@ -124,8 +116,8 @@ void main() {
       test('should calculate exponential backoff correctly', () {
         // Test the backoff calculation logic
         Duration calculateBackoff(int attemptNumber) {
-          final baseDelay = const Duration(seconds: 2);
-          final maxDelay = const Duration(minutes: 5);
+          const baseDelay = Duration(seconds: 2);
+          const maxDelay = Duration(minutes: 5);
           
           final exponentialDelay = Duration(
             seconds: (baseDelay.inSeconds * (1 << (attemptNumber - 1))).clamp(
@@ -272,7 +264,7 @@ void main() {
 
   group('RequestPriority enum', () {
     test('should have expected values in order', () {
-      final values = RequestPriority.values;
+      const values = RequestPriority.values;
       
       expect(values[0], equals(RequestPriority.low));
       expect(values[1], equals(RequestPriority.normal));
@@ -283,7 +275,7 @@ void main() {
 
   group('RequestStatus enum', () {
     test('should have all expected statuses', () {
-      final values = RequestStatus.values;
+      const values = RequestStatus.values;
       
       expect(values, contains(RequestStatus.queued));
       expect(values, contains(RequestStatus.processing));

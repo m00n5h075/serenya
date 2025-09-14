@@ -1038,6 +1038,43 @@ class MockAuthService extends _i1.Mock implements _i8.AuthService {
         ),
         returnValue: _i10.Future<bool>.value(false),
       ) as _i10.Future<bool>);
+
+  @override
+  _i10.Future<bool> refreshToken() => (super.noSuchMethod(
+        Invocation.method(
+          #refreshToken,
+          [],
+        ),
+        returnValue: _i10.Future<bool>.value(false),
+      ) as _i10.Future<bool>);
+
+  @override
+  _i10.Future<void> clearTokens() => (super.noSuchMethod(
+        Invocation.method(
+          #clearTokens,
+          [],
+        ),
+        returnValue: _i10.Future<void>.value(),
+        returnValueForMissingStub: _i10.Future<void>.value(),
+      ) as _i10.Future<void>);
+
+  @override
+  _i10.Future<String?> getDeviceId() => (super.noSuchMethod(
+        Invocation.method(
+          #getDeviceId,
+          [],
+        ),
+        returnValue: _i10.Future<String?>.value(),
+      ) as _i10.Future<String?>);
+
+  @override
+  _i10.Future<String?> getSessionId() => (super.noSuchMethod(
+        Invocation.method(
+          #getSessionId,
+          [],
+        ),
+        returnValue: _i10.Future<String?>.value(),
+      ) as _i10.Future<String?>);
 }
 
 /// A class which mocks [File].

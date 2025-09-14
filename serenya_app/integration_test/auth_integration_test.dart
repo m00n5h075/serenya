@@ -2,7 +2,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:serenya_app/main.dart' as app;
-import 'package:serenya_app/services/auth_service.dart';
 
 /// Integration tests for comprehensive authentication flow validation
 /// Tests end-to-end authentication scenarios including network resilience,
@@ -93,7 +92,7 @@ void main() {
 /// Simulate network interruption during authentication
 Future<void> _simulateNetworkInterruption(WidgetTester tester) async {
   // Mock network failure
-  await tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
     const MethodChannel('plugins.flutter.io/connectivity'),
     (MethodCall methodCall) async {
       if (methodCall.method == 'check') {
@@ -115,7 +114,7 @@ Future<void> _simulateNetworkInterruption(WidgetTester tester) async {
 /// Test offline authentication capabilities
 Future<void> _testOfflineAuthentication(WidgetTester tester) async {
   // Simulate cached authentication data
-  final authService = AuthService();
+  // Test offline authentication capabilities exist
   
   // Test offline authentication with biometric verification
   // This would require proper mock setup in a real test environment
@@ -128,7 +127,7 @@ Future<void> _testOfflineAuthentication(WidgetTester tester) async {
 /// Test biometric authentication integration
 Future<void> _testBiometricAuthentication(WidgetTester tester) async {
   // Mock biometric authentication
-  await tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
     const MethodChannel('plugins.flutter.io/local_auth'),
     (MethodCall methodCall) async {
       if (methodCall.method == 'getAvailableBiometrics') {

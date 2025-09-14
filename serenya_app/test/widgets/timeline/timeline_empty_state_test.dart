@@ -7,7 +7,7 @@ void main() {
     testWidgets('displays empty state message and UI elements', (WidgetTester tester) async {
       // Build the widget
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: TimelineEmptyState(),
           ),
@@ -35,7 +35,7 @@ void main() {
 
     testWidgets('has proper layout structure', (WidgetTester tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: TimelineEmptyState(),
           ),

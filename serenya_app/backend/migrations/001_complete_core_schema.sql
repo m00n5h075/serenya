@@ -567,12 +567,23 @@ CREATE TABLE processing_jobs (
     -- Request context
     user_agent TEXT,                           -- Client user agent
     source_ip INET,                            -- Source IP for audit trail
+    session_id TEXT,                           -- User session identifier
+    correlation_id TEXT,                       -- Request correlation identifier
     api_version TEXT DEFAULT 'v1',             -- API version used
     
     -- Security validation results
     security_scan_passed BOOLEAN DEFAULT FALSE,
     magic_number_validated BOOLEAN DEFAULT FALSE,
     file_integrity_verified BOOLEAN DEFAULT FALSE,
+    
+    -- S3 result location (replaces processing_results table)
+    s3_result_bucket TEXT,
+    s3_result_key TEXT,
+    confidence_score INTEGER CHECK (confidence_score >= 1 AND confidence_score <= 10),
+    ai_model_used TEXT,
+    ai_processing_time_ms BIGINT,
+    extracted_text_length INTEGER,
+    text_extraction_method TEXT,
     
     -- Data retention (HIPAA compliance)
     ttl_expires_at TIMESTAMP WITH TIME ZONE DEFAULT (CURRENT_TIMESTAMP + INTERVAL '24 hours'),
@@ -582,47 +593,6 @@ CREATE TABLE processing_jobs (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- AI processing results table
-CREATE TABLE processing_results (
-    -- Primary identification
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    job_id UUID NOT NULL REFERENCES processing_jobs(id) ON DELETE CASCADE,
-    
-    -- AI processing results (encrypted)
-    confidence_score INTEGER CHECK (confidence_score >= 1 AND confidence_score <= 10),
-    interpretation_text TEXT,                  -- Brief summary (encrypted)
-    detailed_interpretation TEXT,              -- Comprehensive analysis (encrypted)
-    
-    -- Medical flags and warnings (encrypted)
-    medical_flags JSONB DEFAULT '[]'::jsonb,   -- Array of flag codes (encrypted)
-    recommendations JSONB DEFAULT '[]'::jsonb, -- Array of recommendations (encrypted)
-    disclaimers JSONB DEFAULT '[]'::jsonb,     -- Array of medical disclaimers (encrypted)
-    safety_warnings JSONB DEFAULT '[]'::jsonb, -- Array of safety warnings (encrypted)
-    
-    -- AI model information
-    ai_model_used TEXT DEFAULT 'claude-3-sonnet-20240229',
-    ai_model_version TEXT,
-    ai_processing_time_ms BIGINT,
-    ai_token_usage JSONB,                      -- Token usage metrics
-    ai_cost_estimate DECIMAL(10,4),            -- Estimated processing cost
-    
-    -- Content extraction metadata
-    extracted_text_length INTEGER,
-    text_extraction_method TEXT,               -- 'pdf_parse', 'ocr', 'manual'
-    text_extraction_confidence DECIMAL(3,2),  -- Confidence in extracted text
-    
-    -- Result validation
-    result_validated_at TIMESTAMP WITH TIME ZONE,
-    validation_checksum TEXT,                  -- For integrity verification
-    
-    -- Data classification for audit
-    data_classification TEXT DEFAULT 'medical_phi',
-    processing_location TEXT DEFAULT 'us-east-1',
-    
-    -- Timestamps
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
 
 -- Processing job audit events table
 CREATE TABLE processing_job_events (
@@ -680,8 +650,6 @@ CREATE INDEX idx_processing_jobs_cleanup ON processing_jobs(ttl_expires_at) WHER
 CREATE INDEX idx_processing_jobs_timeout ON processing_jobs(processing_started_at, status) WHERE status = 'processing';
 
 -- Processing results indexes
-CREATE INDEX idx_processing_results_job_id ON processing_results(job_id);
-CREATE INDEX idx_processing_results_confidence ON processing_results(confidence_score, created_at DESC);
 
 -- Processing job events indexes  
 CREATE INDEX idx_processing_job_events_job_id ON processing_job_events(job_id, created_at DESC);
@@ -698,9 +666,6 @@ CREATE TRIGGER update_processing_jobs_updated_at
     BEFORE UPDATE ON processing_jobs 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_processing_results_updated_at 
-    BEFORE UPDATE ON processing_results 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ========================================
 -- 19. DOCUMENT PROCESSING RLS POLICIES
@@ -708,15 +673,12 @@ CREATE TRIGGER update_processing_results_updated_at
 
 -- Enable RLS on processing tables
 ALTER TABLE processing_jobs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE processing_results ENABLE ROW LEVEL SECURITY;
 ALTER TABLE processing_job_events ENABLE ROW LEVEL SECURITY;
 
 -- RLS policies for application access
 CREATE POLICY processing_jobs_user_policy ON processing_jobs
     USING (user_id = current_setting('app.current_user_id')::uuid);
 
-CREATE POLICY processing_results_user_policy ON processing_results
-    USING (job_id IN (SELECT id FROM processing_jobs WHERE user_id = current_setting('app.current_user_id')::uuid));
 
 CREATE POLICY processing_job_events_user_policy ON processing_job_events
     USING (job_id IN (SELECT id FROM processing_jobs WHERE user_id = current_setting('app.current_user_id')::uuid));
@@ -735,8 +697,12 @@ CREATE OR REPLACE FUNCTION create_processing_job(
     p_file_size BIGINT,
     p_s3_bucket TEXT,
     p_s3_key TEXT,
+    p_file_checksum TEXT DEFAULT NULL,
+    p_s3_encryption_key_id TEXT DEFAULT NULL,
     p_user_agent TEXT DEFAULT NULL,
-    p_source_ip INET DEFAULT NULL
+    p_source_ip INET DEFAULT NULL,
+    p_session_id TEXT DEFAULT NULL,
+    p_correlation_id TEXT DEFAULT NULL
 )
 RETURNS UUID AS $$
 DECLARE
@@ -745,11 +711,13 @@ BEGIN
     INSERT INTO processing_jobs (
         job_id, user_id, original_filename, sanitized_filename,
         file_type, file_size, s3_bucket, s3_key,
-        user_agent, source_ip
+        file_checksum, s3_encryption_key_id, user_agent, source_ip,
+        session_id, correlation_id
     ) VALUES (
         p_job_id, p_user_id, p_original_filename, p_sanitized_filename,
         p_file_type, p_file_size, p_s3_bucket, p_s3_key,
-        p_user_agent, p_source_ip
+        p_file_checksum, p_s3_encryption_key_id, p_user_agent, p_source_ip,
+        p_session_id, p_correlation_id
     ) RETURNING id INTO v_job_uuid;
     
     RETURN v_job_uuid;
@@ -793,12 +761,7 @@ RETURNS INTEGER AS $$
 DECLARE
     v_deleted_count INTEGER;
 BEGIN
-    -- Delete expired job results first (foreign key dependency)
-    DELETE FROM processing_results 
-    WHERE job_id IN (
-        SELECT id FROM processing_jobs 
-        WHERE ttl_expires_at < CURRENT_TIMESTAMP
-    );
+    -- Delete expired job results (no longer needed - results stored in S3)
     
     -- Delete expired job events
     DELETE FROM processing_job_events 
@@ -823,7 +786,6 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Grant permissions to application user for processing tables
 GRANT SELECT, INSERT, UPDATE, DELETE ON processing_jobs TO serenya_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON processing_results TO serenya_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON processing_job_events TO serenya_app;
 
 GRANT EXECUTE ON FUNCTION create_processing_job TO serenya_app;

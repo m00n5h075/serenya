@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:collection';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/security/local_audit_logger.dart';
 import 'connectivity_service.dart';
@@ -18,13 +17,12 @@ import '../api_client.dart';
 /// - Progress tracking and status updates
 /// - Request cancellation and cleanup
 class RequestQueue {
-  static const RequestQueue _instance = RequestQueue._internal();
+  static final RequestQueue _instance = RequestQueue._internal();
   factory RequestQueue() => _instance;
-  const RequestQueue._internal();
+  RequestQueue._internal();
 
   static const _secureStorage = FlutterSecureStorage();
   static const String _queueStorageKey = 'serenya_request_queue_v1';
-  static const String _queueMetadataKey = 'serenya_queue_metadata_v1';
   
   final Queue<QueuedRequest> _queue = Queue<QueuedRequest>();
   final Map<String, QueuedRequest> _requestMap = {};
@@ -376,8 +374,8 @@ class RequestQueue {
 
   /// Calculate exponential backoff delay
   Duration _calculateBackoffDelay(int attemptNumber) {
-    final baseDelay = const Duration(seconds: 2);
-    final maxDelay = const Duration(minutes: 5);
+    const baseDelay = Duration(seconds: 2);
+    const maxDelay = Duration(minutes: 5);
     
     final exponentialDelay = Duration(
       seconds: (baseDelay.inSeconds * (1 << (attemptNumber - 1))).clamp(
@@ -388,7 +386,7 @@ class RequestQueue {
     
     // Add jitter to prevent thundering herd
     final jitterMs = (exponentialDelay.inMilliseconds * 0.1).round();
-    final jitter = Duration(milliseconds: (jitterMs * (0.5 - DateTime.now().millisecond / 1000)));
+    final jitter = Duration(milliseconds: (jitterMs * (0.5 - DateTime.now().millisecond / 1000)).round());
     
     return exponentialDelay + jitter;
   }
@@ -428,7 +426,7 @@ class RequestQueue {
 
   /// Generate unique request ID
   String _generateRequestId() {
-    return 'req_${DateTime.now().microsecondsSinceEpoch}_${_totalRequests}';
+    return 'req_${DateTime.now().microsecondsSinceEpoch}_$_totalRequests';
   }
 
   /// Broadcast queue status

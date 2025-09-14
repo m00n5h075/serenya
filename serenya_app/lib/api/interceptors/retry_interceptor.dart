@@ -39,7 +39,7 @@ class ApiRetryInterceptor extends Interceptor {
   });
 
   @override
-  void onError(DioException err, ErrorInterceptorHandler handler) async {
+  Future<void> onError(DioException err, ErrorInterceptorHandler handler) async {
     final retryCount = (err.requestOptions.extra['retry_count'] as int?) ?? 0;
     
     // Check if we should retry this error

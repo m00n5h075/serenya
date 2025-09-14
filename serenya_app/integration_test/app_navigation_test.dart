@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:serenya_app/main.dart' as app;
@@ -119,7 +120,7 @@ void main() {
         if (tester.any(buttons)) {
           final buttonSemantics = tester.getSemantics(buttons.first);
           // Check that button has proper semantics
-          expect(buttonSemantics.hasEnabledState, isTrue);
+          expect(buttonSemantics.hasFlag(SemanticsFlag.hasEnabledState), isTrue);
         }
         
         // Verify text elements have proper semantics

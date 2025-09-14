@@ -1,10 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart';
-import '../constants/app_constants.dart';
 import 'local_audit_logger.dart';
 
 /// SSL Certificate Pinning Implementation for Serenya
@@ -47,7 +45,7 @@ class CertificatePinningService {
   /// Configure certificate pinning for Dio client
   static void configureCertificatePinning(Dio dio) {
     // Override certificate validation
-    if (dio.httpClientAdapter case final adapter) {
+    if (dio.httpClientAdapter case final _) {
       try {
         // Try to configure certificate validation if adapter supports it
         final client = HttpClient();

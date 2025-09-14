@@ -12,12 +12,12 @@ import '../../core/security/local_audit_logger.dart';
 /// - Connection retry logic
 /// - Bandwidth estimation
 class ConnectivityService {
-  static const ConnectivityService _instance = ConnectivityService._internal();
+  static final ConnectivityService _instance = ConnectivityService._internal();
   factory ConnectivityService() => _instance;
-  const ConnectivityService._internal();
+  ConnectivityService._internal();
 
   final Connectivity _connectivity = Connectivity();
-  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
   
   // Stream controllers for connectivity events
   final _connectivityController = StreamController<ConnectivityStatus>.broadcast();
@@ -46,7 +46,7 @@ class ConnectivityService {
       
       // Start monitoring connectivity changes
       _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
-        _onConnectivityChanged,
+        (result) => _onConnectivityChanged([result]),
         onError: (error) async {
           await _logConnectivityEvent('connectivity_monitoring_error', {
             'error': error.toString(),
@@ -71,8 +71,8 @@ class ConnectivityService {
   /// Check initial connectivity status
   Future<void> _checkInitialConnectivity() async {
     try {
-      final result = await _connectivity.checkConnectivity();
-      await _processConnectivityResult(result);
+      final results = await _connectivity.checkConnectivity();
+      await _processConnectivityResult([results]);
     } catch (e) {
       _currentStatus = ConnectivityStatus.unknown;
       await _logConnectivityEvent('initial_connectivity_check_failed', {
@@ -140,7 +140,7 @@ class ConnectivityService {
       
       // Simple connectivity test - try to reach a reliable endpoint
       // In production, this could be your health check endpoint
-      final result = await _connectivity.checkConnectivity();
+      await _connectivity.checkConnectivity();
       
       final latency = DateTime.now().difference(startTime);
       
@@ -185,8 +185,8 @@ class ConnectivityService {
       });
 
       // Test connectivity
-      final result = await _connectivity.checkConnectivity();
-      final hasConnection = result.isNotEmpty && !result.contains(ConnectivityResult.none);
+      final results = await _connectivity.checkConnectivity();
+      final hasConnection = results != ConnectivityResult.none;
       
       if (!completer.isCompleted) {
         completer.complete(hasConnection);
@@ -254,7 +254,7 @@ class ConnectivityService {
     
     // More stable if connection hasn't changed recently
     // Full stability after 5 minutes without changes
-    final stabilityMinutes = 5;
+    const stabilityMinutes = 5;
     final stability = (timeSinceLastChange.inMinutes / stabilityMinutes).clamp(0.0, 1.0);
     
     return stability;

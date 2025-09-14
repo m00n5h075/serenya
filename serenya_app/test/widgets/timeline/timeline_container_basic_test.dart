@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serenya_app/widgets/timeline/timeline_container.dart';
 import 'package:serenya_app/core/providers/health_data_provider.dart';
-import 'package:serenya_app/models/local_database_models.dart';
 
 /// Basic test for Timeline Container functionality
 /// Validates core features without complex mocking

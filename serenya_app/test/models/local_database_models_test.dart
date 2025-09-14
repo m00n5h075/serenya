@@ -55,7 +55,7 @@ void main() {
       title: 'Blood Test Analysis',
       content: 'Your blood test results show...',
       confidenceScore: 8.5,
-      medicalFlags: ['normal_glucose', 'elevated_cholesterol'],
+      medicalFlags: const ['normal_glucose', 'elevated_cholesterol'],
       createdAt: DateTime.parse('2025-01-01T10:00:00Z'),
       updatedAt: DateTime.parse('2025-01-01T10:00:00Z'),
     );
@@ -78,7 +78,7 @@ void main() {
         title: 'Test',
         content: 'Content',
         confidenceScore: 5.0,
-        medicalFlags: [],
+        medicalFlags: const [],
         createdAt: DateTime.parse('2025-01-01T10:00:00Z'),
         updatedAt: DateTime.parse('2025-01-01T10:00:00Z'),
       );
@@ -90,7 +90,7 @@ void main() {
         title: 'Test',
         content: 'Content',
         confidenceScore: 5.0,
-        medicalFlags: [],
+        medicalFlags: const [],
         createdAt: DateTime.parse('2025-01-01T10:00:00Z'),
         updatedAt: DateTime.parse('2025-01-01T10:00:00Z'),
       );
@@ -125,6 +125,7 @@ void main() {
         baseJson,
         'Decrypted content text',
         '["flag1", "flag2"]',
+        null,
       );
 
       expect(content.id, 'test-uuid');
@@ -149,6 +150,7 @@ void main() {
         baseJson,
         'Decrypted content text',
         null, // No medical flags
+        null, // No summary
       );
 
       expect(content.medicalFlags, isEmpty);
@@ -379,7 +381,7 @@ void main() {
         serenyaContentId: 'content-uuid-1',
         sender: MessageSenderType.serenya,
         message: 'This indicates your glucose levels are normal.',
-        messageMetadata: {
+        messageMetadata: const {
           'confidence': 0.95,
           'sources': ['lab_results', 'medical_knowledge'],
         },
@@ -415,34 +417,31 @@ void main() {
   group('UserPreference Model', () {
     test('should create preference correctly', () {
       final preference = UserPreference(
-        id: 'pref-uuid-1',
-        preferenceKey: 'theme_mode',
-        preferenceValue: 'dark',
+        key: 'theme_mode',
+        value: 'dark',
         createdAt: DateTime.parse('2025-01-01T10:00:00Z'),
         updatedAt: DateTime.parse('2025-01-01T10:00:00Z'),
       );
 
-      expect(preference.preferenceKey, 'theme_mode');
-      expect(preference.preferenceValue, 'dark');
+      expect(preference.key, 'theme_mode');
+      expect(preference.value, 'dark');
     });
 
     test('should handle null preference value', () {
       final preference = UserPreference(
-        id: 'pref-uuid-2',
-        preferenceKey: 'optional_setting',
-        preferenceValue: null,
+        key: 'optional_setting',
+        value: null,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
 
-      expect(preference.preferenceValue, isNull);
+      expect(preference.value, isNull);
     });
 
     test('should convert to/from JSON correctly', () {
       final preference = UserPreference(
-        id: 'pref-uuid',
-        preferenceKey: 'language',
-        preferenceValue: 'en',
+        key: 'language',
+        value: 'en',
         createdAt: DateTime.parse('2025-01-01T10:00:00Z'),
         updatedAt: DateTime.parse('2025-01-01T10:00:00Z'),
       );
@@ -450,9 +449,8 @@ void main() {
       final json = preference.toJson();
       final reconstructed = UserPreference.fromJson(json);
 
-      expect(reconstructed.id, preference.id);
-      expect(reconstructed.preferenceKey, preference.preferenceKey);
-      expect(reconstructed.preferenceValue, preference.preferenceValue);
+      expect(reconstructed.key, preference.key);
+      expect(reconstructed.value, preference.value);
     });
   });
 
@@ -473,7 +471,7 @@ void main() {
         title: '',
         content: '',
         confidenceScore: 0.0,
-        medicalFlags: [],
+        medicalFlags: const [],
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       ), returnsNormally); // Should allow empty strings if that's intended

@@ -84,7 +84,7 @@ class NotificationService {
     _scaffoldKey!.currentState!.showSnackBar(
       SnackBar(
         content: Container(
-          padding: EdgeInsets.all(12),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: backgroundColor,
             borderRadius: BorderRadius.circular(8),
@@ -97,7 +97,7 @@ class NotificationService {
                 color: iconColor,
                 size: 24,
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -111,7 +111,7 @@ class NotificationService {
                         color: textColor,
                       ),
                     ),
-                    SizedBox(height: 2),
+                    const SizedBox(height: 2),
                     Text(
                       message,
                       style: TextStyle(
@@ -128,7 +128,7 @@ class NotificationService {
         backgroundColor: Colors.transparent,
         elevation: 0,
         behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 4),
+        duration: const Duration(seconds: 4),
         action: SnackBarAction(
           label: 'Dismiss',
           textColor: iconColor,
@@ -149,4 +149,26 @@ class NotificationService {
     print('Push Notification: $title - $body');
   }
 
+  /// Show notification with default styling
+  /// 
+  /// Used by UnifiedPollingService and other services
+  Future<void> showNotification({
+    required String title,
+    required String body,
+  }) async {
+    await _showInAppNotification(
+      title: title,
+      message: body,
+      icon: Icons.info,
+      backgroundColor: Colors.blue[50]!,
+      borderColor: Colors.blue[200]!,
+      iconColor: Colors.blue[600]!,
+      textColor: Colors.blue[800]!,
+    );
+    
+    await _showPushNotification(
+      title: title,
+      body: body,
+    );
+  }
 }
