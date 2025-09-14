@@ -257,6 +257,369 @@ Advanced features that enhance the core medical interpretation platform but are 
 
 ---
 
-**Document Status**: ✅ Complete consolidation of deferred architecture + operational issues  
+## 🚀 **CATEGORY 5: Deferred Implementation Roadmap Tasks**
+**Priority**: P3-P4 - Post-Alpha Implementation  
+**Dependencies**: Core alpha validation + specific business requirements
+
+#### **Problem Summary:**
+Several tasks from the original implementation roadmap have been identified as non-critical for the alpha launch of Serenya. These tasks represent important functionality for a full production system but are not required to validate the core value proposition and user experience during alpha testing.
+
+#### **Tasks Moved from Implementation Roadmap:**
+
+### **TASK 8: Premium Features API** *(Moved from Phase 2)*
+**Original Agent**: AWS Cloud Engineer  
+**Original Status**: ✅ COMPLETE  
+**Complexity**: High - Full subscription infrastructure  
+**Dependencies**: Payment processing, business model validation
+
+**Current Implementation Check:**
+- [ ] Review existing subscription management Lambda functions
+- [ ] Test payment processing integration with App Store/Play Store
+- [ ] Verify premium report generation functionality
+- [ ] Check subscription status validation middleware
+- [ ] Validate premium feature access controls
+
+**Reference Documentation:**
+- Primary: `/guidance/docs/technical/api-contracts.md` (subscription endpoints)
+- Product Requirements: `/guidance/docs/product/Serenya_PRD_v2.md` (premium features)
+- User Flows: `/guidance/docs/product/user-flows.md` (premium upgrade flow)
+- Database: `/guidance/docs/technical/database-architecture.md` (subscription tables)
+- Error Handling: `/guidance/docs/technical/our-dev-rules.md` (payment error patterns)
+
+**Acceptance Criteria:**
+- [ ] Subscription management endpoints `/api/subscriptions/*` working
+- [ ] Apple App Store and Google Play Store payment integration
+- [ ] Premium report generation with enhanced AI analysis
+- [ ] Subscription status validation middleware for protected endpoints
+- [ ] Free tier limitations and premium feature unlocking
+- [ ] Payment webhook handling for subscription updates
+- [ ] Subscription renewal and cancellation processing
+- [ ] Premium content access control throughout API
+- [ ] Error handling for payment failures and subscription issues
+- [ ] Audit logging for all subscription and payment events
+
+**Validation Steps:**
+- [ ] Test subscription creation and payment processing
+- [ ] Verify premium features are properly gated by subscription status
+- [ ] Test premium report generation with enhanced analysis
+- [ ] Check subscription status validation blocks non-premium access
+- [ ] Validate payment webhooks update subscription status correctly
+- [ ] Test subscription renewal and cancellation flows
+- [ ] Verify error handling for payment failures
+
+**Files/Resources to Create/Validate:**
+- `server/functions/subscriptions/create.ts` - Subscription creation
+- `server/functions/subscriptions/status.ts` - Subscription status check
+- `server/functions/subscriptions/webhooks.ts` - Payment webhook handlers
+- `server/functions/reports/premium-generate.ts` - Premium report generation
+- `server/middleware/premium-access.ts` - Premium access validation
+- App Store and Play Store payment integration
+- Subscription database tables and payment records
+
+**Implementation Notes:**
+- **If Complete:** Verify all premium features work correctly, test payment edge cases
+- **If Partial:** Complete missing subscription functionality, fix payment integration
+- **If Missing:** Full premium subscription system implementation required
+
+### **TASK 19: Subscription Management UI** *(Moved from Phase 5)*
+**Original Agent**: Flutter Developer  
+**Original Status**: 🔄 VALIDATION NEEDED  
+**Complexity**: High - Mobile payment integration  
+**Dependencies**: Task 8 completion, platform certifications
+
+**Current Implementation Check:**
+- [ ] Review existing subscription management screens and flows
+- [ ] Test App Store and Play Store payment integration
+- [ ] Verify premium feature unlocking logic
+- [ ] Check subscription status display and updates
+- [ ] Validate subscription renewal and cancellation flows
+
+**Reference Documentation:**
+- Primary: `/guidance/docs/product/user-flows.md` (premium upgrade flow)
+- Product Requirements: `/guidance/docs/product/Serenya_PRD_v2.md` (premium features)
+- API Integration: `/guidance/docs/technical/api-contracts.md` (subscription endpoints)
+- Error Handling: `/guidance/docs/technical/our-dev-rules.md` (payment error patterns)
+
+**Acceptance Criteria:**
+- [ ] Subscription management screens with plan comparison
+- [ ] App Store (iOS) and Play Store (Android) payment integration
+- [ ] Premium feature unlocking with proper access controls
+- [ ] Subscription status display with renewal dates and billing info
+- [ ] Payment flow with proper error handling and retry logic
+- [ ] Subscription cancellation and downgrade options
+- [ ] Restore purchases functionality for existing subscribers
+- [ ] Free trial management and conversion tracking
+- [ ] Premium feature discovery and upgrade prompts
+- [ ] Subscription receipt validation and security
+
+**Validation Steps:**
+- [ ] Test subscription purchase flow on both iOS and Android
+- [ ] Verify premium features unlock correctly after payment
+- [ ] Check subscription status updates in real-time
+- [ ] Test payment error handling and user feedback
+- [ ] Validate subscription restoration on app reinstall
+- [ ] Test subscription cancellation and downgrade flows
+- [ ] Verify receipt validation prevents subscription fraud
+
+**Files/Resources to Create/Validate:**
+- `lib/screens/subscription/subscription_screen.dart` - Subscription management
+- `lib/screens/subscription/payment_flow.dart` - Payment process screens
+- `lib/services/subscription_service.dart` - Subscription logic
+- `lib/services/payment_service.dart` - Platform payment integration
+- `lib/features/premium/premium_gate.dart` - Feature access control
+- `lib/widgets/subscription/plan_comparison.dart` - Plan display components
+- App Store and Play Store product configuration
+
+**Implementation Notes:**
+- **If Complete:** Verify all payment flows work correctly, test subscription edge cases
+- **If Partial:** Complete missing subscription features, fix payment integration
+- **If Missing:** Full subscription management implementation required
+
+### **TASK 22: Comprehensive Testing Suite** *(Moved from Phase 6)*
+**Original Agent**: Flutter Developer + AWS Cloud Engineer  
+**Original Status**: 🔄 VALIDATION NEEDED  
+**Complexity**: Medium - Testing infrastructure  
+**Dependencies**: Core functionality completion for meaningful testing
+
+**Current Implementation Check:**
+- [ ] Review existing test coverage across mobile and backend systems
+- [ ] Verify unit tests cover all business logic components
+- [ ] Check integration tests validate API communication
+- [ ] Test widget tests cover all UI components
+- [ ] Validate test automation and CI/CD integration
+
+**Reference Documentation:**
+- Testing Standards: `/guidance/docs/technical/our-dev-rules.md` (testing requirements)
+- Flutter Testing: `/guidance/docs/technical/flutter-app-architecture.md` (mobile testing strategy)
+- API Testing: `/guidance/docs/technical/api-contracts.md` (endpoint testing)
+- All previous tasks (Tasks 1-21) for comprehensive coverage
+
+**Acceptance Criteria:**
+- [ ] Unit tests for all business logic (>80% code coverage)
+- [ ] Integration tests for all API endpoints and database operations
+- [ ] Widget tests for all UI components and user flows
+- [ ] End-to-end tests for critical user journeys
+- [ ] Performance tests for database queries and API response times
+- [ ] Security tests for authentication and data encryption
+- [ ] Error handling tests for all failure scenarios
+- [ ] Test automation in CI/CD pipeline
+- [ ] Load testing for expected user volumes
+- [ ] Cross-platform testing (iOS/Android compatibility)
+- [ ] Security tests for rate limiting and input validation
+- [ ] File upload security testing (malicious file detection)
+- [ ] Error handling security validation (no information leakage)
+- [ ] Attack prevention testing (XSS, SQL injection, DoS attempts)
+
+**Validation Steps:**
+- [ ] Run complete test suite and verify all tests pass
+- [ ] Check test coverage reports meet minimum requirements
+- [ ] Validate integration tests work with real API endpoints
+- [ ] Test widget tests cover all user interaction scenarios
+- [ ] Verify performance tests identify bottlenecks
+- [ ] Check security tests validate encryption and authentication
+- [ ] Test error handling scenarios trigger appropriate responses
+- [ ] Verify security tests validate rate limiting and input validation
+- [ ] Test file upload security prevents malicious file uploads
+- [ ] Validate error handling tests prevent information disclosure
+- [ ] Test attack prevention measures block common security threats
+
+**Files/Resources to Create/Validate:**
+- `test/unit/` - Unit tests for all business logic
+- `test/integration/` - API and database integration tests
+- `test/widget/` - UI component and flow tests
+- `test/e2e/` - End-to-end user journey tests
+- `server/test/` - Backend Lambda function tests
+- Test configuration and CI/CD integration
+- Performance and load testing scripts
+
+**Implementation Notes:**
+- **If Complete:** Verify comprehensive test coverage, optimize test performance
+- **If Partial:** Complete missing test categories, fix failing tests
+- **If Missing:** Full testing suite implementation required
+
+### **TASK 23: Security Audit Implementation** *(Moved from Phase 6)*
+**Original Agent**: DevOps Engineer  
+**Original Status**: 🔄 VALIDATION NEEDED  
+**Complexity**: High - Professional security validation  
+**Dependencies**: Production environment, third-party auditors
+
+**Current Implementation Check:**
+- [ ] Review existing security implementations and configurations
+- [ ] Conduct penetration testing on all system components
+- [ ] Verify HIPAA and GDPR compliance measures
+- [ ] Check encryption implementations and key management
+- [ ] Validate access controls and authentication mechanisms
+
+**Reference Documentation:**
+- Primary: `/guidance/docs/technical/encryption-strategy.md` (security requirements)
+- Compliance: `/guidance/docs/technical/our-dev-rules.md` (audit logging, error handling)
+- Architecture: `/guidance/docs/technical/system-architecture.md` (security controls)
+- Database: `/guidance/docs/technical/database-architecture.md` (data protection)
+
+**Acceptance Criteria:**
+- [ ] Complete security audit covering all system components
+- [ ] Penetration testing results with vulnerability assessments
+- [ ] HIPAA compliance validation and documentation
+- [ ] GDPR compliance verification and data protection measures
+- [ ] Security vulnerability remediation and fixes
+- [ ] Encryption verification (data at rest and in transit)
+- [ ] Access control and authentication security validation
+- [ ] Security documentation updates and recommendations
+- [ ] Incident response plan and security monitoring
+- [ ] Third-party security assessment and certification preparation
+
+**Validation Steps:**
+- [ ] Execute penetration testing against all endpoints and services
+- [ ] Verify all encryption implementations meet security standards
+- [ ] Check access controls prevent unauthorized data access
+- [ ] Validate audit logging captures all required security events
+- [ ] Test security incident detection and response procedures
+- [ ] Verify compliance with HIPAA technical safeguards
+- [ ] Check GDPR data protection and user rights implementation
+
+**Files/Resources to Create/Validate:**
+- Security audit reports and vulnerability assessments
+- Penetration testing results and remediation plans
+- HIPAA compliance documentation and validation
+- GDPR compliance verification and data protection audit
+- Security configuration reviews and hardening recommendations
+- Incident response procedures and security monitoring setup
+- Security documentation updates and certification preparation
+
+**Implementation Notes:**
+- **If Complete:** Verify all security measures are properly implemented and documented
+- **If Partial:** Complete security remediation, fix identified vulnerabilities
+- **If Missing:** Full security audit and compliance validation required
+
+### **TASK 24: Performance Optimization** *(Moved from Phase 6)*
+**Original Agent**: DevOps Engineer  
+**Original Status**: 🔄 VALIDATION NEEDED  
+**Complexity**: Medium - System optimization  
+**Dependencies**: Real usage data, performance baseline measurements
+
+**Current Implementation Check:**
+- [ ] Review current system performance benchmarks and bottlenecks
+- [ ] Analyze database query performance and optimization opportunities
+- [ ] Check mobile app performance metrics and memory usage
+- [ ] Verify API response times meet performance requirements
+- [ ] Validate infrastructure scaling and resource utilization
+
+**Reference Documentation:**
+- Performance Budgets: `/guidance/docs/technical/flutter-app-architecture.md` (performance targets)
+- System Architecture: `/guidance/docs/technical/system-architecture.md` (scalability requirements)
+- Database Optimization: `/guidance/docs/technical/database-architecture.md` (query performance)
+- Observability: `/guidance/docs/technical/observability.md` (monitoring and metrics)
+
+**Acceptance Criteria:**
+- [ ] Performance benchmarking reports for all system components
+- [ ] Database query optimization with improved response times
+- [ ] Mobile app performance improvements (startup, memory, battery)
+- [ ] API response time optimization (<500ms for critical endpoints)
+- [ ] Infrastructure auto-scaling configuration
+- [ ] CDN setup for static asset delivery
+- [ ] Database connection pooling and caching optimization
+- [ ] Mobile app bundle size optimization
+- [ ] Performance monitoring and alerting setup
+- [ ] Load testing validation for expected user volumes
+
+**Validation Steps:**
+- [ ] Run performance benchmarks and compare against baseline
+- [ ] Test database query performance improvements
+- [ ] Measure mobile app performance metrics (startup time, memory usage)
+- [ ] Validate API response times meet performance targets
+- [ ] Test infrastructure auto-scaling under load
+- [ ] Verify CDN improves asset delivery performance
+- [ ] Check performance monitoring captures key metrics
+
+**Files/Resources to Create/Validate:**
+- Performance benchmarking reports and metrics
+- Database query optimization scripts and indexes
+- Mobile app performance profiling and optimization
+- API performance improvements and caching strategies
+- Infrastructure auto-scaling configurations
+- CDN setup and static asset optimization
+- Performance monitoring dashboards and alerts
+
+**Implementation Notes:**
+- **If Complete:** Verify all performance targets are met, optimize further if needed
+- **If Partial:** Complete performance improvements, fix remaining bottlenecks
+- **If Missing:** Full performance optimization implementation required
+
+### **TASK 25: Monitoring and Alerting Setup** *(Moved from Phase 6)*
+**Original Agent**: DevOps Engineer  
+**Original Status**: 🔄 VALIDATION NEEDED  
+**Complexity**: Medium - Operational infrastructure  
+**Dependencies**: Production environment, operational procedures
+
+**Current Implementation Check:**
+- [ ] Review existing monitoring and alerting infrastructure
+- [ ] Verify comprehensive metrics collection across all services
+- [ ] Check error tracking and logging systems
+- [ ] Test alert notification systems and escalation procedures
+- [ ] Validate monitoring dashboard completeness and usability
+
+**Reference Documentation:**
+- Primary: `/guidance/docs/technical/observability.md`
+- System Monitoring: `/guidance/docs/technical/system-architecture.md` (monitoring requirements)
+- Error Handling: `/guidance/docs/technical/our-dev-rules.md` (logging standards)
+- Performance Metrics: Task 24 performance optimization requirements
+
+**Acceptance Criteria:**
+- [ ] Complete monitoring dashboard with all system metrics
+- [ ] Alert notification systems with proper escalation procedures
+- [ ] Comprehensive error tracking and logging across all services
+- [ ] Performance metrics collection and analysis
+- [ ] Health check monitoring for all critical services
+- [ ] User analytics and usage tracking implementation
+- [ ] Security monitoring and incident detection
+- [ ] Cost monitoring and budget alerts
+- [ ] Mobile app crash reporting and analytics
+- [ ] API monitoring with endpoint-specific metrics
+
+**Validation Steps:**
+- [ ] Test monitoring dashboards display accurate real-time data
+- [ ] Verify alerts trigger correctly for various failure scenarios
+- [ ] Check error tracking captures and categorizes issues properly
+- [ ] Test alert notifications reach appropriate team members
+- [ ] Validate health checks detect service failures
+- [ ] Test security monitoring identifies potential threats
+- [ ] Verify cost monitoring tracks spending accurately
+
+**Files/Resources to Create/Validate:**
+- CloudWatch dashboard configurations
+- Alert notification systems and escalation procedures
+- Error tracking and logging infrastructure
+- Performance metrics collection and analysis
+- Health check monitoring for all services
+- Security monitoring and incident detection systems
+- Mobile app analytics and crash reporting setup
+
+**Implementation Notes:**
+- **If Complete:** Verify all monitoring systems work reliably, test alert scenarios
+- **If Partial:** Complete missing monitoring components, fix alert configurations
+- **If Missing:** Full monitoring and alerting system implementation required
+
+#### **Rationale for Deferral:**
+- **Premium Features (Tasks 8, 19)**: Revenue generation not required for alpha validation
+- **Testing Suite (Task 22)**: Comprehensive testing follows core functionality completion
+- **Security Audit (Task 23)**: Professional audits require production-ready systems
+- **Performance Optimization (Task 24)**: Optimization requires real usage data and metrics
+- **Monitoring/Alerting (Task 25)**: Operational excellence follows product-market fit validation
+
+#### **Post-Alpha Implementation Strategy:**
+1. **Phase 1 (Post-Alpha)**: Implement comprehensive testing suite (Task 22)
+2. **Phase 2 (Pre-Beta)**: Performance optimization and monitoring (Tasks 24, 25)
+3. **Phase 3 (Pre-Production)**: Security audit and compliance validation (Task 23)
+4. **Phase 4 (Revenue Ready)**: Premium features and subscription management (Tasks 8, 19)
+
+#### **Success Metrics for Re-engagement:**
+- **Testing Suite**: Core functionality stable for 4+ weeks, user-reported bugs < 5/week
+- **Performance**: User base > 1000 active users, performance bottlenecks identified
+- **Security**: Production deployment ready, compliance requirements confirmed
+- **Premium Features**: User retention > 60%, willingness to pay validated through surveys
+
+---
+
+**Document Status**: ✅ Complete consolidation of deferred architecture + implementation roadmap tasks  
 **Next Review**: Post-alpha user testing phase (estimated Q1 2026)  
 **Accountability**: Product Manager + CTO joint review of resolution progress
