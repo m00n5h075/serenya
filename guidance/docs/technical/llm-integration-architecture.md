@@ -553,8 +553,6 @@ export async function generateMonthlyBill(userId: string, billingPeriod: string)
 
 ### Cost Optimization Strategies
 - **Intelligent Model Selection**: Use Claude-3-Haiku for simple chat, Claude-3-Sonnet for complex analysis
-- **Response Caching**: Cache common medical interpretations to reduce API calls
-- **Batch Processing**: Group multiple documents for cost-efficient processing
 - **Usage-Based Throttling**: Implement gentle rate limiting for high-usage users
 
 ## Mock Server Benefits
@@ -573,8 +571,6 @@ export async function generateMonthlyBill(userId: string, billingPeriod: string)
 - **Production**: AWS Bedrock for HIPAA compliance and cost efficiency
 
 ### Implementation Features
-- **Anthropic Claude**: Primary production LLM for medical analysis
-- **OpenAI GPT-4**: Backup option with similar structured output capability  
 - **Mock Provider**: Full-featured development environment without external API calls
 - **Rate Limiting**: Built into server-side implementation, not exposed to client
 - **Retry Logic**: Automatic retry with exponential backoff for LLM service failures
