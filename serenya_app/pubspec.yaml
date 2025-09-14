@@ -42,6 +42,10 @@ dependencies:
   # Content Display System dependencies
   share_plus: ^7.2.1
   flutter_markdown: ^0.6.18
+  # PDF Generation dependencies
+  pdf: ^3.10.4
+  path_provider: ^2.1.1
+  cross_file: ^0.3.3+5
 
 dev_dependencies:
   flutter_test:

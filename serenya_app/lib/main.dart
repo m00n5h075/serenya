@@ -6,6 +6,7 @@ import 'core/theme/healthcare_theme.dart';
 import 'core/navigation/app_router.dart';
 import 'services/auth_service.dart';
 import 'services/unified_polling_service.dart';
+import 'services/pdf_cleanup_service.dart';
 
 void main() {
   runApp(const MyApp());
@@ -21,6 +22,7 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   final AuthService _authService = AuthService();
   final UnifiedPollingService _pollingService = UnifiedPollingService();
+  final PdfCleanupService _pdfCleanupService = PdfCleanupService();
   late AppStateProvider _appStateProvider;
   late HealthDataProvider _healthDataProvider;
   
@@ -37,6 +39,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _pollingService.dispose();
+    _pdfCleanupService.dispose(); // Clean up PDF cleanup service
     super.dispose();
   }
   
@@ -45,6 +48,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     
     // Initialize the unified polling service for job monitoring
     await _pollingService.initialize(_healthDataProvider);
+    
+    // Initialize PDF cleanup service for security hardening (CTO recommendation)
+    await _pdfCleanupService.onAppStartup();
   }
   
   @override
@@ -79,6 +85,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         _appStateProvider.setLoggedIn(isStillLoggedIn);
       }
     }
+    
+    // Trigger PDF cleanup when app resumes (CTO security hardening)
+    await _pdfCleanupService.onAppResume();
   }
   
   Future<void> _handleAppPaused() async {
