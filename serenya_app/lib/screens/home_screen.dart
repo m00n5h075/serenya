@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../core/providers/app_state_provider.dart';
 import '../core/providers/health_data_provider.dart';
 import '../widgets/upload_button.dart';
+import '../widgets/buttons/premium_fab.dart';
+import '../widgets/dialogs/upload_dialog.dart';
 import '../services/notification_service.dart';
 import '../widgets/timeline/timeline_container.dart';
 import 'login_screen.dart';
@@ -49,6 +51,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _handleUpload() {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => const UploadDialog(),
+    );
+  }
+
   // Document sorting handled by TimelineContainer provider
 
   @override
@@ -85,8 +97,9 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           },
         ),
-        // CRITICAL FIX: Disable onViewResults to prevent navigation conflicts
-        floatingActionButton: const UploadButton(
+        // Premium FAB with expansion menu for premium users
+        floatingActionButton: PremiumFAB(
+          onUpload: _handleUpload,
           onViewResults: null, // Disabled per CTO review
         ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,

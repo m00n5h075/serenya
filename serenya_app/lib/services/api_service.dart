@@ -186,6 +186,21 @@ class ApiService {
     }
   }
 
+  /// Cleanup temporary S3 files after successful Flutter storage
+  /// Fire-and-forget cleanup call triggered after SerenyaContent table update
+  Future<ApiResult<Map<String, dynamic>>> cleanupTempFiles(String jobId) async {
+    try {
+      final response = await _dio.delete(
+        '${AppConstants.processingEndpoint}/cleanup/$jobId',
+      );
+
+      return _handleResponse(response, 'Temporary file cleanup');
+
+    } on DioException catch (e) {
+      return _handleDioError(e, 'Temporary file cleanup');
+    }
+  }
+
   /// Generate doctor report with enhanced options
   Future<ApiResult<Map<String, dynamic>>> generateDoctorReport({
     required String documentId,

@@ -217,54 +217,15 @@ class ProcessingService {
     HealthDataProvider dataProvider,
   ) async {
     try {
-      // Get interpretation results
-      final interpretationResult = await _executeWithErrorHandling(
-        operation: () => _apiService.getInterpretation(job.jobId),
-        context: 'interpretation_retrieval',
-        jobId: job.jobId,
-      );
-
-      if (!interpretationResult.success || interpretationResult.data == null) {
-        return await _handleJobFailure(
-          job, 
-          {'error_message': 'Failed to retrieve interpretation: ${interpretationResult.message}'}, 
-          dataProvider,
-        );
+      // Handle different job types
+      switch (job.jobType) {
+        case JobType.documentUpload:
+          return await _handleDocumentJobCompletion(job, statusData, dataProvider);
+        case JobType.doctorReport:
+          return await _handleDoctorReportJobCompletion(job, statusData, dataProvider);
+        case JobType.chatMessage:
+          return await _handleChatJobCompletion(job, statusData, dataProvider);
       }
-
-      final interpretation = interpretationResult.data!;
-      final resultContentId = interpretation['content_id'] as String?;
-      
-      if (resultContentId == null) {
-        return await _handleJobFailure(
-          job,
-          {'error_message': 'No content ID in interpretation response'},
-          dataProvider,
-        );
-      }
-
-      // Mark job as completed in database
-      await ProcessingJobRepository.completeJob(job.jobId, resultContentId);
-
-      // Update document in UI database
-      await _updateDocumentWithResults(
-        resultContentId,
-        interpretation,
-        dataProvider,
-      );
-
-      // Send completion notification
-      await _notificationService.showNotification(
-        title: 'Processing Complete',
-        body: 'Your document analysis is ready to view.',
-      );
-
-      return ProcessingJobPollResult(
-        jobId: job.jobId,
-        success: true,
-        shouldContinuePolling: false,
-        resultContentId: resultContentId,
-      );
 
     } catch (e) {
       await _logProcessingError('job_completion_failed', job.jobId, e);
@@ -274,6 +235,139 @@ class ProcessingService {
         dataProvider,
       );
     }
+  }
+
+  /// Handle document upload job completion
+  Future<ProcessingJobPollResult> _handleDocumentJobCompletion(
+    ProcessingJob job,
+    Map<String, dynamic> statusData,
+    HealthDataProvider dataProvider,
+  ) async {
+    // Get interpretation results
+    final interpretationResult = await _executeWithErrorHandling(
+      operation: () => _apiService.getInterpretation(job.jobId),
+      context: 'interpretation_retrieval',
+      jobId: job.jobId,
+    );
+
+    if (!interpretationResult.success || interpretationResult.data == null) {
+      return await _handleJobFailure(
+        job, 
+        {'error_message': 'Failed to retrieve interpretation: ${interpretationResult.message}'}, 
+        dataProvider,
+      );
+    }
+
+    final interpretation = interpretationResult.data!;
+    final resultContentId = interpretation['content_id'] as String?;
+    
+    if (resultContentId == null) {
+      return await _handleJobFailure(
+        job,
+        {'error_message': 'No content ID in interpretation response'},
+        dataProvider,
+      );
+    }
+
+    // Mark job as completed in database
+    await ProcessingJobRepository.completeJob(job.jobId, resultContentId);
+
+    // Update document in UI database
+    await _updateDocumentWithResults(
+      resultContentId,
+      interpretation,
+      dataProvider,
+      ContentType.result,
+      jobId: job.jobId,
+    );
+
+    // Send completion notification
+    await _notificationService.showNotification(
+      title: 'Processing Complete',
+      body: 'Your document analysis is ready to view.',
+    );
+
+    return ProcessingJobPollResult(
+      jobId: job.jobId,
+      success: true,
+      shouldContinuePolling: false,
+      resultContentId: resultContentId,
+    );
+  }
+
+  /// Handle doctor report job completion
+  Future<ProcessingJobPollResult> _handleDoctorReportJobCompletion(
+    ProcessingJob job,
+    Map<String, dynamic> statusData,
+    HealthDataProvider dataProvider,
+  ) async {
+    // Get doctor report results
+    final reportResult = await _executeWithErrorHandling(
+      operation: () => _apiService.getInterpretation(job.jobId), // Same endpoint but different content type
+      context: 'doctor_report_retrieval',
+      jobId: job.jobId,
+    );
+
+    if (!reportResult.success || reportResult.data == null) {
+      return await _handleJobFailure(
+        job, 
+        {'error_message': 'Failed to retrieve doctor report: ${reportResult.message}'}, 
+        dataProvider,
+      );
+    }
+
+    final report = reportResult.data!;
+    final reportContentId = report['content_id'] as String?;
+    
+    if (reportContentId == null) {
+      return await _handleJobFailure(
+        job,
+        {'error_message': 'No content ID in doctor report response'},
+        dataProvider,
+      );
+    }
+
+    // Mark job as completed in database
+    await ProcessingJobRepository.completeJob(job.jobId, reportContentId);
+
+    // Update document in UI database with report content type
+    await _updateDocumentWithResults(
+      reportContentId,
+      report,
+      dataProvider,
+      ContentType.report,
+      jobId: job.jobId,
+    );
+
+    // Send completion notification
+    await _notificationService.showNotification(
+      title: 'Doctor Report Complete',
+      body: 'Your comprehensive doctor report is ready to view.',
+    );
+
+    return ProcessingJobPollResult(
+      jobId: job.jobId,
+      success: true,
+      shouldContinuePolling: false,
+      resultContentId: reportContentId,
+    );
+  }
+
+  /// Handle chat message job completion
+  Future<ProcessingJobPollResult> _handleChatJobCompletion(
+    ProcessingJob job,
+    Map<String, dynamic> statusData,
+    HealthDataProvider dataProvider,
+  ) async {
+    // TODO: Implement chat message completion handling
+    // For now, just mark as completed
+    await ProcessingJobRepository.completeJob(job.jobId, null);
+
+    return ProcessingJobPollResult(
+      jobId: job.jobId,
+      success: true,
+      shouldContinuePolling: false,
+    );
   }
 
   /// Handle job failure
@@ -357,16 +451,29 @@ class ProcessingService {
     String contentId,
     Map<String, dynamic> interpretation,
     HealthDataProvider dataProvider,
-  ) async {
+    ContentType contentType, {
+    String? jobId, // Optional jobId for cleanup
+  }) async {
     // This would normally find and update the existing document
     // For now, we'll create a new document record with the results
     // In a full implementation, this would link to the original upload
     
+    // Set title based on content type
+    String defaultTitle;
+    switch (contentType) {
+      case ContentType.result:
+        defaultTitle = 'Analysis Complete';
+        break;
+      case ContentType.report:
+        defaultTitle = 'Doctor Report';
+        break;
+    }
+    
     final document = SerenyaContent(
       id: contentId,
       userId: 'current_user', // This should come from auth service
-      contentType: ContentType.result,
-      title: interpretation['title'] ?? 'Analysis Complete',
+      contentType: contentType,
+      title: interpretation['title'] ?? defaultTitle,
       summary: interpretation['summary'],
       content: interpretation['detailed_interpretation'] ?? interpretation['interpretation_text'] ?? '',
       confidenceScore: (interpretation['confidence_score'] as num?)?.toDouble() ?? 0.0,
@@ -380,6 +487,12 @@ class ProcessingService {
     );
 
     await dataProvider.addDocument(document);
+    
+    // Trigger cleanup of temporary S3 files after successful storage
+    // This is a fire-and-forget operation for doctor reports only
+    if (jobId != null && contentType == ContentType.report) {
+      _triggerCleanupAsync(jobId);
+    }
   }
 
   /// Update document to show processing failure
@@ -392,6 +505,26 @@ class ProcessingService {
     // and update it to show the failure status
     // For now, we log the failure
     await _logProcessingError('document_processing_failed', jobId, errorMessage);
+  }
+
+  /// Trigger async cleanup of temporary S3 files (fire-and-forget)
+  /// 
+  /// Called after successful storage to SerenyaContent table for doctor reports
+  void _triggerCleanupAsync(String jobId) {
+    // Use Future.microtask to make this truly fire-and-forget
+    Future.microtask(() async {
+      try {
+        final cleanupResult = await _apiService.cleanupTempFiles(jobId);
+        if (cleanupResult.success) {
+          _log('Successfully cleaned up temp files for job: $jobId', 'cleanup_success');
+        } else {
+          _log('Failed to cleanup temp files for job: $jobId - ${cleanupResult.message}', 'cleanup_failure');
+        }
+      } catch (e) {
+        // Log but don't fail - this is fire-and-forget
+        _log('Error during async cleanup for job: $jobId - $e', 'cleanup_error');
+      }
+    });
   }
 
   /// Three-layer error handling wrapper

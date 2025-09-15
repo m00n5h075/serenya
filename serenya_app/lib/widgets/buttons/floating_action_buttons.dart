@@ -5,6 +5,8 @@ import '../../core/constants/design_tokens.dart';
 import '../../core/providers/health_data_provider.dart';
 import '../../api/offline/connectivity_service.dart';
 import '../../models/local_database_models.dart';
+import '../../services/premium_user_service.dart';
+import '../../services/doctor_reports_service.dart';
 
 /// Context-sensitive Floating Action Button system for Serenya
 /// 
@@ -44,6 +46,11 @@ class _SerenyaFABState extends State<SerenyaFAB>
   bool _isConnected = true;
   bool _hasProcessingDocuments = false;
   bool _hasCompletedDocuments = false;
+  bool _isPremiumUser = false;
+  
+  // Services
+  final PremiumUserService _premiumService = PremiumUserService();
+  final DoctorReportsService _doctorReportsService = DoctorReportsService();
 
   @override
   void initState() {
@@ -51,6 +58,7 @@ class _SerenyaFABState extends State<SerenyaFAB>
     _setupAnimations();
     _checkConnectivity();
     _checkDocumentStatus();
+    _checkPremiumStatus();
   }
 
   void _setupAnimations() {
@@ -109,6 +117,241 @@ class _SerenyaFABState extends State<SerenyaFAB>
     } else {
       _rotationController.stop();
     }
+  }
+
+  Future<void> _checkPremiumStatus() async {
+    try {
+      final isPremium = await _premiumService.isPremiumUser();
+      if (mounted) {
+        setState(() {
+          _isPremiumUser = isPremium;
+        });
+      }
+    } catch (e) {
+      // Graceful degradation - assume non-premium on error
+      if (mounted) {
+        setState(() {
+          _isPremiumUser = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _generateDoctorReport() async {
+    try {
+      // Provide haptic feedback
+      HapticFeedback.mediumImpact();
+      
+      // Get health data provider
+      final dataProvider = context.read<HealthDataProvider>();
+      
+      // Generate doctor report using the service
+      final result = await _doctorReportsService.generateDoctorReport(
+        dataProvider: dataProvider,
+      );
+      
+      if (result.success) {
+        // Show success feedback
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Doctor report generation started. You will be notified when it\'s ready.'),
+              backgroundColor: HealthcareColors.serenyaGreenPrimary,
+            ),
+          );
+        }
+      } else {
+        // Show detailed error dialog instead of simple snackbar
+        await _showErrorDialog(result);
+      }
+    } catch (e) {
+      // Handle unexpected errors with detailed dialog
+      await _showGenericErrorDialog(e.toString());
+    }
+  }
+
+  Future<void> _showErrorDialog(DoctorReportResult result) async {
+    String title;
+    String message;
+    List<Widget> actions;
+
+    switch (result.errorType) {
+      case DoctorReportErrorType.premiumRequired:
+        title = 'Premium Required';
+        message = result.message;
+        actions = [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _navigateToUpgrade();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: HealthcareColors.serenyaBluePrimary,
+              foregroundColor: HealthcareColors.serenyaWhite,
+            ),
+            child: const Text('Upgrade'),
+          ),
+        ];
+        break;
+        
+      case DoctorReportErrorType.insufficientHealthData:
+        title = 'Insufficient Health Data';
+        message = result.message;
+        actions = [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              widget.onUpload?.call();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: HealthcareColors.serenyaBluePrimary,
+              foregroundColor: HealthcareColors.serenyaWhite,
+            ),
+            child: const Text('Upload Documents'),
+          ),
+        ];
+        break;
+        
+      case DoctorReportErrorType.apiError:
+        title = 'Network Error';
+        message = 'Unable to connect to our servers. Please check your internet connection and try again.\\n\\nError: ${result.message}';
+        actions = [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              // Retry the doctor report generation
+              Future.delayed(const Duration(milliseconds: 500), () {
+                _generateDoctorReport();
+              });
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: HealthcareColors.serenyaGreenPrimary,
+              foregroundColor: HealthcareColors.serenyaWhite,
+            ),
+            child: const Text('Retry'),
+          ),
+        ];
+        break;
+        
+      case DoctorReportErrorType.unexpected:
+      default:
+        title = 'Generation Failed';
+        message = 'An unexpected error occurred while generating your doctor report. Please try again later.\\n\\nError: ${result.message}';
+        actions = [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              // Retry after a short delay
+              Future.delayed(const Duration(milliseconds: 500), () {
+                _generateDoctorReport();
+              });
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: HealthcareColors.serenyaGreenPrimary,
+              foregroundColor: HealthcareColors.serenyaWhite,
+            ),
+            child: const Text('Try Again'),
+          ),
+        ];
+        break;
+    }
+
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              _getErrorIcon(result.errorType),
+              color: _getErrorColor(result.errorType),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: Text(title)),
+          ],
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 14),
+        ),
+        actions: actions,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
+
+  IconData _getErrorIcon(DoctorReportErrorType? errorType) {
+    switch (errorType) {
+      case DoctorReportErrorType.premiumRequired:
+        return Icons.star_border;
+      case DoctorReportErrorType.insufficientHealthData:
+        return Icons.data_usage;
+      case DoctorReportErrorType.apiError:
+        return Icons.wifi_off;
+      case DoctorReportErrorType.unexpected:
+      default:
+        return Icons.error_outline;
+    }
+  }
+
+  Color _getErrorColor(DoctorReportErrorType? errorType) {
+    switch (errorType) {
+      case DoctorReportErrorType.premiumRequired:
+        return HealthcareColors.serenyaBluePrimary;
+      case DoctorReportErrorType.insufficientHealthData:
+        return HealthcareColors.cautionOrange;
+      case DoctorReportErrorType.apiError:
+        return HealthcareColors.textSecondary;
+      case DoctorReportErrorType.unexpected:
+      default:
+        return HealthcareColors.emergencyRed;
+    }
+  }
+
+  Future<void> _showGenericErrorDialog(String error) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Error'),
+        content: Text('An unexpected error occurred: $error'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _navigateToUpgrade() {
+    // TODO: Navigate to upgrade screen
+    // This should open the subscription/billing screen
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Navigate to upgrade screen - Not implemented yet'),
+      ),
+    );
   }
 
   @override
@@ -209,7 +452,16 @@ class _SerenyaFABState extends State<SerenyaFAB>
             backgroundColor: HealthcareColors.serenyaBlueAccent,
             heroTag: "chat_ai",
           ),
-        const SizedBox(height: HealthcareSpacing.sm),
+        if (widget.onChat != null) const SizedBox(height: HealthcareSpacing.sm),
+        if (_isPremiumUser)
+          _buildMiniActionFAB(
+            icon: Icons.medical_services,
+            label: 'Generate Doctor Report',
+            onPressed: _generateDoctorReport,
+            backgroundColor: HealthcareColors.cautionOrange,
+            heroTag: "doctor_report",
+          ),
+        if (_isPremiumUser) const SizedBox(height: HealthcareSpacing.sm),
         _buildMainActionFAB(
           icon: Icons.add,
           label: 'Upload Document',

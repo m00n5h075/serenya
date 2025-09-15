@@ -72,15 +72,105 @@ exports.handler = async (event) => {
       });
     }
 
-    // Get processing results using PostgreSQL service
-    const results = await DocumentJobService.getResults(jobId, userId);
-    if (!results) {
-      return createErrorResponse(500, 'Results not found', 'Processing results are not available');
+    // Handle different job types differently
+    // Check if this is a doctor report by looking at the filename pattern
+    const isDoctorReport = jobRecord.originalFilename && 
+                          jobRecord.originalFilename.includes('health_data_export');
+    
+    if (isDoctorReport) {
+      // Doctor report results are stored in S3, not database
+      return await handleDoctorReportResults(jobRecord, userId);
+    } else {
+      // Document analysis results are stored in database
+      const results = await DocumentJobService.getResults(jobId, userId);
+      if (!results) {
+        return createErrorResponse(500, 'Results not found', 'Processing results are not available');
+      }
+      
+      return handleDocumentAnalysisResults(jobRecord, results);
     }
 
-    // Prepare interpretation result with decrypted data
+  } catch (error) {
+    console.error('Result retrieval error:', sanitizeError(error));
+    
+    const userId = getUserIdFromEvent(event) || 'unknown';
+    const jobId = event.pathParameters?.jobId || 'unknown';
+    
+    auditLog('result_error', userId, { 
+      jobId, 
+      error: sanitizeError(error).substring(0, 100) 
+    });
+    
+    return createErrorResponse(500, 'Failed to retrieve results');
+  }
+};
+
+/**
+ * Handle doctor report results from S3
+ */
+async function handleDoctorReportResults(jobRecord, userId) {
+  const { s3 } = require('../shared/utils');
+  
+  try {
+    // Get report from S3
+    const s3Key = `reports/${userId}/${jobRecord.jobId}/doctor_report_result.json`;
+    const getObjectParams = {
+      Bucket: process.env.TEMP_BUCKET_NAME,
+      Key: s3Key,
+    };
+    
+    const s3Object = await s3.getObject(getObjectParams).promise();
+    const reportData = JSON.parse(s3Object.Body.toString());
+    
+    // Format as interpretation result for consistency with Flutter app
     const interpretationResult = {
-      job_id: jobId,
+      job_id: jobRecord.jobId,
+      content_id: jobRecord.jobId,
+      title: 'Doctor Report',
+      summary: reportData.clinical_recommendations?.slice(0, 200) || 'Comprehensive medical analysis report',
+      detailed_interpretation: reportData.content,
+      confidence_score: reportData.metadata?.confidence_score || 8,
+      medical_flags: reportData.clinical_recommendations || [],
+      recommendations: reportData.clinical_recommendations || [],
+      disclaimers: reportData.disclaimers || [],
+      safety_warnings: [],
+      processed_at: reportData.metadata?.generation_timestamp,
+      processing_duration_ms: reportData.metadata?.processing_time_ms,
+      ai_model_info: {
+        model_used: reportData.metadata?.model_used,
+        processing_time_ms: reportData.metadata?.processing_time_ms,
+        token_usage: reportData.metadata?.token_usage,
+        cost_estimate: reportData.metadata?.cost_estimate_cents
+      },
+      file_info: {
+        original_name: `doctor_report_${jobRecord.jobId}.json`,
+        type: 'doctor_report',
+        size: s3Object.ContentLength,
+        uploaded_at: jobRecord.uploadedAt,
+      },
+    };
+    
+    // Note: Cleanup of report results file is now handled by Flutter app
+    // after successful storage via DELETE /api/v1/process/cleanup/{jobId}
+    
+    return createResponse(200, {
+      success: true,
+      ...interpretationResult,
+    });
+    
+  } catch (error) {
+    console.error('Error fetching doctor report from S3:', error);
+    return createErrorResponse(500, 'Failed to retrieve doctor report', 'Unable to fetch report from storage');
+  }
+}
+
+/**
+ * Handle document analysis results from database
+ */
+async function handleDocumentAnalysisResults(jobRecord, results) {
+  // Prepare interpretation result with decrypted data
+  const interpretationResult = {
+    job_id: jobRecord.jobId,
       confidence_score: results.confidence_score,
       interpretation_text: results.interpretation_text,
       detailed_interpretation: results.detailed_interpretation,
@@ -117,15 +207,13 @@ exports.handler = async (event) => {
     await auditService.logAuditEvent({
       eventType: 'document_processing',
       eventSubtype: 'result_retrieved',
-      userId: userId,
+      userId: jobRecord.userId,
       eventDetails: {
-        jobId: jobId,
+        jobId: jobRecord.jobId,
         confidenceScore: results.confidence_score,
         confidenceLevel: interpretationResult.confidence_level,
         flagsCount: results.medicalFlags?.length || 0
       },
-      sessionId: sessionId,
-      sourceIp: sourceIp,
       dataClassification: 'medical_phi'
     });
 

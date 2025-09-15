@@ -104,6 +104,82 @@ class BedrockService {
   }
 
   /**
+   * Generate health data report with Claude Haiku
+   */
+  async generateHealthDataReport(healthData, metadata = {}) {
+    const startTime = Date.now();
+    
+    try {
+      this.logger.info('Starting health data report generation', {
+        userId: metadata.userId,
+        reportType: metadata.reportType || 'health_summary',
+        dataPointsCount: metadata.dataPointsCount || 0
+      });
+
+      // Format health data for report generation
+      const reportInput = this.formatHealthDataForReport(healthData, metadata);
+      
+      // Create Bedrock request
+      const bedrockRequest = medicalPromptsService.createBedrockRequest(
+        'health_data_report',
+        reportInput
+      );
+
+      // Execute through circuit breaker
+      const response = await this.circuitBreaker.execute(async () => {
+        return await this.invokeBedrock(bedrockRequest);
+      });
+
+      // Process response
+      const reportResult = await this.processAnalysisResponse(response, 'health_data_report');
+      
+      // Track usage
+      const responseTime = Date.now() - startTime;
+      await this.trackUsage('health_data_report', response.tokenUsage, responseTime, metadata);
+
+      // Audit logging
+      await this.logAnalysisAudit('health_data_report_generated', metadata.userId, {
+        reportType: metadata.reportType,
+        dataPointsCount: metadata.dataPointsCount,
+        includeRecommendations: metadata.includeRecommendations,
+        responseTimeMs: responseTime,
+        tokenUsage: response.tokenUsage
+      });
+
+      return {
+        success: true,
+        report: reportResult,
+        metadata: {
+          processing_time_ms: responseTime,
+          model_used: 'anthropic.claude-3-haiku-20240307-v1:0',
+          token_usage: response.tokenUsage,
+          cost_estimate_cents: this.calculateCostCents(response.tokenUsage),
+          confidence_score: this.calculateHealthDataConfidence(healthData, metadata.dataPointsCount)
+        }
+      };
+
+    } catch (error) {
+      const responseTime = Date.now() - startTime;
+      
+      this.logger.categorizedError(error, 'external', 'bedrock_health_report_failed', {
+        reportType: metadata.reportType,
+        dataPointsCount: metadata.dataPointsCount,
+        responseTimeMs: responseTime,
+        userId: metadata.userId
+      });
+
+      // Audit error
+      await this.logAnalysisAudit('health_data_report_generation_failed', metadata.userId, {
+        error: this.sanitizeError(error),
+        responseTimeMs: responseTime,
+        dataPointsCount: metadata.dataPointsCount
+      });
+
+      return this.handleBedrockError(error, 'health_data_report');
+    }
+  }
+
+  /**
    * Generate doctor report with Claude Haiku
    */
   async generateDoctorReport(analysisData, metadata = {}) {
@@ -505,6 +581,89 @@ Please provide a helpful response based on the medical context.`;
       message: error.message,
       code: error.code || 'UNKNOWN'
     };
+  }
+
+  /**
+   * Format health data for AI report generation
+   */
+  formatHealthDataForReport(healthData, metadata) {
+    const reportContext = {
+      report_type: metadata.reportType || 'health_summary',
+      include_recommendations: metadata.includeRecommendations !== false,
+      data_points_count: metadata.dataPointsCount || 0,
+      export_summary: healthData.export_summary
+    };
+
+    return `Health Data Analysis Request:
+
+Report Configuration:
+${JSON.stringify(reportContext, null, 2)}
+
+Vitals Data (${healthData.export_summary?.vitals_count || 0} records):
+${JSON.stringify(healthData.vitals_data || [], null, 2)}
+
+Lab Results Data (${healthData.export_summary?.lab_results_count || 0} records):
+${JSON.stringify(healthData.lab_results_data || [], null, 2)}
+
+Please generate a comprehensive health report based on this data. Focus on trends, patterns, and clinically significant findings. Include actionable recommendations if requested.`;
+  }
+
+  /**
+   * Calculate confidence score for health data reports
+   */
+  calculateHealthDataConfidence(healthData, dataPointsCount) {
+    try {
+      const vitalsCount = healthData.export_summary?.vitals_count || 0;
+      const labResultsCount = healthData.export_summary?.lab_results_count || 0;
+      const totalPoints = vitalsCount + labResultsCount;
+
+      // Base confidence on data quantity and variety
+      let confidence = 5; // Start with moderate confidence
+
+      // Boost confidence based on data quantity
+      if (totalPoints >= 20) confidence += 2;
+      else if (totalPoints >= 10) confidence += 1;
+
+      // Boost confidence based on data variety (both vitals and labs)
+      if (vitalsCount > 0 && labResultsCount > 0) confidence += 1;
+
+      // Boost confidence based on recent data
+      const recentDataBonus = this.calculateRecentDataBonus(healthData);
+      confidence += recentDataBonus;
+
+      // Cap at maximum confidence of 10
+      return Math.min(confidence, 10);
+    } catch (error) {
+      console.error('Error calculating health data confidence:', error);
+      return 6; // Default moderate confidence
+    }
+  }
+
+  /**
+   * Calculate bonus confidence for recent data
+   */
+  calculateRecentDataBonus(healthData) {
+    try {
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+      const recentVitals = (healthData.vitals_data || []).filter(vital => 
+        new Date(vital.recorded_at) >= sixMonthsAgo
+      ).length;
+
+      const recentLabs = (healthData.lab_results_data || []).filter(lab => 
+        new Date(lab.collected_at || lab.reported_at) >= sixMonthsAgo
+      ).length;
+
+      const recentTotal = recentVitals + recentLabs;
+
+      if (recentTotal >= 10) return 2;
+      if (recentTotal >= 5) return 1;
+      return 0;
+    } catch (error) {
+      console.error('Error calculating recent data bonus:', error);
+      return 0;
+    }
   }
 }
 

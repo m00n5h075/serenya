@@ -396,6 +396,23 @@ export class SerenyaBackendStack extends cdk.Stack {
       description: 'Premium doctor report generation',
     });
 
+    const cleanupFunction = new lambda.Function(this, 'CleanupFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'cleanup.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/cleanup')),
+      role: lambdaExecutionRole,
+      environment: commonLambdaEnvironment,
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [lambdaSecurityGroup],
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256,
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      description: 'S3 temporary file cleanup after successful Flutter storage',
+    });
+
     // JWT Authorizer Lambda  
     const authorizerFunction = new lambda.Function(this, 'AuthorizerFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -541,6 +558,7 @@ export class SerenyaBackendStack extends cdk.Stack {
       result: resultFunction,
       retry: retryFunction,
       doctorReport: doctorReportFunction,
+      cleanup: cleanupFunction,
       chatPrompts: chatPromptsFunction,
       chatMessages: chatMessagesFunction,
       chatStatus: chatStatusFunction,
@@ -696,6 +714,21 @@ export class SerenyaBackendStack extends cdk.Stack {
       authorizer,
       authorizationType: apigateway.AuthorizationType.CUSTOM,
     });
+
+    // Cleanup endpoint for S3 temporary files
+    const cleanup = process.addResource('cleanup');
+    const cleanupJobId = cleanup.addResource('{jobId}');
+    cleanupJobId.addMethod('DELETE', new apigateway.LambdaIntegration(functions.cleanup), {
+      authorizer,
+      authorizationType: apigateway.AuthorizationType.CUSTOM,
+      requestParameters: {
+        'method.request.path.jobId': true,
+      },
+    });
+
+    // Reports API endpoints (premium features)
+    const reports = apiV1.addResource('reports');
+    
 
     // Chat API endpoints (authorization required)
     const chat = apiV1.addResource('chat');
