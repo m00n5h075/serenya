@@ -74,7 +74,7 @@ class ProcessingLoadingState extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  _ProcessingLoadingStateState createState() => _ProcessingLoadingStateState();
+  State<ProcessingLoadingState> createState() => _ProcessingLoadingStateState();
 }
 
 class _ProcessingLoadingStateState extends State<ProcessingLoadingState>

@@ -22,7 +22,7 @@ class UploadButton extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  _UploadButtonState createState() => _UploadButtonState();
+  State<UploadButton> createState() => _UploadButtonState();
 }
 
 class _UploadButtonState extends State<UploadButton>
@@ -108,6 +108,7 @@ class _UploadButtonState extends State<UploadButton>
       }
 
       // Start processing
+      if (!mounted) return;
       final dataProvider = context.read<HealthDataProvider>();
       final result = await _processingService.processDocument(
         file: file.file,
@@ -234,7 +235,7 @@ class _UploadButtonState extends State<UploadButton>
           _handleProcessingFailure();
         }
       } catch (e) {
-        print('Error monitoring document: $e');
+        debugPrint('Error monitoring document: $e');
       }
     });
   }

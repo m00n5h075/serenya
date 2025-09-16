@@ -69,16 +69,23 @@ class _BiometricSetupDialogState extends State<BiometricSetupDialog> {
       
       if (result.success) {
         widget.onSetupComplete?.call();
-        Navigator.of(context).pop();
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
       } else {
-        _showSetupError(result.failureReason ?? 'Biometric setup failed');
+        if (mounted) {
+          _showSetupError(result.failureReason ?? 'Biometric setup failed');
+        }
       }
     } catch (e) {
-      _showSetupError('Could not setup biometric authentication: $e');
+      if (mounted) {
+        _showSetupError('Could not setup biometric authentication: $e');
+      }
     }
   }
 
   void _showSetupError(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import '../models/local_database_models.dart';
 import '../core/constants/app_constants.dart';
 import '../core/providers/health_data_provider.dart';
@@ -360,8 +361,8 @@ class ProcessingService {
     HealthDataProvider dataProvider,
   ) async {
     // TODO: Implement chat message completion handling
-    // For now, just mark as completed
-    await ProcessingJobRepository.completeJob(job.jobId, null);
+    // For now, just mark as completed with placeholder result ID
+    await ProcessingJobRepository.completeJob(job.jobId, 'chat_result_${job.jobId}');
 
     return ProcessingJobPollResult(
       jobId: job.jobId,
@@ -614,16 +615,25 @@ class ProcessingService {
     try {
       final deletedCount = await ProcessingJobRepository.cleanupOldJobs();
       if (deletedCount > 0) {
-        print('ProcessingService: Cleaned up $deletedCount old jobs');
+        debugPrint('ProcessingService: Cleaned up $deletedCount old jobs');
       }
     } catch (e) {
       await _logProcessingError('job_cleanup_failed', 'service', e);
     }
   }
 
+  /// Log messages with consistent formatting
+  void _log(String message, String level) {
+    if (kDebugMode || level == 'error' || level == 'cleanup_error' || level == 'cleanup_failure') {
+      final timestamp = DateTime.now().toIso8601String();
+      final levelUpper = level.toUpperCase();
+      debugPrint('[$timestamp] PROCESSING_SERVICE $levelUpper: $message');
+    }
+  }
+
   /// Log processing errors with comprehensive context
   Future<void> _logProcessingError(String event, String context, dynamic error) async {
-    print('PROCESSING_SERVICE_ERROR: $event in $context - $error');
+    debugPrint('PROCESSING_SERVICE_ERROR: $event in $context - $error');
     
     // TODO: Integrate with comprehensive audit logging system
     // This should include:

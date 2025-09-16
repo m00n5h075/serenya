@@ -1,20 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../core/providers/app_state_provider.dart';
 import '../core/providers/health_data_provider.dart';
 import '../widgets/upload_button.dart';
-import '../widgets/buttons/premium_fab.dart';
-import '../widgets/dialogs/upload_dialog.dart';
 import '../services/notification_service.dart';
 import '../widgets/timeline/timeline_container.dart';
-import 'login_screen.dart';
 import 'results_screen.dart';
+import 'settings/settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  _HomeScreenState createState() => _HomeScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
@@ -33,13 +30,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> _handleSignOut() async {
-    final appState = context.read<AppStateProvider>();
-    await appState.logout();
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
-    );
-  }
 
   // Refresh functionality handled by TimelineContainer directly
 
@@ -51,15 +41,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _handleUpload() {
-    showModalBottomSheet<void>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => const UploadDialog(),
-    );
-  }
 
   // Document sorting handled by TimelineContainer provider
 
@@ -81,9 +62,14 @@ class _HomeScreenState extends State<HomeScreen> {
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
-            onPressed: _handleSignOut,
-            tooltip: 'Sign Out',
+            icon: const Icon(Icons.settings, color: Colors.white),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              );
+            },
+            tooltip: 'Settings',
           ),
         ],
       ),
@@ -97,9 +83,8 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           },
         ),
-        // Premium FAB with expansion menu for premium users
-        floatingActionButton: PremiumFAB(
-          onUpload: _handleUpload,
+        // Upload FAB for file uploads
+        floatingActionButton: const UploadButton(
           onViewResults: null, // Disabled per CTO review
         ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,

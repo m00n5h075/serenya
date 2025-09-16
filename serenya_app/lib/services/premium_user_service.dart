@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../api/endpoints/subscriptions_api.dart';
 import '../api/api_client.dart';
+import '../api/error_handler.dart';
 
 /// Premium User Detection Service with Caching
 /// 
@@ -33,7 +34,7 @@ class PremiumUserService {
   PremiumUserService._()
       : _subscriptionsApi = SubscriptionsApi(
           ApiClient().dio,
-          ApiClient().errorHandler,
+          ApiErrorHandler(),
         ) {
     _startBackgroundRefresh();
   }
@@ -99,8 +100,8 @@ class PremiumUserService {
       _log('Fetching fresh subscription details from API');
       final subscriptionResult = await _subscriptionsApi.getCurrentSubscription();
       
-      if (!subscriptionResult.isSuccess) {
-        _log('Failed to fetch subscription details: ${subscriptionResult.message}', isError: true);
+      if (!subscriptionResult.success) {
+        _log('Failed to fetch subscription details: ${subscriptionResult.error}', isError: true);
         
         // Return cached subscription if available
         if (_cachedSubscription != null) {
@@ -192,8 +193,8 @@ class PremiumUserService {
   Future<bool> _fetchPremiumStatusFromAPI() async {
     final subscriptionResult = await _subscriptionsApi.getCurrentSubscription();
     
-    if (!subscriptionResult.isSuccess) {
-      throw Exception('Failed to fetch subscription: ${subscriptionResult.message}');
+    if (!subscriptionResult.success) {
+      throw Exception('Failed to fetch subscription: ${subscriptionResult.error}');
     }
 
     final subscription = subscriptionResult.data!;
@@ -252,7 +253,7 @@ class PremiumUserService {
     if (kDebugMode || isError) {
       final timestamp = DateTime.now().toIso8601String();
       final level = isError ? 'ERROR' : 'INFO';
-      print('[$timestamp] PREMIUM_USER_SERVICE $level: $message');
+      debugPrint('[$timestamp] PREMIUM_USER_SERVICE $level: $message');
     }
   }
 }

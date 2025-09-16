@@ -302,6 +302,40 @@ class ApiService {
     }
   }
 
+  /// Submit GDPR erasure request (right to be forgotten)
+  Future<ApiResult<Map<String, dynamic>>> requestAccountDeletion({
+    String? deletionReason,
+    required String confirmationText,
+    bool includeAuditAnonymization = true,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/gdpr/erasure-request',
+        data: {
+          'deletion_reason': deletionReason,
+          'confirmation_text': confirmationText,
+          'include_audit_anonymization': includeAuditAnonymization,
+        },
+      );
+
+      return _handleResponse(response, 'Account deletion request');
+
+    } on DioException catch (e) {
+      return _handleDioError(e, 'Account deletion request');
+    }
+  }
+
+  /// Check status of GDPR erasure request
+  Future<ApiResult<Map<String, dynamic>>> getErasureStatus(String erasureRequestId) async {
+    try {
+      final response = await _dio.get('/gdpr/erasure-status/$erasureRequestId');
+      return _handleResponse(response, 'Erasure status check');
+
+    } on DioException catch (e) {
+      return _handleDioError(e, 'Erasure status check');
+    }
+  }
+
   /// Validate file before upload
   String? _validateFile(File file, String fileName) {
     if (!EncryptionUtils.isValidFileType(fileName)) {
@@ -639,14 +673,3 @@ class RetryInterceptor extends Interceptor {
   }
 }
 
-/// Legacy API Exception for backward compatibility
-@deprecated
-class ApiException implements Exception {
-  final String message;
-  final int statusCode;
-
-  ApiException(this.message, this.statusCode);
-
-  @override
-  String toString() => 'ApiException: $message (Status: $statusCode)';
-}

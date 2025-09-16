@@ -10,7 +10,6 @@ import '../../core/providers/health_data_provider.dart';
 import '../../core/utils/encryption_utils.dart';
 import '../../services/processing_service.dart';
 import '../../services/notification_service.dart';
-import '../../models/local_database_models.dart';
 
 /// Reusable Upload Dialog Widget
 /// 
@@ -213,6 +212,7 @@ class _UploadDialogState extends State<UploadDialog> {
     widget.onUploadStarted?.call();
 
     try {
+      if (!mounted) return;
       final dataProvider = context.read<HealthDataProvider>();
       
       final result = await _processingService.processDocument(

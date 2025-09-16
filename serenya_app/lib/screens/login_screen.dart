@@ -6,7 +6,7 @@ class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
 
   @override
-  _LoginScreenState createState() => _LoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
@@ -30,17 +30,25 @@ class _LoginScreenState extends State<LoginScreen> {
       
       if (result.success) {
         // Navigate to home screen
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-        );
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
+        }
       } else if (result.cancelled) {
-        _showErrorDialog('Sign in was cancelled. Please try again to access your medical data securely.');
+        if (mounted) {
+          _showErrorDialog('Sign in was cancelled. Please try again to access your medical data securely.');
+        }
       } else {
         // Handle different error types with appropriate messaging
-        _showHealthcareErrorDialog(result);
+        if (mounted) {
+          _showHealthcareErrorDialog(result);
+        }
       }
     } catch (e) {
-      _showErrorDialog('An unexpected error occurred during authentication. Please try again.');
+      if (mounted) {
+        _showErrorDialog('An unexpected error occurred during authentication. Please try again.');
+      }
     } finally {
       setState(() {
         _isLoading = false;
@@ -49,6 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _showErrorDialog(String message) {
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -65,6 +74,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _showHealthcareErrorDialog(dynamic result) {
+    if (!mounted) return;
     String title = 'Authentication Required';
     String message = result.message;
     List<Widget> actions = [
