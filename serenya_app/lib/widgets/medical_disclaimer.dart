@@ -7,11 +7,11 @@ class MedicalDisclaimer extends StatelessWidget {
   final VoidCallback? onLearnMore;
 
   const MedicalDisclaimer({
-    Key? key,
+    super.key,
     this.type = DisclaimerType.general,
     this.isCompact = false,
     this.onLearnMore,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +53,7 @@ class MedicalDisclaimer extends StatelessWidget {
             isCompact ? disclaimerInfo.shortText : disclaimerInfo.fullText,
             style: TextStyle(
               fontSize: 13,
-              color: disclaimerInfo.textColor.withOpacity(0.9),
+              color: disclaimerInfo.textColor.withValues(alpha: 0.9),
               height: 1.4,
             ),
           ),

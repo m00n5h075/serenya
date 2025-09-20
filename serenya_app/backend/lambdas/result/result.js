@@ -106,53 +106,61 @@ exports.handler = async (event) => {
 };
 
 /**
- * Handle doctor report results from S3
+ * Handle doctor report results using unified approach
  */
 async function handleDoctorReportResults(jobRecord, userId) {
-  const { s3 } = require('../shared/utils');
-  
   try {
-    // Get report from S3
-    const s3Key = `reports/${userId}/${jobRecord.jobId}/doctor_report_result.json`;
-    const getObjectParams = {
-      Bucket: process.env.TEMP_BUCKET_NAME,
-      Key: s3Key,
-    };
-    
-    const s3Object = await s3.getObject(getObjectParams).promise();
-    const reportData = JSON.parse(s3Object.Body.toString());
-    
+    // Get unified results using the same method as document analysis
+    const results = await DocumentJobService.getResults(jobRecord.jobId, userId);
+    if (!results) {
+      return createErrorResponse(500, 'Doctor report results not found', 'Processing results are not available');
+    }
+
+    // Parse unified Bedrock response format (same as document analysis)
+    const bedrockResponse = results;
+    const reportMetadata = bedrockResponse.report_metadata || {};
+    const jobMetadata = results.jobMetadata || {};
+
     // Format as interpretation result for consistency with Flutter app
     const interpretationResult = {
       job_id: jobRecord.jobId,
       content_id: jobRecord.jobId,
-      title: 'Doctor Report',
-      summary: reportData.clinical_recommendations?.slice(0, 200) || 'Comprehensive medical analysis report',
-      detailed_interpretation: reportData.content,
-      confidence_score: reportData.metadata?.confidence_score || 8,
-      medical_flags: reportData.clinical_recommendations || [],
-      recommendations: reportData.clinical_recommendations || [],
-      disclaimers: reportData.disclaimers || [],
+      title: reportMetadata.title || 'Doctor Report',
+      summary: reportMetadata.summary || 'Comprehensive medical analysis report',
+      detailed_interpretation: bedrockResponse.markdown_content || '',
+      confidence_score: reportMetadata.confidence_score || jobMetadata.confidenceScore || 8,
+      medical_flags: reportMetadata.medical_flags || [],
+      recommendations: [], // Not used per user feedback
+      disclaimers: [], // Baked into markdown content per user feedback
       safety_warnings: [],
-      processed_at: reportData.metadata?.generation_timestamp,
-      processing_duration_ms: reportData.metadata?.processing_time_ms,
+      processed_at: new Date(jobRecord.completedAt).toISOString(),
+      processing_duration_ms: jobMetadata.processingTimeMs || 0,
       ai_model_info: {
-        model_used: reportData.metadata?.model_used,
-        processing_time_ms: reportData.metadata?.processing_time_ms,
-        token_usage: reportData.metadata?.token_usage,
-        cost_estimate: reportData.metadata?.cost_estimate_cents
+        model_used: jobMetadata.aiModelUsed || 'claude-3-haiku-20240307',
+        processing_time_ms: jobMetadata.processingTimeMs || 0,
+        token_usage: bedrockResponse.token_usage || null,
+        cost_estimate: bedrockResponse.cost_estimate || null
       },
       file_info: {
-        original_name: `doctor_report_${jobRecord.jobId}.json`,
+        original_name: jobRecord.original_filename || `doctor_report_${jobRecord.jobId}.json`,
         type: 'doctor_report',
-        size: s3Object.ContentLength,
-        uploaded_at: jobRecord.uploadedAt,
+        size: jobRecord.fileSize,
+        uploaded_at: new Date(jobRecord.uploadedAt).toISOString(),
       },
+      // Include structured data for local storage
+      lab_results: bedrockResponse.lab_results || [],
+      vitals: bedrockResponse.vitals || []
     };
+
+    // Add medical safety warnings
+    const safetyWarnings = generateSafetyWarnings(
+      interpretationResult.confidence_score,
+      interpretationResult.medical_flags
+    );
     
-    // Note: Cleanup of report results file is now handled by Flutter app
-    // after successful storage via DELETE /api/v1/process/cleanup/{jobId}
-    
+    interpretationResult.safety_warnings = [...(interpretationResult.safety_warnings || []), ...safetyWarnings];
+    interpretationResult.confidence_level = getConfidenceLevel(interpretationResult.confidence_score);
+
     return createResponse(200, {
       success: true,
       ...interpretationResult,
@@ -165,77 +173,73 @@ async function handleDoctorReportResults(jobRecord, userId) {
 }
 
 /**
- * Handle document analysis results from database
+ * Handle document analysis results from unified Bedrock response
  */
 async function handleDocumentAnalysisResults(jobRecord, results) {
-  // Prepare interpretation result with decrypted data
+  // Parse unified Bedrock response format
+  const bedrockResponse = results;
+  const documentMetadata = bedrockResponse.document_metadata || {};
+  const jobMetadata = results.jobMetadata || {};
+
+  // Prepare interpretation result with parsed data
   const interpretationResult = {
     job_id: jobRecord.jobId,
-      confidence_score: results.confidence_score,
-      interpretation_text: results.interpretation_text,
-      detailed_interpretation: results.detailed_interpretation,
-      medical_flags: results.medicalFlags || [],
-      recommendations: results.recommendations || [],
-      disclaimers: results.disclaimers || [],
-      safety_warnings: results.safetyWarnings || [],
-      processed_at: new Date(jobRecord.completedAt).toISOString(),
-      processing_duration_ms: jobRecord.processingDuration,
-      ai_model_info: {
-        model_used: results.ai_model_used,
-        processing_time_ms: results.ai_processing_time_ms,
-        token_usage: results.aiTokenUsage,
-        cost_estimate: results.ai_cost_estimate
-      },
-      file_info: {
-        original_name: jobRecord.original_filename,
-        type: jobRecord.fileType,
-        size: jobRecord.fileSize,
-        uploaded_at: new Date(jobRecord.uploadedAt).toISOString(),
-      },
-    };
+    content_id: jobRecord.jobId,
+    title: documentMetadata.title || 'Medical Document Analysis',
+    summary: documentMetadata.summary || '',
+    detailed_interpretation: bedrockResponse.markdown_content || '',
+    confidence_score: documentMetadata.confidence_score || jobMetadata.confidenceScore || 5,
+    medical_flags: documentMetadata.medical_flags || [],
+    recommendations: [], // Not used per user feedback
+    disclaimers: [], // Baked into markdown content per user feedback
+    safety_warnings: [],
+    processed_at: new Date(jobRecord.completedAt).toISOString(),
+    processing_duration_ms: jobMetadata.processingTimeMs || 0,
+    ai_model_info: {
+      model_used: jobMetadata.aiModelUsed || 'claude-3-haiku-20240307',
+      processing_time_ms: jobMetadata.processingTimeMs || 0,
+      token_usage: bedrockResponse.token_usage || null,
+      cost_estimate: bedrockResponse.cost_estimate || null
+    },
+    file_info: {
+      original_name: jobRecord.original_filename,
+      type: jobRecord.fileType,
+      size: jobRecord.fileSize,
+      uploaded_at: new Date(jobRecord.uploadedAt).toISOString(),
+    },
+    // Include structured data for local storage
+    lab_results: bedrockResponse.lab_results || [],
+    vitals: bedrockResponse.vitals || []
+  };
 
-    // Add medical safety warnings based on confidence and flags
-    const safetyWarnings = generateSafetyWarnings(
-      results.confidence_score,
-      results.medicalFlags
-    );
+  // Add medical safety warnings based on confidence and flags
+  const safetyWarnings = generateSafetyWarnings(
+    interpretationResult.confidence_score,
+    interpretationResult.medical_flags
+  );
     
-    interpretationResult.safety_warnings = [...(interpretationResult.safety_warnings || []), ...safetyWarnings];
-    interpretationResult.confidence_level = getConfidenceLevel(results.confidence_score);
+  interpretationResult.safety_warnings = [...(interpretationResult.safety_warnings || []), ...safetyWarnings];
+  interpretationResult.confidence_level = getConfidenceLevel(interpretationResult.confidence_score);
 
-    // Enhanced result retrieval audit
-    await auditService.logAuditEvent({
-      eventType: 'document_processing',
-      eventSubtype: 'result_retrieved',
-      userId: jobRecord.userId,
-      eventDetails: {
-        jobId: jobRecord.jobId,
-        confidenceScore: results.confidence_score,
-        confidenceLevel: interpretationResult.confidence_level,
-        flagsCount: results.medicalFlags?.length || 0
-      },
-      dataClassification: 'medical_phi'
-    });
+  // Enhanced result retrieval audit
+  await auditService.logAuditEvent({
+    eventType: 'document_processing',
+    eventSubtype: 'result_retrieved',
+    userId: jobRecord.userId,
+    eventDetails: {
+      jobId: jobRecord.jobId,
+      confidenceScore: interpretationResult.confidence_score,
+      confidenceLevel: interpretationResult.confidence_level,
+      flagsCount: interpretationResult.medical_flags?.length || 0
+    },
+    dataClassification: 'medical_phi'
+  });
 
-    return createResponse(200, {
-      success: true,
-      ...interpretationResult,
-    });
-
-  } catch (error) {
-    console.error('Result retrieval error:', sanitizeError(error));
-    
-    const userId = getUserIdFromEvent(event) || 'unknown';
-    const jobId = event.pathParameters?.jobId || 'unknown';
-    
-    auditLog('result_error', userId, { 
-      jobId, 
-      error: sanitizeError(error).substring(0, 100) 
-    });
-    
-    return createErrorResponse(500, 'Failed to retrieve results');
-  }
-};
+  return createResponse(200, {
+    success: true,
+    ...interpretationResult,
+  });
+}
 
 /**
  * Get status message for incomplete processing

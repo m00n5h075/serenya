@@ -18,50 +18,18 @@ class ProcessingService {
     required HealthDataProvider dataProvider,
   }) async {
     try {
-      // Phase P0: Create processing job record in database
-      // This replaces the timer-based approach with persistent tracking
-      
-      // Create initial document record with pending status
-      final document = SerenyaContent(
-        id: DateTime.now().millisecondsSinceEpoch.toString(), // Temporary ID until server assigns one
-        userId: 'current_user', // This should come from auth service
-        contentType: ContentType.result,
-        title: 'Processing $fileName',
-        content: '', // Will be filled when processing completes
-        confidenceScore: 0.0, // Will be filled when processing completes
-        medicalFlags: const [],
-        fileName: fileName,
-        fileType: _extractFileType(fileName),
-        fileSize: await file.length(),
-        uploadDate: DateTime.now(),
-        processingStatus: ProcessingStatus.pending,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
-
-      await dataProvider.addDocument(document);
-
-      // Start upload process using three-layer error handling
+      // Start upload process using three-layer error handling (no initial document creation)
       final uploadResult = await _executeWithErrorHandling(
         operation: () => _apiService.uploadDocument(
           file: file,
           fileName: fileName,
-          fileType: document.fileType ?? 'unknown',
+          fileType: _extractFileType(fileName),
         ),
         context: 'document_upload',
         fileName: fileName,
       );
 
       if (!uploadResult.success || uploadResult.data == null) {
-        // Update document status to failed
-        await dataProvider.updateDocument(
-          document.copyWith(
-            processingStatus: ProcessingStatus.failed,
-            content: 'Upload failed: ${uploadResult.message}',
-            updatedAt: DateTime.now(),
-          )
-        );
-        
         return ProcessingResult(
           success: false,
           message: uploadResult.message,
@@ -80,13 +48,6 @@ class ProcessingService {
         estimatedCompletionSeconds: estimatedSeconds,
       );
 
-      // Update document with processing status and link to job
-      final updatedDocument = document.copyWith(
-        processingStatus: ProcessingStatus.processing,
-        updatedAt: DateTime.now(),
-      );
-      await dataProvider.updateDocument(updatedDocument);
-
       // Send notification about upload success
       await _notificationService.showNotification(
         title: 'Upload Complete',
@@ -96,7 +57,7 @@ class ProcessingService {
       return ProcessingResult(
         success: true,
         jobId: jobId,
-        document: updatedDocument,
+        document: null, // No initial document created
         processingJob: processingJob,
         message: 'Document uploaded successfully. Processing started.',
       );
@@ -273,8 +234,8 @@ class ProcessingService {
     // Mark job as completed in database
     await ProcessingJobRepository.completeJob(job.jobId, resultContentId);
 
-    // Update document in UI database
-    await _updateDocumentWithResults(
+    // Create document in UI database (no initial document exists for uploads)
+    await _createDocumentWithResults(
       resultContentId,
       interpretation,
       dataProvider,
@@ -331,8 +292,8 @@ class ProcessingService {
     // Mark job as completed in database
     await ProcessingJobRepository.completeJob(job.jobId, reportContentId);
 
-    // Update document in UI database with report content type
-    await _updateDocumentWithResults(
+    // Create document in UI database with report content type
+    await _createDocumentWithResults(
       reportContentId,
       report,
       dataProvider,
@@ -447,34 +408,22 @@ class ProcessingService {
     }
   }
 
-  /// Update document with successful processing results
-  Future<void> _updateDocumentWithResults(
+  /// Create document with successful processing results
+  Future<void> _createDocumentWithResults(
     String contentId,
     Map<String, dynamic> interpretation,
     HealthDataProvider dataProvider,
     ContentType contentType, {
     String? jobId, // Optional jobId for cleanup
   }) async {
-    // This would normally find and update the existing document
-    // For now, we'll create a new document record with the results
-    // In a full implementation, this would link to the original upload
-    
-    // Set title based on content type
-    String defaultTitle;
-    switch (contentType) {
-      case ContentType.result:
-        defaultTitle = 'Analysis Complete';
-        break;
-      case ContentType.report:
-        defaultTitle = 'Doctor Report';
-        break;
-    }
+    // Create new document record with the results
+    // This is used for doctor reports which don't have an initial document
     
     final document = SerenyaContent(
       id: contentId,
       userId: 'current_user', // This should come from auth service
       contentType: contentType,
-      title: interpretation['title'] ?? defaultTitle,
+      title: interpretation['title'] ?? 'Doctor Report', // Use Bedrock title with fallback
       summary: interpretation['summary'],
       content: interpretation['detailed_interpretation'] ?? interpretation['interpretation_text'] ?? '',
       confidenceScore: (interpretation['confidence_score'] as num?)?.toDouble() ?? 0.0,
@@ -490,8 +439,8 @@ class ProcessingService {
     await dataProvider.addDocument(document);
     
     // Trigger cleanup of temporary S3 files after successful storage
-    // This is a fire-and-forget operation for doctor reports only
-    if (jobId != null && contentType == ContentType.report) {
+    // This is a fire-and-forget operation for all content types
+    if (jobId != null) {
       _triggerCleanupAsync(jobId);
     }
   }
@@ -510,7 +459,7 @@ class ProcessingService {
 
   /// Trigger async cleanup of temporary S3 files (fire-and-forget)
   /// 
-  /// Called after successful storage to SerenyaContent table for doctor reports
+  /// Called after successful storage to SerenyaContent table for all content types
   void _triggerCleanupAsync(String jobId) {
     // Use Future.microtask to make this truly fire-and-forget
     Future.microtask(() async {

@@ -69,19 +69,19 @@ class HealthcareTestMatchers {
   static Finder confidenceLowColor() => find.byWidgetPredicate(
     (widget) => widget is Container && 
     widget.decoration is BoxDecoration &&
-    (widget.decoration as BoxDecoration).color?.value == 0xFFFF5252,
+    (widget.decoration as BoxDecoration).color?.toARGB32() == 0xFFFF5252,
   );
   
   static Finder confidenceModerateColor() => find.byWidgetPredicate(
     (widget) => widget is Container && 
     widget.decoration is BoxDecoration &&
-    (widget.decoration as BoxDecoration).color?.value == 0xFFFF9800,
+    (widget.decoration as BoxDecoration).color?.toARGB32() == 0xFFFF9800,
   );
   
   static Finder confidenceHighColor() => find.byWidgetPredicate(
     (widget) => widget is Container && 
     widget.decoration is BoxDecoration &&
-    (widget.decoration as BoxDecoration).color?.value == 0xFF4CAF50,
+    (widget.decoration as BoxDecoration).color?.toARGB32() == 0xFF4CAF50,
   );
 }
 

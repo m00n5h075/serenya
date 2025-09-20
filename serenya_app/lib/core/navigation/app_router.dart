@@ -75,7 +75,7 @@ class AppRouter {
 }
 
 class LoadingScreen extends StatelessWidget {
-  const LoadingScreen({Key? key}) : super(key: key);
+  const LoadingScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -93,7 +93,7 @@ class LoadingScreen extends StatelessWidget {
 }
 
 class ErrorScreen extends StatelessWidget {
-  const ErrorScreen({Key? key}) : super(key: key);
+  const ErrorScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

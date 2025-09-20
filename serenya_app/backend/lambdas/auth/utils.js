@@ -4,10 +4,15 @@ const jwt = require('jsonwebtoken');
 // AWS SDK configuration
 const s3 = new AWS.S3();
 const secretsManager = new AWS.SecretsManager();
+const kms = new AWS.KMS();
 
 // Cache for secrets to avoid repeated API calls
 let secretsCache = null;
 let secretsCacheExpiry = 0;
+
+// Cache for decrypted Apple private key
+let applePrivateKeyCache = null;
+let applePrivateKeyCacheExpiry = 0;
 
 /**
  * Get API secrets from AWS Secrets Manager with caching
@@ -196,6 +201,73 @@ function auditLog(action, userId, metadata = {}) {
 }
 
 /**
+ * Get decrypted Apple private key with KMS and caching
+ */
+async function getApplePrivateKey() {
+  const now = Date.now();
+  
+  // Return cached key if still valid (cache for 10 minutes)
+  if (applePrivateKeyCache && now < applePrivateKeyCacheExpiry) {
+    return applePrivateKeyCache;
+  }
+
+  try {
+    const secrets = await getSecrets();
+    
+    // Check if the Apple private key is KMS encrypted
+    if (secrets.applePrivateKeyEncrypted && secrets.appleKmsKeyId) {
+      // Decrypt the private key using KMS
+      const decryptParams = {
+        CiphertextBlob: Buffer.from(secrets.applePrivateKeyEncrypted, 'base64'),
+        KeyId: secrets.appleKmsKeyId,
+        EncryptionContext: {
+          Purpose: 'AppleSignInAuth',
+          Environment: process.env.NODE_ENV || 'development'
+        }
+      };
+      
+      const decryptResult = await kms.decrypt(decryptParams).promise();
+      const decryptedKey = decryptResult.Plaintext.toString('utf8');
+      
+      // Cache the decrypted key
+      applePrivateKeyCache = decryptedKey;
+      applePrivateKeyCacheExpiry = now + (10 * 60 * 1000); // 10 minutes
+      
+      return decryptedKey;
+    } else {
+      // Fallback to plain text key (for backward compatibility)
+      console.warn('Apple private key is not KMS encrypted - consider migrating to KMS');
+      return secrets.applePrivateKey;
+    }
+  } catch (error) {
+    console.error('Error retrieving Apple private key:', error);
+    throw new Error('Failed to retrieve Apple private key');
+  }
+}
+
+/**
+ * Encrypt Apple private key using KMS (utility function for setup)
+ */
+async function encryptApplePrivateKey(privateKeyContent, kmsKeyId) {
+  try {
+    const encryptParams = {
+      KeyId: kmsKeyId,
+      Plaintext: privateKeyContent,
+      EncryptionContext: {
+        Purpose: 'AppleSignInAuth',
+        Environment: process.env.NODE_ENV || 'development'
+      }
+    };
+    
+    const encryptResult = await kms.encrypt(encryptParams).promise();
+    return encryptResult.CiphertextBlob.toString('base64');
+  } catch (error) {
+    console.error('Error encrypting Apple private key:', error);
+    throw new Error('Failed to encrypt Apple private key');
+  }
+}
+
+/**
  * Check if error contains PHI and sanitize
  */
 function sanitizeError(error) {
@@ -220,5 +292,7 @@ module.exports = {
   sanitizeFileName,
   auditLog,
   sanitizeError,
+  getApplePrivateKey,
+  encryptApplePrivateKey,
   s3,
 };

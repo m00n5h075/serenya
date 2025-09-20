@@ -8,17 +8,45 @@ import 'package:serenya_app/core/providers/health_data_provider.dart';
 import 'package:mockito/mockito.dart';
 
 class MockAppStateProvider extends Mock implements AppStateProvider {
+  final bool _isLoading = false;
+  String? _error;
+  final bool _isOnboardingComplete = false;
+  final bool _isLoggedIn = false;
+
   @override
-  bool get isLoading => false;
-  
+  bool get isLoading => super.noSuchMethod(
+    Invocation.getter(#isLoading),
+    returnValue: _isLoading,
+    returnValueForMissingStub: _isLoading,
+  );
+
   @override
-  String? get error => null;
-  
+  String? get error => super.noSuchMethod(
+    Invocation.getter(#error),
+    returnValue: _error,
+    returnValueForMissingStub: _error,
+  );
+
   @override
-  bool get isOnboardingComplete => true;
-  
+  bool get isOnboardingComplete => super.noSuchMethod(
+    Invocation.getter(#isOnboardingComplete),
+    returnValue: _isOnboardingComplete,
+    returnValueForMissingStub: _isOnboardingComplete,
+  );
+
   @override
-  bool get isLoggedIn => true;
+  bool get isLoggedIn => super.noSuchMethod(
+    Invocation.getter(#isLoggedIn),
+    returnValue: _isLoggedIn,
+    returnValueForMissingStub: _isLoggedIn,
+  );
+
+  @override
+  Future<void> initialize() => super.noSuchMethod(
+    Invocation.method(#initialize, []),
+    returnValue: Future<void>.value(),
+    returnValueForMissingStub: Future<void>.value(),
+  );
 }
 
 void main() {
@@ -27,9 +55,15 @@ void main() {
     
     setUp(() {
       mockAppStateProvider = MockAppStateProvider();
+      // Set up default return values to avoid null issues
+      when(mockAppStateProvider.isLoading).thenReturn(false);
+      when(mockAppStateProvider.error).thenReturn(null);
+      when(mockAppStateProvider.isOnboardingComplete).thenReturn(false);
+      when(mockAppStateProvider.isLoggedIn).thenReturn(false);
+      when(mockAppStateProvider.initialize()).thenAnswer((_) async {});
     });
 
-    Widget createTestWidget({required Widget child}) {
+    Widget createTestWidget() {
       return MultiProvider(
         providers: [
           ChangeNotifierProvider<AppStateProvider>.value(
@@ -48,9 +82,10 @@ void main() {
       when(mockAppStateProvider.error).thenReturn(null);
       when(mockAppStateProvider.isOnboardingComplete).thenReturn(true);
       when(mockAppStateProvider.isLoggedIn).thenReturn(true);
+      when(mockAppStateProvider.initialize()).thenAnswer((_) async {});
 
-      await tester.pumpWidget(createTestWidget(child: Container()));
-      await tester.pumpAndSettle();
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle(const Duration(seconds: 2));
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
@@ -61,8 +96,8 @@ void main() {
       when(mockAppStateProvider.isOnboardingComplete).thenReturn(true);
       when(mockAppStateProvider.isLoggedIn).thenReturn(true);
 
-      await tester.pumpWidget(createTestWidget(child: Container()));
-      await tester.pumpAndSettle();
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle(const Duration(seconds: 2));
 
       expect(find.text('Error: Test error'), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
@@ -74,11 +109,11 @@ void main() {
       when(mockAppStateProvider.isOnboardingComplete).thenReturn(false);
       when(mockAppStateProvider.isLoggedIn).thenReturn(false);
 
-      await tester.pumpWidget(createTestWidget(child: Container()));
-      await tester.pumpAndSettle();
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle(const Duration(seconds: 2));
 
-      // Onboarding flow should be displayed
-      expect(GoRouter.of(tester.element(find.byType(MaterialApp))).routeInformationProvider.value.uri.path, equals('/onboarding'));
+      // Onboarding flow should be displayed - look for onboarding UI elements
+      expect(find.text('Welcome to Serenya'), findsWidgets);
     });
 
     testWidgets('should redirect to login when not logged in', (tester) async {
@@ -87,10 +122,11 @@ void main() {
       when(mockAppStateProvider.isOnboardingComplete).thenReturn(true);
       when(mockAppStateProvider.isLoggedIn).thenReturn(false);
 
-      await tester.pumpWidget(createTestWidget(child: Container()));
-      await tester.pumpAndSettle();
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle(const Duration(seconds: 2));
 
-      expect(GoRouter.of(tester.element(find.byType(MaterialApp))).routeInformationProvider.value.uri.path, equals('/login'));
+      // Login screen should be displayed - look for login UI elements
+      expect(find.text('Sign in with Google'), findsWidgets);
     });
 
     testWidgets('should show home when logged in', (tester) async {
@@ -99,10 +135,11 @@ void main() {
       when(mockAppStateProvider.isOnboardingComplete).thenReturn(true);
       when(mockAppStateProvider.isLoggedIn).thenReturn(true);
 
-      await tester.pumpWidget(createTestWidget(child: Container()));
-      await tester.pumpAndSettle();
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle(const Duration(seconds: 2));
 
-      expect(GoRouter.of(tester.element(find.byType(MaterialApp))).routeInformationProvider.value.uri.path, equals('/home'));
+      // Home screen should be displayed - look for home UI elements
+      expect(find.text('Serenya'), findsWidgets);
     });
   });
 

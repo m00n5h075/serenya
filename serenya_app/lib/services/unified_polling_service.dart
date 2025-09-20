@@ -554,7 +554,7 @@ class UnifiedPollingService with WidgetsBindingObserver {
     if (kDebugMode || isError) {
       final timestamp = DateTime.now().toIso8601String();
       final level = isError ? 'ERROR' : 'INFO';
-      print('[$timestamp] $_logPrefix $level: $message');
+      debugPrint('[$timestamp] $_logPrefix $level: $message');
     }
   }
 }

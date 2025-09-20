@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
@@ -59,7 +60,7 @@ class PdfGenerationService {
       
       // Generate unique filename
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final filename = 'serenya_results_${timestamp}.pdf';
+      final filename = 'serenya_results_$timestamp.pdf';
       tempFile = File('${tempDir.path}/$filename');
       
       // Save PDF with error handling
@@ -84,7 +85,7 @@ class PdfGenerationService {
       
       // Verify file was created successfully
       if (!await tempFile.exists() || await tempFile.length() == 0) {
-        throw PdfGenerationException(
+        throw const PdfGenerationException(
           technicalDetails: 'PDF file was not created or is empty',
         );
       }
@@ -143,13 +144,13 @@ class PdfGenerationService {
     List<SerenyaContent> interpretations,
   ) {
     if (content.title.trim().isEmpty) {
-      throw InvalidContentException(
+      throw const InvalidContentException(
         technicalDetails: 'Content title is empty',
       );
     }
     
     if (content.content.trim().isEmpty && interpretations.isEmpty) {
-      throw InvalidContentException(
+      throw const InvalidContentException(
         technicalDetails: 'No content available for PDF generation',
       );
     }
@@ -158,7 +159,6 @@ class PdfGenerationService {
   /// Check available storage space before PDF generation
   static Future<void> _checkStorageSpace(Directory tempDir) async {
     try {
-      final stat = await tempDir.stat();
       // We can't directly check free space on mobile, but we can try to create a small test file
       final testFile = File('${tempDir.path}/space_test.tmp');
       await testFile.writeAsString('test');
@@ -187,7 +187,7 @@ class PdfGenerationService {
     final timeout = Timer(const Duration(seconds: 30), () {
       if (!completer.isCompleted) {
         completer.completeError(
-          TimeoutException(
+          const TimeoutException(
             technicalDetails: 'PDF generation timed out after 30 seconds',
           ),
         );
@@ -265,7 +265,7 @@ class PdfGenerationService {
       );
     } catch (e) {
       // Don't let logging errors affect PDF generation
-      print('Warning: Failed to log PDF operation: $e');
+      debugPrint('Warning: Failed to log PDF operation: $e');
     }
   }
   
@@ -434,7 +434,7 @@ class PdfGenerationService {
                 ],
               ),
             ),
-          ).toList(),
+          ),
         ],
       ],
     );

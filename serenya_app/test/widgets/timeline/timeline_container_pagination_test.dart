@@ -39,12 +39,10 @@ void main() {
       when(mockProvider.error).thenReturn(null);
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: TimelineContainer(
-              provider: mockProvider,
-              onDocumentTap: (document) {},
-            ),
+        createTestWidget(
+          TimelineContainer(
+            provider: mockProvider,
+            onDocumentTap: (document) {},
           ),
         ),
       );
@@ -64,12 +62,10 @@ void main() {
       when(mockProvider.error).thenReturn(null);
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: TimelineContainer(
-              provider: mockProvider,
-              onDocumentTap: (document) {},
-            ),
+        createTestWidget(
+          TimelineContainer(
+            provider: mockProvider,
+            onDocumentTap: (document) {},
           ),
         ),
       );
@@ -92,12 +88,10 @@ void main() {
       when(mockProvider.error).thenReturn(null);
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: TimelineContainer(
+        createTestWidget(
+          TimelineContainer(
               provider: mockProvider,
               onDocumentTap: (document) {},
-            ),
           ),
         ),
       );
@@ -123,12 +117,10 @@ void main() {
       when(mockProvider.applyPreloadedContent()).thenReturn(null);
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: TimelineContainer(
+        createTestWidget(
+          TimelineContainer(
               provider: mockProvider,
               onDocumentTap: (document) {},
-            ),
           ),
         ),
       );
@@ -155,13 +147,11 @@ void main() {
       when(mockProvider.error).thenReturn(null);
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: TimelineContainer(
+        createTestWidget(
+          TimelineContainer(
               provider: mockProvider,
               onDocumentTap: (document) {},
               enableInfiniteScroll: false,
-            ),
           ),
         ),
       );
@@ -188,12 +178,10 @@ void main() {
       when(mockProvider.loadContent()).thenAnswer((_) async {});
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: TimelineContainer(
+        createTestWidget(
+          TimelineContainer(
               provider: mockProvider,
               onDocumentTap: (document) {},
-            ),
           ),
         ),
       );
@@ -217,12 +205,10 @@ void main() {
       when(mockProvider.loadContent()).thenAnswer((_) async {});
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: TimelineContainer(
+        createTestWidget(
+          TimelineContainer(
               provider: mockProvider,
               onDocumentTap: (document) {},
-            ),
           ),
         ),
       );
@@ -250,12 +236,10 @@ void main() {
       when(mockProvider.error).thenReturn(null);
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: TimelineContainer(
+        createTestWidget(
+          TimelineContainer(
               provider: mockProvider,
               onDocumentTap: (document) {},
-            ),
           ),
         ),
       );
@@ -277,14 +261,12 @@ void main() {
       when(mockProvider.error).thenReturn(null);
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: TimelineContainer(
+        createTestWidget(
+          TimelineContainer(
               provider: mockProvider,
               onDocumentTap: (document) {
                 tappedDocument = document;
               },
-            ),
           ),
         ),
       );

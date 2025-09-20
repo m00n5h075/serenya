@@ -5,9 +5,9 @@ class DisclaimerSlide extends StatelessWidget {
   final VoidCallback onUnderstand;
 
   const DisclaimerSlide({
-    Key? key,
+    super.key,
     required this.onUnderstand,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

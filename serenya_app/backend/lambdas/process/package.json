@@ -4,9 +4,6 @@
   "description": "AI processing with Anthropic Claude integration",
   "main": "process.js",
   "dependencies": {
-    "aws-sdk": "^2.1481.0",
-    "@anthropic-ai/sdk": "^0.25.0",
-    "sharp": "^0.32.6",
-    "pdf-parse": "^1.1.1"
+    "aws-sdk": "^2.1481.0"
   }
 }

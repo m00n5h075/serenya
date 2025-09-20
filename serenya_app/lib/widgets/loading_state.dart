@@ -8,12 +8,12 @@ class LoadingState extends StatelessWidget {
   final double? progress;
 
   const LoadingState({
-    Key? key,
+    super.key,
     required this.message,
     this.subMessage,
     this.showProgress = false,
     this.progress,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -68,10 +68,10 @@ class ProcessingLoadingState extends StatefulWidget {
   final VoidCallback? onCancel;
 
   const ProcessingLoadingState({
-    Key? key,
+    super.key,
     required this.stage,
     this.onCancel,
-  }) : super(key: key);
+  });
 
   @override
   State<ProcessingLoadingState> createState() => _ProcessingLoadingStateState();

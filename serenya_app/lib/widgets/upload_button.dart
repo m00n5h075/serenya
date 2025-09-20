@@ -17,9 +17,9 @@ class UploadButton extends StatefulWidget {
   final VoidCallback? onViewResults;
 
   const UploadButton({
-    Key? key,
+    super.key,
     this.onViewResults,
-  }) : super(key: key);
+  });
 
   @override
   State<UploadButton> createState() => _UploadButtonState();

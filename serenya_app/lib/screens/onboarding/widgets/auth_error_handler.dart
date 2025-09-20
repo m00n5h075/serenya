@@ -162,7 +162,7 @@ class _AuthErrorWidget extends StatelessWidget {
           width: 64,
           height: 64,
           decoration: BoxDecoration(
-            color: (errorInfo['color'] as Color).withOpacity(0.1),
+            color: (errorInfo['color'] as Color).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(32),
           ),
           child: Icon(

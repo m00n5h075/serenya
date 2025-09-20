@@ -19,7 +19,7 @@ class OnboardingButton extends StatelessWidget {
   final String? semanticHint;
 
   const OnboardingButton({
-    Key? key,
+    super.key,
     required this.text,
     this.onPressed,
     this.isLoading = false,
@@ -27,7 +27,7 @@ class OnboardingButton extends StatelessWidget {
     this.margin,
     this.semanticLabel,
     this.semanticHint,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

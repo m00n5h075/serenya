@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
@@ -41,7 +42,7 @@ void main() {
       expect(stopwatch.elapsedMilliseconds, lessThan(3000), 
              reason: 'Authentication should complete in under 3 seconds');
       
-      print('Authentication completed in ${stopwatch.elapsedMilliseconds}ms');
+      debugPrint('Authentication completed in ${stopwatch.elapsedMilliseconds}ms');
     });
 
     test('Token refresh performance benchmark', () async {
@@ -59,7 +60,7 @@ void main() {
       expect(stopwatch.elapsedMilliseconds, lessThan(1000),
              reason: 'Token refresh should complete in under 1 second');
       
-      print('Token refresh completed in ${stopwatch.elapsedMilliseconds}ms');
+      debugPrint('Token refresh completed in ${stopwatch.elapsedMilliseconds}ms');
     });
 
     test('Biometric authentication performance benchmark', () async {
@@ -76,7 +77,7 @@ void main() {
       expect(stopwatch.elapsedMilliseconds, lessThan(2000),
              reason: 'Biometric authentication should complete in under 2 seconds');
       
-      print('Biometric authentication completed in ${stopwatch.elapsedMilliseconds}ms');
+      debugPrint('Biometric authentication completed in ${stopwatch.elapsedMilliseconds}ms');
     });
 
     test('Concurrent authentication requests handling', () async {
@@ -98,7 +99,7 @@ void main() {
       expect(stopwatch.elapsedMilliseconds, lessThan(5000),
              reason: 'Concurrent authentication requests should complete efficiently');
       
-      print('10 concurrent authentication requests completed in ${stopwatch.elapsedMilliseconds}ms');
+      debugPrint('10 concurrent authentication requests completed in ${stopwatch.elapsedMilliseconds}ms');
     });
 
     test('Memory usage during authentication flow', () async {
@@ -121,7 +122,7 @@ void main() {
       expect(memoryIncrease, lessThan(50), 
              reason: 'Authentication should not increase memory usage by more than 50MB');
       
-      print('Memory increase during authentication: ${memoryIncrease}MB');
+      debugPrint('Memory increase during authentication: ${memoryIncrease}MB');
     });
 
     test('Network request performance with retries', () async {
@@ -146,7 +147,7 @@ void main() {
         expect(stopwatch.elapsedMilliseconds, lessThan(10000),
                reason: 'Network requests with retries should complete within reasonable time');
         
-        print('Network request with retries completed in ${stopwatch.elapsedMilliseconds}ms');
+        debugPrint('Network request with retries completed in ${stopwatch.elapsedMilliseconds}ms');
       } catch (e) {
         stopwatch.stop();
         fail('Network request with retries should eventually succeed');
@@ -167,7 +168,7 @@ void main() {
       expect(stopwatch.elapsedMilliseconds, lessThan(500),
              reason: 'Authentication state persistence should be fast');
       
-      print('Authentication state read completed in ${stopwatch.elapsedMilliseconds}ms');
+      debugPrint('Authentication state read completed in ${stopwatch.elapsedMilliseconds}ms');
     });
 
     test('Battery optimization - minimal background processing', () async {
@@ -195,7 +196,7 @@ void main() {
       expect(stopwatch.elapsedMilliseconds, lessThan(65000),
              reason: 'Background authentication checks should be efficient');
       
-      print('Background processing completed in ${stopwatch.elapsedMilliseconds}ms');
+      debugPrint('Background processing completed in ${stopwatch.elapsedMilliseconds}ms');
     });
 
     test('Stress test - rapid authentication state changes', () async {
@@ -216,7 +217,7 @@ void main() {
       expect(stopwatch.elapsedMilliseconds, lessThan(10000),
              reason: 'Rapid authentication state changes should be handled efficiently');
       
-      print('50 rapid authentication state changes completed in ${stopwatch.elapsedMilliseconds}ms');
+      debugPrint('50 rapid authentication state changes completed in ${stopwatch.elapsedMilliseconds}ms');
     });
   });
 }

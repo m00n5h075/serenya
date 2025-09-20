@@ -90,22 +90,22 @@ class ApiLoggingInterceptor extends Interceptor {
 
   /// Debug print request details
   void _printRequest(RequestOptions options) {
-    print('\n╭──────────────────────────────────────────────────────────');
-    print('│ 🚀 API Request [${options.extra['request_id']}]');
-    print('├──────────────────────────────────────────────────────────');
-    print('│ ${options.method.toUpperCase()} ${options.uri}');
+    debugPrint('\n╭──────────────────────────────────────────────────────────');
+    debugPrint('│ 🚀 API Request [${options.extra['request_id']}]');
+    debugPrint('├──────────────────────────────────────────────────────────');
+    debugPrint('│ ${options.method.toUpperCase()} ${options.uri}');
     
     if (logHeaders && options.headers.isNotEmpty) {
-      print('├─ Headers:');
+      debugPrint('├─ Headers:');
       _printHeaders(options.headers);
     }
 
     if (logRequestBody && options.data != null) {
-      print('├─ Body:');
-      print('│ ${_formatData(options.data)}');
+      debugPrint('├─ Body:');
+      debugPrint('│ ${_formatData(options.data)}');
     }
     
-    print('╰──────────────────────────────────────────────────────────\n');
+    debugPrint('╰──────────────────────────────────────────────────────────\n');
   }
 
   /// Debug print response details
@@ -113,52 +113,52 @@ class ApiLoggingInterceptor extends Interceptor {
     final statusCode = response.statusCode ?? 0;
     final statusEmoji = _getStatusEmoji(statusCode);
     
-    print('\n╭──────────────────────────────────────────────────────────');
-    print('│ $statusEmoji API Response [${response.requestOptions.extra['request_id']}]');
-    print('├──────────────────────────────────────────────────────────');
-    print('│ ${response.requestOptions.method.toUpperCase()} ${response.requestOptions.uri}');
-    print('│ Status: $statusCode ${response.statusMessage ?? ''}');
+    debugPrint('\n╭──────────────────────────────────────────────────────────');
+    debugPrint('│ $statusEmoji API Response [${response.requestOptions.extra['request_id']}]');
+    debugPrint('├──────────────────────────────────────────────────────────');
+    debugPrint('│ ${response.requestOptions.method.toUpperCase()} ${response.requestOptions.uri}');
+    debugPrint('│ Status: $statusCode ${response.statusMessage ?? ''}');
     
     if (duration != null) {
-      print('│ Duration: ${duration}ms');
+      debugPrint('│ Duration: ${duration}ms');
     }
 
     if (logHeaders && response.headers.map.isNotEmpty) {
-      print('├─ Headers:');
+      debugPrint('├─ Headers:');
       _printHeaders(response.headers.map);
     }
 
     if (logResponseBody && response.data != null) {
-      print('├─ Body:');
-      print('│ ${_formatData(response.data)}');
+      debugPrint('├─ Body:');
+      debugPrint('│ ${_formatData(response.data)}');
     }
     
-    print('╰──────────────────────────────────────────────────────────\n');
+    debugPrint('╰──────────────────────────────────────────────────────────\n');
   }
 
   /// Debug print error details
   void _printError(DioException error, int? duration) {
-    print('\n╭──────────────────────────────────────────────────────────');
-    print('│ ❌ API Error [${error.requestOptions.extra['request_id']}]');
-    print('├──────────────────────────────────────────────────────────');
-    print('│ ${error.requestOptions.method.toUpperCase()} ${error.requestOptions.uri}');
-    print('│ Type: ${error.type}');
-    print('│ Message: ${error.message}');
+    debugPrint('\n╭──────────────────────────────────────────────────────────');
+    debugPrint('│ ❌ API Error [${error.requestOptions.extra['request_id']}]');
+    debugPrint('├──────────────────────────────────────────────────────────');
+    debugPrint('│ ${error.requestOptions.method.toUpperCase()} ${error.requestOptions.uri}');
+    debugPrint('│ Type: ${error.type}');
+    debugPrint('│ Message: ${error.message}');
     
     if (duration != null) {
-      print('│ Duration: ${duration}ms');
+      debugPrint('│ Duration: ${duration}ms');
     }
 
     if (error.response != null) {
-      print('│ Status: ${error.response!.statusCode}');
+      debugPrint('│ Status: ${error.response!.statusCode}');
       
       if (logResponseBody && error.response!.data != null) {
-        print('├─ Response Body:');
-        print('│ ${_formatData(error.response!.data)}');
+        debugPrint('├─ Response Body:');
+        debugPrint('│ ${_formatData(error.response!.data)}');
       }
     }
     
-    print('╰──────────────────────────────────────────────────────────\n');
+    debugPrint('╰──────────────────────────────────────────────────────────\n');
   }
 
   /// Get emoji for HTTP status codes
@@ -174,7 +174,7 @@ class ApiLoggingInterceptor extends Interceptor {
   void _printHeaders(Map<String, dynamic> headers) {
     headers.forEach((key, value) {
       final redactedValue = _shouldRedactHeader(key) ? '[REDACTED]' : value;
-      print('│   $key: $redactedValue');
+      debugPrint('│   $key: $redactedValue');
     });
   }
 

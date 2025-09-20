@@ -5,9 +5,9 @@ class PrivacySlide extends StatelessWidget {
   final VoidCallback onContinue;
 
   const PrivacySlide({
-    Key? key,
+    super.key,
     required this.onContinue,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

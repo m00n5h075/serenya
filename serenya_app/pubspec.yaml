@@ -1,5 +1,5 @@
 name: serenya_app
-description: Serenya AI Health Agent mobile app
+description: "Serenya: AI-powered health document analysis and personalized medical insights for better healthcare decision-making."
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -11,60 +11,63 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.2
-  google_sign_in: ^6.2.1
+  google_sign_in: ^7.1.1
+  # Apple Sign-In for iOS authentication
+  sign_in_with_apple: ^7.0.1
   flutter_secure_storage: ^9.0.0
   http: ^1.1.0
-  sqflite_common_ffi: ^2.3.0+2
+  sqflite_common_ffi: ^2.3.6
   sqlite3_flutter_libs: ^0.5.18
-  path: ^1.8.3
+  path: ^1.9.0
   provider: ^6.0.5
-  shared_preferences: ^2.2.2
+  shared_preferences: ^2.5.3
   crypto: ^3.0.3
-  file_picker: ^6.1.1
-  image_picker: ^1.0.4
-  permission_handler: ^11.0.1
+  file_picker: ^10.3.3
+  image_picker: ^1.2.0
+  permission_handler: ^12.0.1
   # SQLCipher encryption for local database
-  sqflite_sqlcipher: ^2.2.1
+  sqflite_sqlcipher: ^3.4.0
   # Biometric authentication
   local_auth: ^2.1.6
   # HKDF key derivation
   cryptography: ^2.5.0
   # Enhanced Navigation and State Management
-  go_router: ^14.2.7
+  go_router: ^16.2.1
   # Enhanced Testing Support
   equatable: ^2.0.5
   # Enhanced HTTP Client
   dio: ^5.3.2
   # Network connectivity checking
-  connectivity_plus: ^5.0.1
+  connectivity_plus: ^7.0.0
   # HTTP retry interceptor  
-  dio_smart_retry: ^6.0.0
+  dio_smart_retry: ^7.0.1
   # Content Display System dependencies
-  share_plus: ^7.2.1
-  flutter_markdown: ^0.6.18
+  share_plus: ^12.0.0
   # PDF Generation dependencies
   pdf: ^3.10.4
   path_provider: ^2.1.1
   cross_file: ^0.3.3+5
+  markdown_widget: ^2.3.2+8
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^2.0.0
-  mockito: ^5.4.2
+  flutter_lints: ^6.0.0
+  mockito: ^5.4.4
   build_runner: ^2.4.6
   # Enhanced Testing Framework
-  bloc_test: ^9.1.4
+  bloc_test: ^10.0.0
   mocktail: ^1.0.0
   integration_test:
     sdk: flutter
   # Code Generation
   json_annotation: ^4.8.1
-  json_serializable: ^6.7.1
+  json_serializable: ^6.11.1
   local_auth_android: any
   local_auth_darwin: any
   local_auth_windows: any
   connectivity_plus_platform_interface: any
   google_sign_in_platform_interface: any
+  test: any
 flutter:
   uses-material-design: true

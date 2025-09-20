@@ -5,9 +5,9 @@ class WelcomeSlide extends StatelessWidget {
   final VoidCallback onGetStarted;
 
   const WelcomeSlide({
-    Key? key,
+    super.key,
     required this.onGetStarted,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -17,24 +17,25 @@ class WelcomeSlide extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 40),
-                    _buildHeader(),
-                    const SizedBox(height: 32),
-                    _buildMainDescription(),
-                    const SizedBox(height: 32),
-                    _buildFeatures(),
-                    const SizedBox(height: 32),
-                    _buildClosingStatement(),
-                  ],
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 40),
+                      _buildHeader(),
+                      const SizedBox(height: 32),
+                      _buildMainDescription(),
+                      const SizedBox(height: 32),
+                      _buildFeatures(),
+                      const SizedBox(height: 32),
+                      _buildClosingStatement(),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 24),
               _buildButton(),
               const SizedBox(height: 24),
             ],

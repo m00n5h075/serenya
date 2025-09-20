@@ -34,7 +34,7 @@ class BedrockService {
   }
 
   /**
-   * Process medical document with Claude Haiku
+   * Process medical document with Claude Haiku (supporting binary files)
    */
   async analyzeMedicalDocument(documentContent, metadata = {}) {
     const startTime = Date.now();
@@ -46,10 +46,10 @@ class BedrockService {
         userId: metadata.userId
       });
 
-      // Create Bedrock request using prompts service
-      const bedrockRequest = medicalPromptsService.createBedrockRequest(
-        'medical_analysis', 
+      // Create Bedrock request for binary document analysis
+      const bedrockRequest = this.createDocumentAnalysisRequest(
         documentContent,
+        metadata.fileType,
         { abTesting: true }
       );
 
@@ -307,6 +307,89 @@ class BedrockService {
 
       return this.handleBedrockError(error, 'chat_response');
     }
+  }
+
+  /**
+   * Create Bedrock request for binary document analysis
+   * Supports PDF and image files for Claude 3 multimodal processing
+   */
+  createDocumentAnalysisRequest(documentContent, fileType, options = {}) {
+    try {
+      // Determine media type based on file extension
+      const mediaType = this.getMediaTypeFromFileType(fileType);
+      
+      // Create multimodal content array
+      const contentArray = [
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: mediaType,
+            data: documentContent.toString('base64')
+          }
+        },
+        {
+          type: 'text', 
+          text: medicalPromptsService.getPrompt('medical_analysis', {
+            abTesting: options.abTesting || false,
+            customizations: {
+              fileType: fileType
+            }
+          })
+        }
+      ];
+
+      return {
+        modelId: 'anthropic.claude-3-haiku-20240307-v1:0',
+        contentType: 'application/json',
+        accept: 'application/json',
+        body: JSON.stringify({
+          anthropic_version: 'bedrock-2023-05-31',
+          max_tokens: 4000,
+          temperature: 0.1,
+          messages: [
+            {
+              role: 'user',
+              content: contentArray
+            }
+          ]
+        })
+      };
+
+    } catch (error) {
+      this.logger.categorizedError(error, 'technical', 'document_request_creation_failed', {
+        fileType: fileType,
+        contentLength: documentContent?.length || 0
+      });
+      
+      throw new Error(`Failed to create document analysis request: ${error.message}`);
+    }
+  }
+
+  /**
+   * Map file type to Claude 3 supported media types
+   */
+  getMediaTypeFromFileType(fileType) {
+    const mediaTypeMap = {
+      'pdf': 'application/pdf',
+      'png': 'image/png', 
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'webp': 'image/webp',
+      'gif': 'image/gif',
+      'bmp': 'image/bmp',
+      'tiff': 'image/tiff',
+      'tif': 'image/tiff'
+    };
+
+    const normalizedType = fileType.toLowerCase().replace('.', '');
+    const mediaType = mediaTypeMap[normalizedType];
+    
+    if (!mediaType) {
+      throw new Error(`Unsupported file type for multimodal analysis: ${fileType}`);
+    }
+    
+    return mediaType;
   }
 
   /**

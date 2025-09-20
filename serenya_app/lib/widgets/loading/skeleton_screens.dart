@@ -17,13 +17,13 @@ class SkeletonLoader extends StatefulWidget {
   final Duration animationDuration;
 
   const SkeletonLoader({
-    Key? key,
+    super.key,
     required this.child,
     required this.isLoading,
     this.baseColor,
     this.highlightColor,
     this.animationDuration = const Duration(milliseconds: 1000),
-  }) : super(key: key);
+  });
 
   @override
   State<SkeletonLoader> createState() => _SkeletonLoaderState();
@@ -81,7 +81,7 @@ class _SkeletonLoaderState extends State<SkeletonLoader>
     final baseColor = widget.baseColor ?? 
         HealthcareColors.backgroundTertiary;
     final highlightColor = widget.highlightColor ?? 
-        HealthcareColors.serenyaWhite.withOpacity(0.8);
+        HealthcareColors.serenyaWhite.withValues(alpha: 0.8);
 
     return AnimatedBuilder(
       animation: _animation,
@@ -117,10 +117,10 @@ class TimelineSkeletonScreen extends StatelessWidget {
   final bool showHeader;
 
   const TimelineSkeletonScreen({
-    Key? key,
+    super.key,
     this.itemCount = 5,
     this.showHeader = true,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -276,10 +276,10 @@ class ResultsSkeletonScreen extends StatelessWidget {
   final bool showMetrics;
 
   const ResultsSkeletonScreen({
-    Key? key,
+    super.key,
     this.showSummary = true,
     this.showMetrics = true,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -546,9 +546,9 @@ class ChatSkeletonScreen extends StatelessWidget {
   final int messageCount;
 
   const ChatSkeletonScreen({
-    Key? key,
+    super.key,
     this.messageCount = 5,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -684,10 +684,10 @@ class ListSkeletonScreen extends StatelessWidget {
   final Widget Function(BuildContext, int)? itemBuilder;
 
   const ListSkeletonScreen({
-    Key? key,
+    super.key,
     this.itemCount = 10,
     this.itemBuilder,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

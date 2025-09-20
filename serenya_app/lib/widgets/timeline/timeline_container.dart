@@ -22,14 +22,14 @@ class TimelineContainer extends StatefulWidget {
   final double preloadThreshold; // 0.0 to 1.0 (80% = 0.8)
 
   const TimelineContainer({
-    Key? key,
+    super.key,
     required this.provider,
     required this.onDocumentTap,
     this.filterType,
     this.enableInfiniteScroll = true,
     this.enablePreloading = true,
     this.preloadThreshold = 0.8,
-  }) : super(key: key);
+  });
 
   @override
   State<TimelineContainer> createState() => _TimelineContainerState();

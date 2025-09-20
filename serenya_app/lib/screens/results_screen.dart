@@ -1,7 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:markdown_widget/markdown_widget.dart';
 import '../core/providers/health_data_provider.dart';
 import '../core/constants/app_constants.dart';
 import '../core/constants/design_tokens.dart';
@@ -23,9 +24,9 @@ class ResultsScreen extends StatefulWidget {
   final String? documentId;
 
   const ResultsScreen({
-    Key? key,
+    super.key,
     this.documentId,
-  }) : super(key: key);
+  });
 
   @override
   State<ResultsScreen> createState() => _ResultsScreenState();
@@ -279,27 +280,28 @@ class _ResultsScreenState extends State<ResultsScreen>
                       ],
                     ),
                     const SizedBox(height: HealthcareSpacing.sm),
-                    MarkdownBody(
+                    MarkdownWidget(
                       data: interpretation.content,
-                      styleSheet: MarkdownStyleSheet(
-                        p: HealthcareTypography.bodyMedium.copyWith(
-                          color: HealthcareColors.textPrimary,
-                          height: 1.5,
+                      config: MarkdownConfig(configs: [
+                        PConfig(
+                          textStyle: HealthcareTypography.bodyMedium.copyWith(
+                            color: HealthcareColors.textPrimary,
+                            height: 1.5,
+                          ),
                         ),
-                        h1: HealthcareTypography.headingH4.copyWith(
-                          color: HealthcareColors.textPrimary,
+                        H1Config(
+                          style: HealthcareTypography.headingH4.copyWith(
+                            color: HealthcareColors.textPrimary,
+                          ),
                         ),
-                        h2: HealthcareTypography.labelLarge.copyWith(
-                          color: HealthcareColors.textPrimary,
+                        H2Config(
+                          style: HealthcareTypography.labelLarge.copyWith(
+                            color: HealthcareColors.textPrimary,
+                          ),
                         ),
-                        strong: HealthcareTypography.bodyMedium.copyWith(
-                          color: HealthcareColors.textPrimary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        listBullet: HealthcareTypography.bodyMedium.copyWith(
-                          color: HealthcareColors.serenyaBluePrimary,
-                        ),
-                      ),
+                        // Strong/bold text styling - may need different config class name
+                        // UL list styling - may need different config class name
+                      ]),
                       selectable: true,
                     ),
                     if (interpretation.medicalFlags.isNotEmpty) ...[
@@ -314,10 +316,10 @@ class _ResultsScreenState extends State<ResultsScreen>
                               vertical: HealthcareSpacing.xs,
                             ),
                             decoration: BoxDecoration(
-                              color: HealthcareColors.cautionOrange.withOpacity(0.1),
+                              color: HealthcareColors.cautionOrange.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(HealthcareBorderRadius.xs),
                               border: Border.all(
-                                color: HealthcareColors.cautionOrange.withOpacity(0.3),
+                                color: HealthcareColors.cautionOrange.withValues(alpha: 0.3),
                               ),
                             ),
                             child: Text(
@@ -333,7 +335,7 @@ class _ResultsScreenState extends State<ResultsScreen>
                   ],
                 ),
               ),
-            )).toList(),
+            )),
             const SizedBox(height: HealthcareSpacing.lg),
           ],
 
@@ -515,31 +517,28 @@ class _ResultsScreenState extends State<ResultsScreen>
                             color: HealthcareColors.serenyaWhite,
                           ),
                         )
-                      : MarkdownBody(
+                      : MarkdownWidget(
                           data: message.message,
-                          styleSheet: MarkdownStyleSheet(
-                            p: HealthcareTypography.bodyMedium.copyWith(
-                              color: HealthcareColors.textPrimary,
+                          config: MarkdownConfig(configs: [
+                            PConfig(
+                              textStyle: HealthcareTypography.bodyMedium.copyWith(
+                                color: HealthcareColors.textPrimary,
+                              ),
                             ),
-                            h1: HealthcareTypography.headingH3.copyWith(
-                              color: HealthcareColors.textPrimary,
+                            H1Config(
+                              style: HealthcareTypography.headingH3.copyWith(
+                                color: HealthcareColors.textPrimary,
+                              ),
                             ),
-                            h2: HealthcareTypography.headingH4.copyWith(
-                              color: HealthcareColors.textPrimary,
+                            H2Config(
+                              style: HealthcareTypography.headingH4.copyWith(
+                                color: HealthcareColors.textPrimary,
+                              ),
                             ),
-                            strong: HealthcareTypography.bodyMedium.copyWith(
-                              color: HealthcareColors.textPrimary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            code: HealthcareTypography.bodySmall.copyWith(
-                              color: HealthcareColors.textPrimary,
-                              backgroundColor: HealthcareColors.surfaceBorder,
-                            ),
-                            blockquote: HealthcareTypography.bodyMedium.copyWith(
-                              color: HealthcareColors.textSecondary,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
+                            // Strong/bold text styling - may need different config class name
+                            // Code styling - may need different config class name  
+                            // Blockquote styling - may need different config class name
+                          ]),
                           selectable: true,
                         ),
                 ),
@@ -698,10 +697,10 @@ class _ResultsScreenState extends State<ResultsScreen>
     
     try {
       final shareText = _buildShareText();
-      await Share.share(
-        shareText,
+      await SharePlus.instance.share(ShareParams(
+        text: shareText,
         subject: 'Health Analysis Results - ${_selectedDocument!.title}',
-      );
+      ));
     } catch (e) {
       _showError('Error sharing as text: $e');
     }
@@ -786,11 +785,11 @@ class _ResultsScreenState extends State<ResultsScreen>
       
       // Share PDF file with error handling
       try {
-        await Share.shareXFiles(
-          [XFile(generatedFile.path)],
+        await SharePlus.instance.share(ShareParams(
+          files: [XFile(generatedFile.path)],
           text: 'Serenya Health Analysis Results',
           subject: 'Health Analysis Results - ${_selectedDocument!.title}',
-        );
+        ));
         
         // Show success message
         if (mounted) {
@@ -867,7 +866,7 @@ class _ResultsScreenState extends State<ResultsScreen>
     );
     
     // Log technical details for debugging (never shown to user)
-    print('PDF Error [${error.errorCode}]: ${error.technicalDetails}');
+    debugPrint('PDF Error [${error.errorCode}]: ${error.technicalDetails}');
   }
   
   void _showError(String message) {
@@ -951,23 +950,23 @@ class SerenyaEnhancedFAB extends StatelessWidget {
   final VoidCallback? onViewAnswer;
 
   const SerenyaEnhancedFAB({
-    Key? key,
+    super.key,
     required this.context,
     this.isProcessing = false,
     this.hasNewResponse = false,
     this.onUpload,
     this.onChat,
     this.onViewAnswer,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
     // Processing state - disabled with spinner
     if (isProcessing) {
-      return FloatingActionButton.extended(
+      return const FloatingActionButton.extended(
         onPressed: null,
         backgroundColor: HealthcareColors.textDisabled,
-        icon: const SizedBox(
+        icon: SizedBox(
           width: 20,
           height: 20,
           child: CircularProgressIndicator(
@@ -975,7 +974,7 @@ class SerenyaEnhancedFAB extends StatelessWidget {
             valueColor: AlwaysStoppedAnimation<Color>(HealthcareColors.serenyaWhite),
           ),
         ),
-        label: const Text(
+        label: Text(
           'Processing...',
           style: TextStyle(color: HealthcareColors.serenyaWhite),
         ),

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import '../core/security/local_audit_logger.dart';
 import 'pdf_generation_service.dart';
@@ -55,7 +56,7 @@ class PdfCleanupService {
       await _logCleanupOperation('cleanup_service_init_failed', {
         'error': e.toString(),
       });
-      print('Warning: PDF cleanup service initialization failed: $e');
+      debugPrint('Warning: PDF cleanup service initialization failed: $e');
     }
   }
 
@@ -64,7 +65,12 @@ class PdfCleanupService {
     _periodicTimer?.cancel();
     _periodicTimer = Timer.periodic(_cleanupInterval, (_) {
       performCleanup().catchError((error) {
-        print('Warning: Periodic PDF cleanup failed: $error');
+        debugPrint('Warning: Periodic PDF cleanup failed: $error');
+        return CleanupResult(
+          filesScanned: 0,
+          filesRemoved: 0,
+          errors: [error.toString()],
+        );
       });
     });
   }
@@ -277,7 +283,7 @@ class PdfCleanupService {
       await _logCleanupOperation('cleanup_service_disposed', {});
       
     } catch (e) {
-      print('Warning: Error disposing PDF cleanup service: $e');
+      debugPrint('Warning: Error disposing PDF cleanup service: $e');
     }
   }
 
@@ -294,7 +300,7 @@ class PdfCleanupService {
       );
     } catch (e) {
       // Don't let logging errors affect cleanup operations
-      print('Warning: Failed to log cleanup operation: $e');
+      debugPrint('Warning: Failed to log cleanup operation: $e');
     }
   }
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../../../services/auth_service.dart';
+import '../../../core/utils/platform_utils.dart';
 import '../widgets/legal_document_viewer.dart';
 import '../widgets/auth_error_handler.dart';
 
@@ -8,9 +10,9 @@ class ConsentSlide extends StatefulWidget {
   final Function(bool agreedToTerms, bool understoodDisclaimer, bool authSuccess) onAgree;
 
   const ConsentSlide({
-    Key? key,
+    super.key,
     required this.onAgree,
-  }) : super(key: key);
+  });
 
   @override
   State<ConsentSlide> createState() => _ConsentSlideState();
@@ -20,9 +22,29 @@ class _ConsentSlideState extends State<ConsentSlide> {
   bool _understoodDisclaimer = false;
   bool _agreedToTerms = false;
   bool _isLoading = false;
+  bool _isAppleLoading = false;
+  bool _appleSignInAvailable = false;
   final AuthService _authService = AuthService();
 
   bool get _canProceed => _understoodDisclaimer && _agreedToTerms;
+  bool get _isAnyLoading => _isLoading || _isAppleLoading;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAppleSignInAvailability();
+  }
+
+  Future<void> _checkAppleSignInAvailability() async {
+    if (PlatformUtils.supportsAppleSignIn) {
+      final available = await _authService.isAppleSignInAvailable();
+      if (mounted) {
+        setState(() {
+          _appleSignInAvailable = available;
+        });
+      }
+    }
+  }
 
   Future<void> _handleGoogleSignIn() async {
     if (!_canProceed) return;
@@ -69,6 +91,163 @@ class _ConsentSlideState extends State<ConsentSlide> {
         );
       }
     }
+  }
+
+  Future<void> _handleAppleSignIn() async {
+    if (!_canProceed) return;
+    
+    setState(() {
+      _isAppleLoading = true;
+    });
+
+    try {
+      // Prepare consent data matching API contract - 2 checkboxes map to 5 consent types
+      final consentData = {
+        // Checkbox 1 - Legal & Processing Bundle maps to 3 consent types
+        'terms_of_service': _agreedToTerms,
+        'privacy_policy': _agreedToTerms,
+        'healthcare_consultation': _agreedToTerms,
+        
+        // Checkbox 2 - Medical Disclaimers Bundle maps to 2 consent types
+        'medical_disclaimers': _understoodDisclaimer,
+        'emergency_care_limitation': _understoodDisclaimer,
+        
+        'timestamp': DateTime.now().toIso8601String(),
+        'version': '1.0',
+        'consent_method': 'bundled_consent',
+      };
+      
+      final result = await _authService.signInWithApple(consentData: consentData);
+      widget.onAgree(_agreedToTerms, _understoodDisclaimer, result.success);
+    } catch (e) {
+      // Enhanced healthcare-compliant error handling for Apple Sign-In
+      setState(() {
+        _isAppleLoading = false;
+      });
+      
+      if (mounted) {
+        final errorInfo = _categorizeAppleError(e);
+        AuthErrorHandler.showError(
+          context,
+          errorCode: errorInfo['error_code'],
+          userMessage: errorInfo['user_message'],
+          technicalDetails: errorInfo['technical_details'],
+          onRetry: _handleAppleSignIn,
+          onSettings: _showAppleSignInGuidance,
+          onSupport: _contactSupport,
+        );
+      }
+    }
+  }
+
+  /// Categorize Apple Sign-In errors for healthcare-appropriate error handling
+  Map<String, dynamic> _categorizeAppleError(dynamic error) {
+    String errorCode = 'APPLE_AUTH_ERROR';
+    String userMessage = 'Apple sign-in failed. Please try again.';
+    String recoveryAction = 'retry';
+    String technicalDetails = error.toString();
+    String detailedGuidance = '';
+    
+    // Handle specific Apple SignInWithApple errors
+    if (error.toString().contains('AuthorizationErrorCode.canceled') || 
+        error.toString().contains('canceled') || 
+        error.toString().contains('cancelled')) {
+      errorCode = 'USER_CANCELLED';
+      userMessage = 'Apple sign-in was cancelled.';
+      recoveryAction = 'retry';
+      detailedGuidance = 'Please tap the Apple sign-in button again to continue.';
+    } else if (error.toString().contains('AuthorizationErrorCode.failed') ||
+               error.toString().contains('authentication failed')) {
+      errorCode = 'APPLE_AUTH_FAILED';
+      userMessage = 'Apple authentication failed.';
+      recoveryAction = 'retry_or_alternative';
+      detailedGuidance = 'Please try again or use Google sign-in if the issue persists.';
+    } else if (error.toString().contains('AuthorizationErrorCode.invalidResponse') ||
+               error.toString().contains('invalid_response')) {
+      errorCode = 'APPLE_INVALID_RESPONSE';
+      userMessage = 'Invalid response from Apple.';
+      recoveryAction = 'retry_or_alternative';
+      detailedGuidance = 'Please try again in a moment or use Google sign-in.';
+    } else if (error.toString().contains('AuthorizationErrorCode.notHandled') || 
+               error.toString().contains('not_handled') || 
+               error.toString().contains('notHandled')) {
+      errorCode = 'APPLE_CONFIG_ERROR';
+      userMessage = 'Apple sign-in is not properly configured.';
+      recoveryAction = 'alternative';
+      detailedGuidance = 'Please use Google sign-in to continue. We\'re working on fixing this issue.';
+    } else if (error.toString().contains('AuthorizationErrorCode.unknown')) {
+      errorCode = 'APPLE_UNKNOWN_ERROR';
+      userMessage = 'An unexpected Apple sign-in error occurred.';
+      recoveryAction = 'retry_or_alternative';
+      detailedGuidance = 'Please try again or use Google sign-in if the problem continues.';
+    } else if (error.toString().contains('not signed in') || 
+               error.toString().contains('no Apple ID')) {
+      errorCode = 'APPLE_NOT_SIGNED_IN';
+      userMessage = 'Please sign in to your Apple ID first.';
+      recoveryAction = 'settings';
+      detailedGuidance = 'Go to Settings > Sign in to your [device] to set up your Apple ID, then try again.';
+    } else if (error.toString().contains('two-factor') || 
+               error.toString().contains('2FA') ||
+               error.toString().contains('verification required')) {
+      errorCode = 'APPLE_2FA_REQUIRED';
+      userMessage = 'Two-factor authentication required.';
+      recoveryAction = 'retry';
+      detailedGuidance = 'Please complete two-factor authentication on your Apple ID and try again.';
+    } else if (error.toString().contains('network') || 
+               error.toString().contains('timeout') ||
+               error.toString().contains('connection') ||
+               error.toString().contains('internet')) {
+      errorCode = 'NETWORK_ERROR';
+      userMessage = 'Connection issue detected.';
+      recoveryAction = 'retry';
+      detailedGuidance = 'Please check your internet connection and try again.';
+    } else if (error.toString().contains('ACCOUNT_LINKING_REQUIRED')) {
+      errorCode = 'ACCOUNT_LINKING_REQUIRED';
+      userMessage = 'This email is already registered.';
+      recoveryAction = 'alternative';
+      detailedGuidance = 'Please sign in with your existing Google account, or contact support for account linking.';
+    } else if (error.toString().contains('token') && error.toString().contains('expired')) {
+      errorCode = 'APPLE_TOKEN_EXPIRED';
+      userMessage = 'Apple authentication expired.';
+      recoveryAction = 'retry';
+      detailedGuidance = 'Please sign in with Apple again.';
+    }
+    
+    return {
+      'error_code': errorCode,
+      'user_message': userMessage,
+      'recovery_action': recoveryAction,
+      'technical_details': technicalDetails,
+      'detailed_guidance': detailedGuidance,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+  }
+
+  void _showAppleSignInGuidance() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Apple Sign-In Setup'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('To use Apple Sign-In:'),
+            SizedBox(height: 12),
+            Text('• Make sure you\'re signed in to iCloud'),
+            Text('• Go to Settings > Sign-In & Security'),
+            Text('• Enable Two-Factor Authentication'),
+            Text('• Return to Serenya to continue'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Categorize error for healthcare-appropriate error handling
@@ -508,6 +687,12 @@ class _ConsentSlideState extends State<ConsentSlide> {
         ),
         const SizedBox(height: 24),
         
+        // Apple Sign-In Button (iOS only, top position per Apple HIG)
+        if (_appleSignInAvailable) ...[
+          _buildAppleSignInButton(),
+          const SizedBox(height: 12),
+        ],
+        
         // Google Sign-In Button
         _buildGoogleSignInButton(),
         
@@ -535,7 +720,7 @@ class _ConsentSlideState extends State<ConsentSlide> {
         height: 50,
         margin: const EdgeInsets.symmetric(horizontal: 24),
         child: ElevatedButton(
-          onPressed: _canProceed && !_isLoading ? _handleGoogleSignIn : null,
+          onPressed: _canProceed && !_isAnyLoading ? _handleGoogleSignIn : null,
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.white,
             foregroundColor: Colors.black87,
@@ -588,6 +773,36 @@ class _ConsentSlideState extends State<ConsentSlide> {
                   ],
                 ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildAppleSignInButton() {
+    return Semantics(
+      label: 'Continue with Apple',
+      hint: 'Sign in using your Apple ID to create your Serenya account',
+      child: Container(
+        width: 328,
+        height: 50,
+        margin: const EdgeInsets.symmetric(horizontal: 24),
+        child: _canProceed && !_isAnyLoading
+            ? SignInWithAppleButton(
+                onPressed: () => _handleAppleSignIn(),
+                style: SignInWithAppleButtonStyle.black,
+                borderRadius: BorderRadius.circular(4),
+                height: 50,
+                text: 'Continue with Apple',
+              )
+            : Opacity(
+                opacity: 0.5,
+                child: SignInWithAppleButton(
+                  onPressed: () {}, // Empty callback for disabled state
+                  style: SignInWithAppleButtonStyle.black,
+                  borderRadius: BorderRadius.circular(4),
+                  height: 50,
+                  text: 'Continue with Apple',
+                ),
+              ),
       ),
     );
   }

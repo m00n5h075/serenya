@@ -13,10 +13,10 @@ class OnboardingFlow extends StatefulWidget {
   final VoidCallback? onAuthenticationSuccess;
   
   const OnboardingFlow({
-    Key? key, 
+    super.key, 
     this.onComplete,
     this.onAuthenticationSuccess,
-  }) : super(key: key);
+  });
 
   @override
   State<OnboardingFlow> createState() => _OnboardingFlowState();

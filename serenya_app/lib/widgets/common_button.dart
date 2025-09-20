@@ -11,7 +11,7 @@ class CommonButton extends StatelessWidget {
   final double? width;
 
   const CommonButton({
-    Key? key,
+    super.key,
     required this.text,
     this.onPressed,
     this.isLoading = false,
@@ -19,7 +19,7 @@ class CommonButton extends StatelessWidget {
     this.icon,
     this.margin,
     this.width,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

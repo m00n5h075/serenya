@@ -22,7 +22,7 @@ class SerenyaButton extends StatelessWidget {
   final String? semanticLabel;
 
   const SerenyaButton({
-    Key? key,
+    super.key,
     required this.text,
     this.onPressed,
     this.variant = SerenyaButtonVariant.primary,
@@ -32,7 +32,7 @@ class SerenyaButton extends StatelessWidget {
     this.isFullWidth = false,
     this.customColor,
     this.semanticLabel,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -107,7 +107,7 @@ class SerenyaButton extends StatelessWidget {
       disabledBackgroundColor: colors.disabledBackground,
       disabledForegroundColor: colors.disabledForeground,
       elevation: _getElevation(),
-      shadowColor: HealthcareColors.textSecondary.withOpacity(0.2),
+      shadowColor: HealthcareColors.textSecondary.withValues(alpha: 0.2),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(_getBorderRadius()),
         side: _getBorderSide(colors),

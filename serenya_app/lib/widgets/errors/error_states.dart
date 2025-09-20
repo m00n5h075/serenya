@@ -23,7 +23,7 @@ class ErrorStateWidget extends StatelessWidget {
   final String? technicalError;
 
   const ErrorStateWidget({
-    Key? key,
+    super.key,
     required this.errorType,
     this.customMessage,
     this.customDescription,
@@ -33,7 +33,7 @@ class ErrorStateWidget extends StatelessWidget {
     this.customAction,
     this.showTechnicalDetails = false,
     this.technicalError,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -68,10 +68,10 @@ class ErrorStateWidget extends StatelessWidget {
       width: 80,
       height: 80,
       decoration: BoxDecoration(
-        color: errorInfo.color.withOpacity(0.1),
+        color: errorInfo.color.withValues(alpha: 0.1),
         shape: BoxShape.circle,
         border: Border.all(
-          color: errorInfo.color.withOpacity(0.3),
+          color: errorInfo.color.withValues(alpha: 0.3),
           width: 2,
         ),
       ),
@@ -312,13 +312,13 @@ class ErrorBanner extends StatelessWidget {
   final bool showIcon;
 
   const ErrorBanner({
-    Key? key,
+    super.key,
     required this.message,
     required this.type,
     this.onRetry,
     this.onDismiss,
     this.showIcon = true,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -328,10 +328,10 @@ class ErrorBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(HealthcareSpacing.md),
       decoration: BoxDecoration(
-        color: errorInfo.withOpacity(0.1),
+        color: errorInfo.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(HealthcareBorderRadius.sm),
         border: Border.all(
-          color: errorInfo.withOpacity(0.3),
+          color: errorInfo.withValues(alpha: 0.3),
         ),
       ),
       child: Row(
@@ -469,12 +469,12 @@ class ErrorStateBuilder extends StatelessWidget {
   final Widget Function(dynamic data) dataBuilder;
 
   const ErrorStateBuilder({
-    Key? key,
+    super.key,
     required this.snapshot,
     required this.errorBuilder,
     required this.loadingWidget,
     required this.dataBuilder,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

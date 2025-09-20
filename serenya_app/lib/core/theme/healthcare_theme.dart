@@ -28,10 +28,10 @@ class HealthcareTheme {
       ),
       
       // Card Theme
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: HealthcareColors.surfaceCard,
         elevation: 1,
-        shadowColor: HealthcareColors.textSecondary.withOpacity(0.1),
+        shadowColor: HealthcareColors.textSecondary.withValues(alpha: 0.1),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(HealthcareBorderRadius.card),
           side: const BorderSide(
@@ -48,7 +48,7 @@ class HealthcareTheme {
           backgroundColor: HealthcareColors.serenyaBluePrimary,
           foregroundColor: HealthcareColors.serenyaWhite,
           elevation: 1,
-          shadowColor: HealthcareColors.textSecondary.withOpacity(0.2),
+          shadowColor: HealthcareColors.textSecondary.withValues(alpha: 0.2),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(HealthcareBorderRadius.button),
           ),
@@ -202,7 +202,7 @@ class HealthcareTheme {
       ),
       
       // Dialog Theme
-      dialogTheme: DialogTheme(
+      dialogTheme: DialogThemeData(
         backgroundColor: HealthcareColors.serenyaWhite,
         elevation: 3,
         shape: RoundedRectangleBorder(

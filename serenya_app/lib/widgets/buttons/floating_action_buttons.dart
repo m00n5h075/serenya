@@ -24,14 +24,14 @@ class SerenyaFAB extends StatefulWidget {
   final bool showLabels;
 
   const SerenyaFAB({
-    Key? key,
+    super.key,
     required this.context,
     this.onUpload,
     this.onViewResults,
     this.onRetry,
     this.onChat,
     this.showLabels = false,
-  }) : super(key: key);
+  });
 
   @override
   State<SerenyaFAB> createState() => _SerenyaFABState();

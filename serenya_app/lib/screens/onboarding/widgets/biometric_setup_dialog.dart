@@ -11,10 +11,10 @@ class BiometricSetupDialog extends StatefulWidget {
   final VoidCallback? onSkipped;
   
   const BiometricSetupDialog({
-    Key? key,
+    super.key,
     this.onSetupComplete,
     this.onSkipped,
-  }) : super(key: key);
+  });
 
   @override
   State<BiometricSetupDialog> createState() => _BiometricSetupDialogState();

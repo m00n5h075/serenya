@@ -21,7 +21,7 @@ class SerenyaCard extends StatelessWidget {
   final bool isInteractive;
 
   const SerenyaCard({
-    Key? key,
+    super.key,
     required this.child,
     this.onTap,
     this.padding,
@@ -31,7 +31,7 @@ class SerenyaCard extends StatelessWidget {
     this.customBorderColor,
     this.semanticLabel,
     this.isInteractive = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -60,8 +60,8 @@ class SerenyaCard extends StatelessWidget {
           child: InkWell(
             onTap: onTap,
             borderRadius: BorderRadius.circular(cardConfig.borderRadius),
-            splashColor: HealthcareColors.serenyaBluePrimary.withOpacity(0.1),
-            highlightColor: HealthcareColors.serenyaBluePrimary.withOpacity(0.05),
+            splashColor: HealthcareColors.serenyaBluePrimary.withValues(alpha: 0.1),
+            highlightColor: HealthcareColors.serenyaBluePrimary.withValues(alpha: 0.05),
             child: cardContent,
           ),
         ),
@@ -101,7 +101,7 @@ class SerenyaCard extends StatelessWidget {
           borderRadius: HealthcareBorderRadius.sm,
           shadows: [
             BoxShadow(
-              color: HealthcareColors.textSecondary.withOpacity(0.08),
+              color: HealthcareColors.textSecondary.withValues(alpha: 0.08),
               offset: const Offset(0, 1),
               blurRadius: 2,
             ),
@@ -116,7 +116,7 @@ class SerenyaCard extends StatelessWidget {
           borderRadius: HealthcareBorderRadius.card,
           shadows: [
             BoxShadow(
-              color: HealthcareColors.textSecondary.withOpacity(0.1),
+              color: HealthcareColors.textSecondary.withValues(alpha: 0.1),
               offset: const Offset(0, 2),
               blurRadius: 4,
             ),
@@ -131,7 +131,7 @@ class SerenyaCard extends StatelessWidget {
           borderRadius: HealthcareBorderRadius.lg,
           shadows: [
             BoxShadow(
-              color: HealthcareColors.textSecondary.withOpacity(0.12),
+              color: HealthcareColors.textSecondary.withValues(alpha: 0.12),
               offset: const Offset(0, 4),
               blurRadius: 8,
             ),
@@ -141,7 +141,7 @@ class SerenyaCard extends StatelessWidget {
       case SerenyaCardVariant.minimal:
         return _CardConfig(
           backgroundColor: HealthcareColors.backgroundSecondary,
-          borderColor: HealthcareColors.surfaceBorder.withOpacity(0.5),
+          borderColor: HealthcareColors.surfaceBorder.withValues(alpha: 0.5),
           borderWidth: 0.5,
           borderRadius: HealthcareBorderRadius.xs,
           shadows: [],
@@ -163,7 +163,7 @@ class HealthInfoCard extends StatelessWidget {
   final String? warningText;
 
   const HealthInfoCard({
-    Key? key,
+    super.key,
     required this.title,
     this.subtitle,
     required this.content,
@@ -173,7 +173,7 @@ class HealthInfoCard extends StatelessWidget {
     this.onTap,
     this.showWarning = false,
     this.warningText,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -207,7 +207,7 @@ class HealthInfoCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(HealthcareSpacing.sm),
             decoration: BoxDecoration(
-              color: (iconColor ?? HealthcareColors.serenyaBluePrimary).withOpacity(0.1),
+              color: (iconColor ?? HealthcareColors.serenyaBluePrimary).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(HealthcareBorderRadius.sm),
             ),
             child: Icon(
@@ -248,10 +248,10 @@ class HealthInfoCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(HealthcareSpacing.sm),
       decoration: BoxDecoration(
-        color: HealthcareColors.cautionOrange.withOpacity(0.1),
+        color: HealthcareColors.cautionOrange.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(HealthcareBorderRadius.sm),
         border: Border.all(
-          color: HealthcareColors.cautionOrange.withOpacity(0.3),
+          color: HealthcareColors.cautionOrange.withValues(alpha: 0.3),
         ),
       ),
       child: Row(
@@ -297,7 +297,7 @@ class SummaryCard extends StatelessWidget {
   final VoidCallback? onTap;
 
   const SummaryCard({
-    Key? key,
+    super.key,
     required this.value,
     required this.label,
     this.unit,
@@ -306,7 +306,7 @@ class SummaryCard extends StatelessWidget {
     this.trend,
     this.trendDirection,
     this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

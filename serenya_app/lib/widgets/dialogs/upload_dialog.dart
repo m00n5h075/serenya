@@ -20,10 +20,10 @@ class UploadDialog extends StatefulWidget {
   final VoidCallback? onUploadCompleted;
 
   const UploadDialog({
-    Key? key,
+    super.key,
     this.onUploadStarted,
     this.onUploadCompleted,
-  }) : super(key: key);
+  });
 
   @override
   State<UploadDialog> createState() => _UploadDialogState();

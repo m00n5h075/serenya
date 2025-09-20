@@ -1,11 +1,11 @@
-/// Common reusable UI components for Serenya healthcare platform
-/// 
-/// This barrel file exports all common components for easy importing:
-/// - Buttons (SerenyaButton)
-/// - Cards (SerenyaCard, HealthInfoCard, SummaryCard)
-/// - Loading states and skeletons
-/// - Error handling components
-/// - FAB system
+// Common reusable UI components for Serenya healthcare platform
+// 
+// This barrel file exports all common components for easy importing:
+// - Buttons (SerenyaButton)
+// - Cards (SerenyaCard, HealthInfoCard, SummaryCard)
+// - Loading states and skeletons
+// - Error handling components
+// - FAB system
 
 // Common UI Components
 export 'serenya_button.dart';

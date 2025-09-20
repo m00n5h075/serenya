@@ -1,5 +1,4 @@
 const AWS = require('aws-sdk');
-const sharp = require('sharp');
 const {
   createResponse,
   createErrorResponse,
@@ -68,14 +67,9 @@ exports.handler = async (event) => {
     // Download file from S3
     const fileContent = await downloadFileFromS3(jobRecord.s3Key);
     
-    // Extract text content based on file type
-    const extractedText = await extractTextContent(
-      fileContent, 
-      jobRecord.fileType
-    );
-
-    // Process with Bedrock Claude
-    const bedrockResult = await bedrockService.analyzeMedicalDocument(extractedText, {
+    // Process with Bedrock Claude directly (no pre-processing)
+    // Let Bedrock handle text extraction and image analysis natively
+    const bedrockResult = await bedrockService.analyzeMedicalDocument(fileContent, {
       userId: jobRecord.userId,
       fileType: jobRecord.fileType,
       fileName: jobRecord.originalFileName
@@ -115,8 +109,8 @@ exports.handler = async (event) => {
       confidenceScore: aiResult.confidenceScore,
       aiModelUsed: aiResult.ai_model_used,
       processingTimeMs: aiResult.processing_time_ms,
-      extractedTextLength: extractedText?.length || 0,
-      textExtractionMethod: jobRecord.fileType === 'pdf' ? 'pdf_text_extraction' : 'image_metadata'
+      originalFileSize: fileContent?.length || 0,
+      processingMethod: 'bedrock_native_analysis'
     }, jobRecord.userId);
 
     // Update job status to completed
@@ -207,72 +201,6 @@ async function downloadFileFromS3(s3Key) {
   }
 }
 
-/**
- * Extract text content from file based on type
- */
-async function extractTextContent(fileContent, fileType) {
-  switch (fileType) {
-    case 'pdf':
-      return await extractTextFromPDF(fileContent);
-    case 'jpg':
-    case 'jpeg':
-    case 'png':
-      return await extractTextFromImage(fileContent);
-    default:
-      throw new Error(`Unsupported file type: ${fileType}`);
-  }
-}
-
-/**
- * Extract text from PDF (basic implementation)
- */
-async function extractTextFromPDF(fileContent) {
-  // For production, use a proper PDF parsing library like pdf-parse
-  // This is a simplified implementation
-  try {
-    const pdfString = fileContent.toString('binary');
-    
-    // Very basic text extraction - look for readable text patterns
-    const textPattern = /BT\s+.*?ET/g;
-    const matches = pdfString.match(textPattern) || [];
-    
-    let extractedText = matches
-      .map(match => match.replace(/BT\s+|ET/g, ''))
-      .join(' ')
-      .replace(/[^\w\s\.\,\:\;\-\%\(\)]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    if (!extractedText || extractedText.length < 10) {
-      // Fallback: return indication that this is a PDF document
-      extractedText = 'This appears to be a PDF medical document. Please process the visual content for medical information extraction.';
-    }
-
-    return extractedText;
-  } catch (error) {
-    console.error('PDF text extraction error:', error);
-    return 'PDF medical document uploaded for interpretation. Content extraction may require enhanced processing.';
-  }
-}
-
-/**
- * Extract text from image using OCR (basic implementation)
- */
-async function extractTextFromImage(fileContent) {
-  try {
-    // For production, integrate with AWS Textract or Google Vision API
-    // This is a simplified implementation that processes the image
-    
-    const metadata = await sharp(fileContent).metadata();
-    
-    // Return basic image information for now
-    return `Medical document image uploaded for analysis. Image specifications: ${metadata.width}x${metadata.height} pixels, ${metadata.format} format. Please analyze the visual content for medical information and data extraction.`;
-    
-  } catch (error) {
-    console.error('Image text extraction error:', error);
-    return 'Medical document image uploaded for interpretation. Enhanced visual analysis required for data extraction.';
-  }
-}
 
 /**
  * Transform Bedrock response to legacy format for compatibility
@@ -281,13 +209,13 @@ function transformBedrockToLegacyFormat(bedrockResult) {
   const analysis = bedrockResult.analysis;
   
   return {
-    // Legacy field mapping
-    confidenceScore: analysis.medical_analysis?.confidence_score || 5,
-    interpretationText: analysis.medical_analysis?.interpretation_text || 'Medical document processed successfully.',
-    detailedInterpretation: analysis.medical_analysis?.detailed_interpretation || analysis.medical_analysis?.interpretation_text || 'Analysis completed.',
-    medicalFlags: analysis.medical_analysis?.medical_flags || [],
-    recommendations: analysis.medical_analysis?.recommendations || ['Consult with your healthcare provider'],
-    disclaimers: analysis.disclaimers || [],
+    // Legacy field mapping - updated for new JSON structure
+    confidenceScore: analysis.extraction_metadata?.confidence_score || 5,
+    interpretationText: analysis.extraction_metadata?.summary || 'Medical document processed successfully.',
+    detailedInterpretation: analysis.extraction_metadata?.summary || 'Analysis completed.',
+    medicalFlags: analysis.extraction_metadata?.medical_flags || [],
+    recommendations: ['Consult with your healthcare provider'], // Static as per requirements
+    disclaimers: [], // Empty as disclaimers are now in markdown content
     
     // Additional metadata
     ai_model_used: bedrockResult.metadata.model_used,
@@ -295,11 +223,11 @@ function transformBedrockToLegacyFormat(bedrockResult) {
     aiTokenUsage: bedrockResult.metadata.token_usage,
     ai_cost_estimate: bedrockResult.metadata.cost_estimate_cents,
     
-    // Document validation info
+    // Document validation info - simplified for non-medical documents
     documentValidation: {
-      is_medical_document: analysis.document_validation?.is_medical_document || true,
-      document_type: analysis.document_validation?.document_type || 'general_medical',
-      validation_confidence: analysis.document_validation?.validation_confidence || 0.8
+      is_medical_document: true, // Will be handled by simple error response
+      document_type: 'general_medical',
+      validation_confidence: 0.8
     }
   };
 }

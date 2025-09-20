@@ -109,6 +109,7 @@ async function getChatPrompts(contentType) {
         category,
         option_text,
         display_order,
+        has_sub_options,
         created_at
       FROM chat_options 
       WHERE content_type = $1 
@@ -128,7 +129,8 @@ async function getChatPrompts(contentType) {
       content_type: row.content_type,
       category: row.category,
       prompt_text: row.option_text,
-      display_order: row.display_order
+      display_order: row.display_order,
+      has_sub_options: row.has_sub_options
     }));
 
   } catch (error) {

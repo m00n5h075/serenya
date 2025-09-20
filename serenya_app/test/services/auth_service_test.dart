@@ -12,6 +12,8 @@ import 'package:serenya_app/services/auth_service.dart';
   GoogleSignIn,
   GoogleSignInAccount, 
   GoogleSignInAuthentication,
+  GoogleSignInAuthorizationClient,
+  GoogleSignInClientAuthorization,
   FlutterSecureStorage,
   Dio,
 ])
@@ -39,10 +41,14 @@ void main() {
         // Arrange
         final mockGoogleUser = MockGoogleSignInAccount();
         final mockGoogleAuth = MockGoogleSignInAuthentication();
+        final mockAuthClient = MockGoogleSignInAuthorizationClient();
+        final mockAuthorization = MockGoogleSignInClientAuthorization();
         
-        when(mockGoogleSignIn.signIn()).thenAnswer((_) async => mockGoogleUser);
-        when(mockGoogleUser.authentication).thenAnswer((_) async => mockGoogleAuth);
-        when(mockGoogleAuth.accessToken).thenReturn('mock_access_token');
+        when(mockGoogleSignIn.authenticate()).thenAnswer((_) async => mockGoogleUser);
+        when(mockGoogleUser.authentication).thenReturn(mockGoogleAuth);
+        when(mockGoogleUser.authorizationClient).thenReturn(mockAuthClient);
+        when(mockAuthClient.authorizationForScopes(any)).thenAnswer((_) async => mockAuthorization);
+        when(mockAuthorization.accessToken).thenReturn('mock_access_token');
         when(mockGoogleAuth.idToken).thenReturn('mock_id_token');
         
         // Note: BiometricAuthService uses static methods, so no mocking needed
@@ -85,15 +91,16 @@ void main() {
 
       test('should handle Google OAuth cancellation gracefully', () async {
         // Arrange
-        when(mockGoogleSignIn.signIn()).thenAnswer((_) async => null);
+        // Note: In Google Sign-In 7.0+, authenticate() throws exceptions for cancellation
+        // rather than returning null, so we'll test exception handling instead
+        when(mockGoogleSignIn.authenticate()).thenThrow(Exception('User cancelled authentication'));
 
         // Act
         final result = await authService.signInWithGoogle();
 
         // Assert
         expect(result.success, isFalse);
-        expect(result.cancelled, isFalse); // Should be treated as failure, not cancellation
-        expect(result.message, contains('cancelled'));
+        expect(result.message, contains('Authentication error'));
       });
 
       test('should handle biometric authentication failure', () async {
@@ -101,9 +108,14 @@ void main() {
         final mockGoogleUser = MockGoogleSignInAccount();
         final mockGoogleAuth = MockGoogleSignInAuthentication();
         
-        when(mockGoogleSignIn.signIn()).thenAnswer((_) async => mockGoogleUser);
-        when(mockGoogleUser.authentication).thenAnswer((_) async => mockGoogleAuth);
-        when(mockGoogleAuth.accessToken).thenReturn('mock_access_token');
+        final mockAuthClient = MockGoogleSignInAuthorizationClient();
+        final mockAuthorization = MockGoogleSignInClientAuthorization();
+        
+        when(mockGoogleSignIn.authenticate()).thenAnswer((_) async => mockGoogleUser);
+        when(mockGoogleUser.authentication).thenReturn(mockGoogleAuth);
+        when(mockGoogleUser.authorizationClient).thenReturn(mockAuthClient);
+        when(mockAuthClient.authorizationForScopes(any)).thenAnswer((_) async => mockAuthorization);
+        when(mockAuthorization.accessToken).thenReturn('mock_access_token');
         when(mockGoogleAuth.idToken).thenReturn('mock_id_token');
         
         // Note: BiometricAuthService static methods cannot be mocked directly
@@ -124,9 +136,14 @@ void main() {
         final mockGoogleUser = MockGoogleSignInAccount();
         final mockGoogleAuth = MockGoogleSignInAuthentication();
         
-        when(mockGoogleSignIn.signIn()).thenAnswer((_) async => mockGoogleUser);
-        when(mockGoogleUser.authentication).thenAnswer((_) async => mockGoogleAuth);
-        when(mockGoogleAuth.accessToken).thenReturn('mock_access_token');
+        final mockAuthClient = MockGoogleSignInAuthorizationClient();
+        final mockAuthorization = MockGoogleSignInClientAuthorization();
+        
+        when(mockGoogleSignIn.authenticate()).thenAnswer((_) async => mockGoogleUser);
+        when(mockGoogleUser.authentication).thenReturn(mockGoogleAuth);
+        when(mockGoogleUser.authorizationClient).thenReturn(mockAuthClient);
+        when(mockAuthClient.authorizationForScopes(any)).thenAnswer((_) async => mockAuthorization);
+        when(mockAuthorization.accessToken).thenReturn('mock_access_token');
         when(mockGoogleAuth.idToken).thenReturn('mock_id_token');
         
         // Note: BiometricAuthService static methods cannot be mocked directly

@@ -6,7 +6,7 @@ import '../../core/constants/app_constants.dart';
 /// Displays "Your Health Journey Starts Here" message when no documents exist
 /// Follows UI specifications for empty state design with warm, encouraging messaging
 class TimelineEmptyState extends StatelessWidget {
-  const TimelineEmptyState({Key? key}) : super(key: key);
+  const TimelineEmptyState({super.key});
 
   @override
   Widget build(BuildContext context) {

@@ -8,10 +8,10 @@ class LegalDocumentViewer extends StatelessWidget {
   final String documentType; // 'terms' or 'privacy'
   
   const LegalDocumentViewer({
-    Key? key,
+    super.key,
     required this.title,
     required this.documentType,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

@@ -116,7 +116,7 @@ class NotificationService {
                       message,
                       style: TextStyle(
                         fontSize: 13,
-                        color: textColor.withOpacity(0.9),
+                        color: textColor.withValues(alpha: 0.9),
                       ),
                     ),
                   ],
@@ -146,7 +146,7 @@ class NotificationService {
   }) async {
     // TODO: Implement actual push notifications
     // For now, this is a placeholder for when push notification service is set up
-    print('Push Notification: $title - $body');
+    debugPrint('Push Notification: $title - $body');
   }
 
   /// Show notification with default styling

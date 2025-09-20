@@ -18,7 +18,7 @@ class ProgressDots extends StatefulWidget {
   final List<String>? slideNames;
 
   const ProgressDots({
-    Key? key,
+    super.key,
     required this.currentIndex,
     required this.totalCount,
     this.activeColor = const Color(0xFF2196F3), // Healthcare Blue
@@ -27,7 +27,7 @@ class ProgressDots extends StatefulWidget {
     this.dotSize = 12.0,
     this.spacing = 16.0,
     this.slideNames,
-  }) : super(key: key);
+  });
 
   @override
   State<ProgressDots> createState() => _ProgressDotsState();
@@ -143,7 +143,7 @@ class _ProgressDotsState extends State<ProgressDots>
                 color: dotColor,
                 boxShadow: isActive ? [
                   BoxShadow(
-                    color: dotColor.withOpacity(0.3),
+                    color: dotColor.withValues(alpha: 0.3),
                     blurRadius: 4,
                     spreadRadius: 1,
                   ),

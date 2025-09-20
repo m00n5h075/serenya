@@ -9,10 +9,10 @@ class ConfidenceIndicator extends StatelessWidget {
   final bool showDetails;
 
   const ConfidenceIndicator({
-    Key? key,
+    super.key,
     required this.confidenceScore,
     this.showDetails = true,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -28,9 +28,9 @@ class ConfidenceIndicator extends StatelessWidget {
         vertical: HealthcareSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(HealthcareBorderRadius.confidenceIndicator),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -50,7 +50,7 @@ class ConfidenceIndicator extends StatelessWidget {
             Text(
               '(${confidenceScore.toStringAsFixed(1)}/10)',
               style: HealthcareTypography.labelSmall.copyWith(
-                color: color.withOpacity(0.8),
+                color: color.withValues(alpha: 0.8),
               ),
             ),
           ],
@@ -77,11 +77,11 @@ class ConfidenceCard extends StatelessWidget {
   final VoidCallback? onConsultDoctor;
 
   const ConfidenceCard({
-    Key? key,
+    super.key,
     required this.confidenceScore,
     required this.message,
     this.onConsultDoctor,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -120,10 +120,10 @@ class ConfidenceCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(HealthcareSpacing.sm),
                 decoration: BoxDecoration(
-                  color: HealthcareColors.cautionOrange.withOpacity(0.1),
+                  color: HealthcareColors.cautionOrange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(HealthcareBorderRadius.sm),
                   border: Border.all(
-                    color: HealthcareColors.cautionOrange.withOpacity(0.3),
+                    color: HealthcareColors.cautionOrange.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Row(

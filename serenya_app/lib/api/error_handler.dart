@@ -75,7 +75,6 @@ class ApiErrorHandler {
         );
 
       case DioExceptionType.unknown:
-      default:
         return ApiResult.failed(
           'An unexpected error occurred. Please try again.',
           statusCode: 0,
@@ -200,7 +199,6 @@ class ApiErrorHandler {
         return false;
 
       case DioExceptionType.unknown:
-      default:
         // Retry unknown errors cautiously
         return attemptCount < 2;
     }

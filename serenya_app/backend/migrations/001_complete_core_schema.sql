@@ -22,7 +22,7 @@ CREATE TYPE subscription_type AS ENUM ('monthly', 'yearly');
 CREATE TYPE payment_provider_type AS ENUM ('apple', 'google', 'stripe');
 CREATE TYPE payment_status_type AS ENUM ('pending', 'completed', 'failed', 'refunded', 'disputed');
 CREATE TYPE content_type AS ENUM ('result', 'report');
-CREATE TYPE chat_category_type AS ENUM ('explanation', 'doctor_prep', 'clarification', 'general');
+CREATE TYPE chat_category_type AS ENUM ('explanation', 'doctor_prep', 'clarification', 'general', 'metrics');
 
 -- Device and session management ENUM types
 CREATE TYPE device_status_type AS ENUM ('active', 'inactive', 'revoked');
@@ -358,6 +358,7 @@ CREATE TABLE chat_options (
     -- Option details
     option_text TEXT NOT NULL,              -- The suggested question/prompt
     display_order INTEGER NOT NULL,         -- For consistent UI ordering
+    has_sub_options BOOLEAN DEFAULT FALSE,  -- Whether this option needs sub-option selection
     is_active BOOLEAN DEFAULT TRUE,         -- Enable/disable without deletion
     
     -- Timestamps
@@ -443,24 +444,25 @@ ON CONFLICT (tier_name) DO UPDATE SET
     updated_at = CURRENT_TIMESTAMP;
 
 -- Insert default chat options
-INSERT INTO chat_options (content_type, category, option_text, display_order) VALUES
+INSERT INTO chat_options (content_type, category, option_text, display_order, has_sub_options) VALUES
 -- Result chat options
-('result', 'explanation', 'Can you explain this in simpler terms?', 1),
-('result', 'explanation', 'What do these numbers mean for my health?', 2),
-('result', 'doctor_prep', 'What should I ask my doctor about these results?', 1),
-('result', 'doctor_prep', 'What questions should I prepare for my next appointment?', 2),
-('result', 'clarification', 'Are there any immediate concerns I should know about?', 1),
-('result', 'clarification', 'How do these results compare to normal ranges?', 2),
-('result', 'general', 'What lifestyle changes might help improve these results?', 1),
+('result', 'explanation', 'Can you explain this in simpler terms?', 1, false),
+('result', 'explanation', 'What do these numbers mean for my health?', 2, false),
+('result', 'doctor_prep', 'What should I ask my doctor about these results?', 1, false),
+('result', 'doctor_prep', 'What questions should I prepare for my next appointment?', 2, false),
+('result', 'clarification', 'Are there any immediate concerns I should know about?', 1, false),
+('result', 'clarification', 'How do these results compare to normal ranges?', 2, false),
+('result', 'metrics', 'Explain specific metric', 1, true),
+('result', 'general', 'What lifestyle changes might help improve these results?', 1, false),
 
 -- Report chat options  
-('report', 'explanation', 'Can you summarize the key findings?', 1),
-('report', 'explanation', 'What are the most important points in this report?', 2),
-('report', 'doctor_prep', 'How should I present this to my doctor?', 1),
-('report', 'doctor_prep', 'What questions should I ask based on this analysis?', 2),
-('report', 'clarification', 'Are there any patterns or trends I should be aware of?', 1),
-('report', 'clarification', 'What do these recommendations mean for my care?', 2),
-('report', 'general', 'How can I use this information to improve my health?', 1);
+('report', 'explanation', 'Can you summarize the key findings?', 1, false),
+('report', 'explanation', 'What are the most important points in this report?', 2, false),
+('report', 'doctor_prep', 'How should I present this to my doctor?', 1, false),
+('report', 'doctor_prep', 'What questions should I ask based on this analysis?', 2, false),
+('report', 'clarification', 'Are there any patterns or trends I should be aware of?', 1, false),
+('report', 'clarification', 'What do these recommendations mean for my care?', 2, false),
+('report', 'general', 'How can I use this information to improve my health?', 1, false);
 
 -- ========================================
 -- 15. TABLE COMMENTS FOR DOCUMENTATION

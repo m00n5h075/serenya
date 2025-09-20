@@ -11,11 +11,11 @@ class EnhancedChatPromptsBottomSheet extends StatelessWidget {
   final VoidCallback onClose;
 
   const EnhancedChatPromptsBottomSheet({
-    Key? key,
+    super.key,
     required this.contentId,
     required this.contentType,
     required this.onClose,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -126,20 +126,11 @@ class EnhancedChatPromptsBottomSheet extends StatelessWidget {
           title: _getCategoryTitle(chatPrompt.category),
           subtitle: _getCategorySubtitle(chatPrompt.category),
           icon: _getCategoryIcon(chatPrompt.category),
-          promptText: chatPrompt.promptText,
+          promptText: chatPrompt.hasSubOptions ? null : chatPrompt.promptText,
+          onTap: chatPrompt.hasSubOptions ? () => chatProvider.loadMetrics(contentId) : null,
+          isMetricSelector: chatPrompt.hasSubOptions,
         );
       }).toList();
-      
-      // Add metrics selector if this is results content
-      if (contentType == 'results') {
-        mainPrompts.add(ChatPromptOption(
-          title: 'Ask about specific metrics',
-          subtitle: 'Get detailed information about individual test values',
-          icon: Icons.analytics_outlined,
-          onTap: () => chatProvider.loadMetrics(contentId),
-          isMetricSelector: true,
-        ));
-      }
     } else {
       // Fallback to hardcoded prompts
       mainPrompts = [
@@ -313,7 +304,7 @@ class EnhancedChatPromptsBottomSheet extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: HealthcareColors.serenyaBluePrimary.withOpacity(0.1),
+                  color: HealthcareColors.serenyaBluePrimary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
@@ -404,8 +395,8 @@ class EnhancedChatPromptsBottomSheet extends StatelessWidget {
                 height: 40,
                 decoration: BoxDecoration(
                   color: metric.type == 'lab' 
-                      ? HealthcareColors.successLight.withOpacity(0.2)
-                      : HealthcareColors.infoLight.withOpacity(0.2),
+                      ? HealthcareColors.successLight.withValues(alpha: 0.2)
+                      : HealthcareColors.infoLight.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
@@ -454,6 +445,14 @@ class EnhancedChatPromptsBottomSheet extends StatelessWidget {
     switch (category.toLowerCase()) {
       case 'explanation':
         return contentType == 'report' ? 'Explain my report in simple terms' : 'Explain my results in simple terms';
+      case 'doctor_prep':
+        return 'What should I discuss with my doctor?';
+      case 'clarification':
+        return 'Are there any concerning values?';
+      case 'general':
+        return 'General health questions';
+      case 'metrics':
+        return 'Ask about specific metrics';
       case 'doctor_discussion':
         return 'What should I discuss with my doctor?';
       case 'concerning_values':
@@ -475,6 +474,14 @@ class EnhancedChatPromptsBottomSheet extends StatelessWidget {
     switch (category.toLowerCase()) {
       case 'explanation':
         return contentType == 'report' ? 'Get a clear overview of your report' : 'Get a clear overview of your test results';
+      case 'doctor_prep':
+        return 'Prepare for your next appointment';
+      case 'clarification':
+        return 'Identify values that need attention';
+      case 'general':
+        return 'General health questions and guidance';
+      case 'metrics':
+        return 'Get detailed information about individual test values';
       case 'doctor_discussion':
         return 'Prepare for your next appointment';
       case 'concerning_values':
@@ -495,6 +502,14 @@ class EnhancedChatPromptsBottomSheet extends StatelessWidget {
     switch (category.toLowerCase()) {
       case 'explanation':
         return Icons.lightbulb_outline;
+      case 'doctor_prep':
+        return Icons.medical_services_outlined;
+      case 'clarification':
+        return Icons.warning_amber_outlined;
+      case 'general':
+        return Icons.help_outline;
+      case 'metrics':
+        return Icons.analytics_outlined;
       case 'doctor_discussion':
         return Icons.medical_services_outlined;
       case 'concerning_values':

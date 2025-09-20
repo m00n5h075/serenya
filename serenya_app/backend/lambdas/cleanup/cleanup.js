@@ -45,13 +45,17 @@ exports.handler = async (event) => {
       dataClassification: 'medical_phi'
     });
 
-    // Clean up both health data input and doctor report results
-    // Health data input file (for doctor reports)
-    const healthDataKey = `reports/${userId}/${jobId}/health_data_export.json`;
-    // Doctor report results file
-    const reportResultKey = `reports/${userId}/${jobId}/doctor_report_result.json`;
-    
-    const filesToCleanup = [healthDataKey, reportResultKey];
+    // Clean up all possible temporary files for this job
+    const filesToCleanup = [
+      // Health data input file (for doctor reports)
+      `reports/${userId}/${jobId}/health_data_export.json`,
+      // Doctor report results file  
+      `reports/${userId}/${jobId}/doctor_report_result.json`,
+      // Document analysis results file
+      `results/${userId}/${jobId}/result.json`,
+      // Any other results files that might exist
+      `results/${userId}/${jobId}/analysis_result.json`
+    ];
     const cleanupResults = [];
     
     for (const s3Key of filesToCleanup) {

@@ -315,6 +315,50 @@ const DocumentJobService = {
   },
 
   /**
+   * Get complete processing results from S3 (unified Bedrock response)
+   */
+  async getResults(jobId, userId = null) {
+    try {
+      const job = await this.getJob(jobId, userId);
+      if (!job) {
+        throw new Error('Job not found');
+      }
+
+      // Check if results are available
+      if (!job.s3_result_bucket || !job.s3_result_key) {
+        return null;
+      }
+
+      // Fetch complete results from S3
+      const AWS = require('aws-sdk');
+      const s3 = new AWS.S3();
+      
+      const getObjectParams = {
+        Bucket: job.s3_result_bucket,
+        Key: job.s3_result_key,
+      };
+
+      const s3Object = await s3.getObject(getObjectParams).promise();
+      const resultsData = JSON.parse(s3Object.Body.toString());
+
+      // Return complete Bedrock response with job metadata
+      return {
+        ...resultsData,
+        jobMetadata: {
+          confidenceScore: job.confidence_score,
+          aiModelUsed: job.ai_model_used,
+          processingTimeMs: job.ai_processing_time_ms,
+          extractedTextLength: job.extracted_text_length,
+          textExtractionMethod: job.text_extraction_method
+        }
+      };
+
+    } catch (error) {
+      throw new Error(`Failed to get results: ${error.message}`);
+    }
+  },
+
+  /**
    * Get S3 location for processing results (client fetches from S3 directly)
    */
   async getResultsLocation(jobId, userId = null) {

@@ -17,7 +17,7 @@ class ConnectivityService {
   ConnectivityService._internal();
 
   final Connectivity _connectivity = Connectivity();
-  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   
   // Stream controllers for connectivity events
   final _connectivityController = StreamController<ConnectivityStatus>.broadcast();
@@ -46,7 +46,7 @@ class ConnectivityService {
       
       // Start monitoring connectivity changes
       _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
-        (result) => _onConnectivityChanged([result]),
+        (results) => _onConnectivityChanged(results),
         onError: (error) async {
           await _logConnectivityEvent('connectivity_monitoring_error', {
             'error': error.toString(),
@@ -72,7 +72,7 @@ class ConnectivityService {
   Future<void> _checkInitialConnectivity() async {
     try {
       final results = await _connectivity.checkConnectivity();
-      await _processConnectivityResult([results]);
+      await _processConnectivityResult(results);
     } catch (e) {
       _currentStatus = ConnectivityStatus.unknown;
       await _logConnectivityEvent('initial_connectivity_check_failed', {
@@ -186,7 +186,7 @@ class ConnectivityService {
 
       // Test connectivity
       final results = await _connectivity.checkConnectivity();
-      final hasConnection = results != ConnectivityResult.none;
+      final hasConnection = !results.contains(ConnectivityResult.none);
       
       if (!completer.isCompleted) {
         completer.complete(hasConnection);

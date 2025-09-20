@@ -11,12 +11,12 @@ class DocumentCard extends StatelessWidget {
   final bool showConfidence;
 
   const DocumentCard({
-    Key? key,
+    super.key,
     required this.document,
     this.onTap,
     this.onDelete,
     this.showConfidence = true,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -136,9 +136,9 @@ class DocumentCard extends StatelessWidget {
         vertical: 4,
       ),
       decoration: BoxDecoration(
-        color: statusInfo.color.withOpacity(0.1),
+        color: statusInfo.color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: statusInfo.color.withOpacity(0.3)),
+        border: Border.all(color: statusInfo.color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

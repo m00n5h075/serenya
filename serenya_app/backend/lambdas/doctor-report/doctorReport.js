@@ -144,16 +144,94 @@ exports.handler = async (event) => {
 
       await DocumentJobService.createJob(jobData);
       
-      // Queue async Bedrock processing (don't wait for completion)
-      await queueBedrockProcessing(jobId, userId, s3Key, health_data, report_type);
-      
-      // Return immediately with 202 Accepted and job_id
-      return createResponse(202, {
+      // Enhanced processing started audit
+      await auditService.logAuditEvent({
+        eventType: 'premium_feature',
+        eventSubtype: 'doctor_report_processing_started',
+        userId: userId,
+        eventDetails: {
+          jobId: jobId,
+          reportType: report_type,
+          healthDataSizeKB: Math.round(healthDataString.length / 1024)
+        },
+        dataClassification: 'medical_phi'
+      });
+
+      // Update status to processing
+      await DocumentJobService.updateJobStatus(jobId, 'processing', {
+        processingStartedAt: Date.now(),
+      }, userId);
+
+      // Process with Bedrock synchronously (same pattern as document processing)
+      const bedrockResult = await bedrockService.generateHealthDataReport(health_data, {
+        userId: userId,
+        reportType: report_type,
+        jobId: jobId
+      });
+
+      // Handle Bedrock processing failure
+      if (!bedrockResult.success) {
+        await DocumentJobService.updateJobStatus(jobId, 'failed', {
+          failedAt: Date.now(),
+          errorMessage: bedrockResult.error.message,
+        }, userId);
+
+        return createErrorResponse(500, bedrockResult.error.code, bedrockResult.error.message, bedrockResult.error.user_action);
+      }
+
+      // Store results using unified approach
+      await DocumentJobService.storeResultsToS3(jobId, {
+        markdown_content: bedrockResult.report.report_content || bedrockResult.report.response_content || '',
+        report_metadata: {
+          title: bedrockResult.report.title || 'Doctor Report',
+          summary: bedrockResult.report.summary || 'Comprehensive medical analysis report',
+          confidence_score: bedrockResult.metadata.confidence_score || 8,
+          report_type: report_type
+        },
+        jobMetadata: {
+          aiModelUsed: bedrockResult.metadata.model_used,
+          processingTimeMs: bedrockResult.metadata.processing_time_ms,
+          token_usage: bedrockResult.metadata.token_usage,
+          cost_estimate: bedrockResult.metadata.cost_estimate_cents
+        }
+      }, userId);
+
+      // Update job status to completed
+      await DocumentJobService.updateJobStatus(jobId, 'completed', {
+        completedAt: Date.now(),
+        processingDuration: bedrockResult.metadata.processing_time_ms,
+      }, userId);
+
+      // Clean up input health data file immediately after successful processing
+      await cleanupS3File(s3Key);
+
+      // Enhanced processing completed audit
+      await auditService.logAuditEvent({
+        eventType: 'premium_feature',
+        eventSubtype: 'doctor_report_completed',
+        userId: userId,
+        eventDetails: {
+          jobId: jobId,
+          reportType: report_type,
+          processingDurationMs: bedrockResult.metadata.processing_time_ms,
+          tokenUsage: bedrockResult.metadata.token_usage,
+          costCents: bedrockResult.metadata.cost_estimate_cents
+        },
+        dataClassification: 'medical_phi'
+      });
+
+      // Return success response with results (same pattern as document processing)
+      return createResponse(200, {
         success: true,
         job_id: jobId,
-        message: 'Doctor report generation started. Use job polling to check status.',
-        status: 'processing',
-        estimated_completion_seconds: 120
+        status: 'completed',
+        message: 'Doctor report generated successfully.',
+        processing_metadata: {
+          model_used: bedrockResult.metadata.model_used,
+          processing_time_ms: bedrockResult.metadata.processing_time_ms,
+          token_usage: bedrockResult.metadata.token_usage,
+          cost_estimate_cents: bedrockResult.metadata.cost_estimate_cents
+        }
       });
     } else {
       // Document Report Flow (existing) - this remains synchronous as it uses existing results
@@ -239,175 +317,47 @@ exports.handler = async (event) => {
     
     const userId = getUserIdFromEvent(event) || 'unknown';
     
-    await auditService.logAuditEvent({
-      eventType: 'premium_feature',
-      eventSubtype: 'doctor_report_error',
-      userId: userId,
-      eventDetails: {
-        error: sanitizeError(error).message?.substring(0, 100) || 'Unknown error'
-      },
-      dataClassification: 'system_error'
-    }).catch(auditError => {
-      console.error('Audit logging failed:', auditError);
-    });
+    // Mark job as failed if we have a jobId
+    if (jobId) {
+      try {
+        await DocumentJobService.updateJobStatus(jobId, 'failed', {
+          failedAt: Date.now(),
+          errorMessage: sanitizeError(error).message?.substring(0, 500) || 'Unknown processing error',
+        }, userId);
+
+        await auditService.logAuditEvent({
+          eventType: 'premium_feature',
+          eventSubtype: 'doctor_report_processing_error',
+          userId: userId,
+          eventDetails: {
+            jobId: jobId,
+            error: sanitizeError(error).message?.substring(0, 100) || 'Unknown error'
+          },
+          dataClassification: 'system_error'
+        });
+      } catch (auditError) {
+        console.error('Error logging processing failure:', auditError);
+      }
+    }
     
     return createErrorResponse(500, 'REPORT_GENERATION_FAILED', 'Failed to generate doctor report', 'An error occurred while generating your medical report. Please try again or contact support.');
   }
 };
 
 /**
- * Queue asynchronous Bedrock processing for health data report
+ * Clean up S3 file after processing
  */
-async function queueBedrockProcessing(jobId, userId, s3Key, healthData, reportType) {
+async function cleanupS3File(s3Key) {
   try {
-    // In a production environment, this would use SQS or Step Functions
-    // For now, we'll use setTimeout to simulate async processing
+    await s3.deleteObject({
+      Bucket: process.env.TEMP_BUCKET_NAME,
+      Key: s3Key,
+    }).promise();
     
-    // Log the async processing start
-    await auditService.logAuditEvent({
-      eventType: 'premium_feature',
-      eventSubtype: 'doctor_report_async_processing_started',
-      userId: userId,
-      eventDetails: {
-        jobId: jobId,
-        s3Key: s3Key,
-        reportType: reportType
-      },
-      dataClassification: 'medical_phi'
-    });
-
-    // Simulate async processing by using setImmediate (in real implementation, use SQS/Step Functions)
-    setImmediate(async () => {
-      try {
-        console.log(`Starting async Bedrock processing for job ${jobId}`);
-        
-        // Generate comprehensive medical report using Bedrock
-        const bedrockResult = await bedrockService.generateHealthDataReport(healthData, {
-          userId: userId,
-          reportType: reportType,
-          jobId: jobId
-        });
-        
-        if (bedrockResult.success) {
-          // Store report results in S3 (separate from input data)
-          const resultS3Key = `reports/${userId}/${jobId}/doctor_report_result.json`;
-          const reportData = {
-            type: reportType,
-            content: bedrockResult.report.report_content || bedrockResult.report.response_content,
-            clinical_recommendations: bedrockResult.report.clinical_recommendations || bedrockResult.report.recommendations,
-            disclaimers: bedrockResult.report.disclaimers,
-            metadata: {
-              generation_timestamp: new Date().toISOString(),
-              model_used: bedrockResult.metadata.model_used,
-              processing_time_ms: bedrockResult.metadata.processing_time_ms,
-              token_usage: bedrockResult.metadata.token_usage,
-              cost_estimate_cents: bedrockResult.metadata.cost_estimate_cents,
-              confidence_score: bedrockResult.metadata?.confidence_score || 8
-            }
-          };
-
-          const resultUploadParams = {
-            Bucket: process.env.TEMP_BUCKET_NAME,
-            Key: resultS3Key,
-            Body: JSON.stringify(reportData),
-            ContentType: 'application/json',
-            ServerSideEncryption: 'aws:kms',
-            SSEKMSKeyId: process.env.KMS_KEY_ID,
-            Metadata: {
-              'job-id': jobId,
-              'content-type': 'doctor_report_result',
-              'user-id': userId
-            },
-            Tagging: 'Classification=PHI-Temporary&AutoDelete=true',
-          };
-
-          await s3.upload(resultUploadParams).promise();
-          
-          // Update job status to completed with result location
-          await DocumentJobService.updateJobStatus(jobId, 'completed', {
-            s3ResultBucket: process.env.TEMP_BUCKET_NAME,
-            s3ResultKey: resultS3Key,
-            confidenceScore: bedrockResult.metadata?.confidence_score || 8,
-            aiModelUsed: bedrockResult.metadata?.model_used,
-            aiProcessingTimeMs: bedrockResult.metadata?.processing_time_ms,
-            extractedTextLength: JSON.stringify(healthData).length
-          }, userId);
-
-          console.log(`Async Bedrock processing completed for job ${jobId}`);
-          
-          // Clean up input health data file after successful processing
-          try {
-            const healthDataKey = `reports/${userId}/${jobId}/health_data_export.json`;
-            await s3.deleteObject({
-              Bucket: process.env.TEMP_BUCKET_NAME,
-              Key: healthDataKey,
-            }).promise();
-            console.log(`Cleaned up health data file: ${healthDataKey}`);
-          } catch (cleanupError) {
-            console.error(`Failed to cleanup health data file for job ${jobId}:`, cleanupError);
-            // Don't fail the job completion for cleanup errors
-          }
-          
-          // Log successful completion
-          await auditService.logAuditEvent({
-            eventType: 'premium_feature',
-            eventSubtype: 'doctor_report_async_processing_completed',
-            userId: userId,
-            eventDetails: {
-              jobId: jobId,
-              resultS3Key: resultS3Key,
-              processingTimeMs: bedrockResult.metadata.processing_time_ms,
-              healthDataCleaned: true
-            },
-            dataClassification: 'medical_phi'
-          });
-          
-        } else {
-          // Mark job as failed
-          await DocumentJobService.updateJobStatus(jobId, 'failed', {
-            errorMessage: bedrockResult.error?.message || 'Bedrock processing failed'
-          }, userId);
-          
-          console.error(`Async Bedrock processing failed for job ${jobId}:`, bedrockResult.error);
-          
-          // Log failure
-          await auditService.logAuditEvent({
-            eventType: 'premium_feature',
-            eventSubtype: 'doctor_report_async_processing_failed',
-            userId: userId,
-            eventDetails: {
-              jobId: jobId,
-              errorMessage: bedrockResult.error?.message || 'Unknown error'
-            },
-            dataClassification: 'medical_phi'
-          });
-        }
-        
-      } catch (asyncError) {
-        console.error(`Async processing error for job ${jobId}:`, asyncError);
-        
-        // Mark job as failed
-        await DocumentJobService.updateJobStatus(jobId, 'failed', {
-          errorMessage: `Async processing error: ${asyncError.message}`
-        }, userId);
-        
-        // Log async processing failure
-        await auditService.logAuditEvent({
-          eventType: 'premium_feature',
-          eventSubtype: 'doctor_report_async_processing_error',
-          userId: userId,
-          eventDetails: {
-            jobId: jobId,
-            error: asyncError.message
-          },
-          dataClassification: 'medical_phi'
-        });
-      }
-    });
-    
+    console.log(`Cleaned up S3 file: ${s3Key}`);
   } catch (error) {
-    console.error('Error queuing async processing:', error);
-    throw error;
+    console.error('S3 cleanup error:', error);
+    // Don't throw - file will be cleaned up by lifecycle policy
   }
 }
 

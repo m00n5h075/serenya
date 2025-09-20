@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:dio/dio.dart';
 import '../core/constants/app_constants.dart';
@@ -13,6 +14,7 @@ import '../core/security/device_key_manager.dart';
 /// 
 /// Implements end-to-end authentication with:
 /// - Google OAuth integration with backend APIs
+/// - Apple Sign-In integration (iOS only)
 /// - JWT token management with automatic refresh
 /// - Biometric authentication integration
 /// - Healthcare-appropriate session management
@@ -43,9 +45,8 @@ class AuthService {
   static const Duration _healthcareSessionTimeout = Duration(hours: 1);
   static const Duration _biometricReauthInterval = Duration(minutes: 30);
   
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: ['email', 'profile'],
-  );
+  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
+  bool _isGoogleSignInInitialized = false;
   
   final Dio _dio = Dio(BaseOptions(
     baseUrl: AppConstants.baseApiUrl,
@@ -58,6 +59,23 @@ class AuthService {
 
   AuthService() {
     _setupDioInterceptors();
+    _initializeGoogleSignIn();
+  }
+
+  /// Initialize Google Sign-In (required for v7.0+)
+  Future<void> _initializeGoogleSignIn() async {
+    if (_isGoogleSignInInitialized) return;
+    
+    try {
+      await _googleSignIn.initialize();
+      _isGoogleSignInInitialized = true;
+    } catch (e) {
+      // Use a logging framework in production instead of print
+      if (kDebugMode) {
+        print('Failed to initialize Google Sign-In: $e');
+      }
+      // Continue without Google Sign-In if initialization fails
+    }
   }
 
   /// Setup Dio interceptors for automatic token refresh and error handling
@@ -140,13 +158,24 @@ class AuthService {
     bool requireBiometric = true,
   }) async {
     try {
-      // Step 1: Google OAuth authentication
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) {
-        return AuthResult.cancelled('User cancelled Google sign in');
+      // Ensure Google Sign-In is initialized
+      await _initializeGoogleSignIn();
+      if (!_isGoogleSignInInitialized) {
+        return AuthResult.failed('Google Sign-In initialization failed');
       }
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      // Step 1: Google OAuth authentication
+      final GoogleSignInAccount googleUser = await _googleSignIn.authenticate();
+
+      // Get authorization for the required scopes to access tokens
+      const scopes = ['email', 'profile'];
+      final authorization = await googleUser.authorizationClient.authorizationForScopes(scopes);
+      
+      if (authorization == null) {
+        return AuthResult.failed('Failed to authorize required scopes');
+      }
+
+      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
       
       // Step 2: Biometric authentication (if enabled and supported)
       if (requireBiometric && await BiometricAuthService.isBiometricAvailable()) {
@@ -163,14 +192,24 @@ class AuthService {
       // Step 3: Prepare backend authentication request
       final authRequest = await _buildAuthenticationRequest(
         googleAuth, 
+        authorization,
         consentData,
       );
       
-      // Step 4: Backend authentication
-      final response = await _dio.post('/auth/google-onboarding', data: authRequest); // FIXED: Changed from '/auth/google' to '/auth/google-onboarding' to match backend endpoint
+      // Step 4: Backend authentication via unified OAuth endpoint
+      final response = await _dio.post('/auth/oauth-onboarding', data: authRequest);
       
-      if (response.statusCode == 200 && response.data['success'] == true) {
-        final authData = response.data['data'];
+      if (response.statusCode == 200) {
+        final authData = response.data;
+        
+        // Check if this is an error response
+        if (authData['success'] == false) {
+          final errorData = authData['error'] ?? {};
+          return AuthResult.failed(
+            errorData['user_message'] ?? 'Authentication failed',
+            errorCode: errorData['code'],
+          );
+        }
         
         // Step 5: Store authentication data securely
         await _storeAuthenticationData(authData);
@@ -183,16 +222,16 @@ class AuthService {
         return AuthResult.success(
           'Authentication successful',
           userData: authData['user'],
-          sessionData: authData['session'],
+          sessionData: {
+            'access_token': authData['access_token'],
+            'refresh_token': authData['refresh_token'],
+            'expires_in': authData['expires_in'],
+          },
         );
       }
       
-      // Handle backend authentication failure
-      final errorData = response.data['error'] ?? {};
-      return AuthResult.failed(
-        errorData['user_message'] ?? 'Authentication failed',
-        errorCode: errorData['code'],
-      );
+      // Handle non-200 status codes
+      return AuthResult.failed('Authentication failed with status: ${response.statusCode}');
       
     } on DioException catch (e) {
       await _googleSignIn.signOut();
@@ -203,16 +242,155 @@ class AuthService {
     }
   }
 
-  /// Build authentication request matching backend API contract
-  Future<Map<String, dynamic>> _buildAuthenticationRequest(
-    GoogleSignInAuthentication googleAuth,
+  /// Enhanced Apple Sign In with full backend integration
+  Future<AuthResult> signInWithApple({
+    Map<String, dynamic>? consentData,
+    bool requireBiometric = true,
+  }) async {
+    try {
+      // Step 1: Apple ID authentication
+      final appleCredential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      // Step 2: Biometric authentication (if enabled and supported)
+      if (requireBiometric && await BiometricAuthService.isBiometricAvailable()) {
+        final biometricResult = await BiometricAuthService.authenticate(
+          reason: 'Authenticate to access your medical data securely',
+        );
+        
+        if (!biometricResult.success) {
+          return AuthResult.failed('Biometric authentication required for medical data access');
+        }
+      }
+
+      // Step 3: Prepare backend authentication request
+      final authRequest = await _buildAppleAuthRequest(appleCredential, consentData);
+      
+      // Step 4: Backend authentication via unified OAuth endpoint
+      final response = await _dio.post('/auth/oauth-onboarding', data: authRequest);
+      
+      if (response.statusCode == 200) {
+        final authData = response.data;
+        
+        // Check if this is an error response
+        if (authData['success'] == false) {
+          final errorData = authData['error'] ?? {};
+          return AuthResult.failed(
+            errorData['user_message'] ?? 'Authentication failed',
+            errorCode: errorData['code'],
+          );
+        }
+        
+        // Step 5: Store authentication data securely
+        await _storeAuthenticationData(authData);
+        
+        // Step 6: Mark biometric session if used
+        if (requireBiometric && await BiometricAuthService.isBiometricAvailable()) {
+          await _markBiometricSession();
+        }
+        
+        return AuthResult.success(
+          'Authentication successful',
+          userData: authData['user'],
+          sessionData: {
+            'access_token': authData['access_token'],
+            'refresh_token': authData['refresh_token'],
+            'expires_in': authData['expires_in'],
+          },
+        );
+      }
+      
+      // Handle non-200 status codes
+      return AuthResult.failed('Apple authentication failed with status: ${response.statusCode}');
+      
+    } on SignInWithAppleAuthorizationException catch (e) {
+      return _handleAppleAuthError(e);
+    } on DioException catch (e) {
+      return _handleDioError(e, 'Apple authentication');
+    } catch (e) {
+      return AuthResult.failed('Apple authentication error: $e');
+    }
+  }
+
+  /// Build Apple authentication request matching backend API contract
+  Future<Map<String, dynamic>> _buildAppleAuthRequest(
+    AuthorizationCredentialAppleID appleCredential,
     Map<String, dynamic>? consentData,
   ) async {
     final deviceId = await _getDeviceId();
     
     final request = {
-      // FIXED: Match actual backend implementation (auth.js lines 36, 44)
-      'google_token': googleAuth.accessToken, // Backend expects 'google_token' at root level
+      'provider': 'apple', // Specify OAuth provider for unified endpoint
+      'apple_id_token': appleCredential.identityToken, // Match backend field name
+      'apple_authorization_code': appleCredential.authorizationCode, // Match backend field name
+      'device_info': {
+        'platform': Platform.operatingSystem.toLowerCase(),
+        'app_installation_id': deviceId,
+        'app_version': AppConstants.appVersion,
+      },
+    };
+    
+    // Add user data if available (first sign-in only for Apple)
+    if (appleCredential.email != null) {
+      request['apple_email'] = appleCredential.email;
+    }
+    if (appleCredential.givenName != null || appleCredential.familyName != null) {
+      request['apple_name'] = {
+        'given_name': appleCredential.givenName,
+        'family_name': appleCredential.familyName,
+      };
+    }
+    
+    // Add consent data if provided
+    if (consentData != null) {
+      request['consent_acknowledgments'] = consentData;
+    }
+    
+    // Add encryption context for field-level encryption
+    try {
+      await DeviceKeyManager.initialize();
+      final encryptionContext = await _buildEncryptionContext();
+      request['encryption_context'] = encryptionContext;
+    } catch (e) {
+      // Encryption context optional - continue without it
+      debugPrint('Warning: Could not build encryption context: $e');
+    }
+    
+    return request;
+  }
+
+  /// Handle Apple-specific authentication errors
+  AuthResult _handleAppleAuthError(SignInWithAppleAuthorizationException e) {
+    switch (e.code) {
+      case AuthorizationErrorCode.canceled:
+        return AuthResult.cancelled('Apple sign-in was cancelled');
+      case AuthorizationErrorCode.failed:
+        return AuthResult.failed('Apple sign-in failed. Please try again.');
+      case AuthorizationErrorCode.invalidResponse:
+        return AuthResult.failed('Invalid response from Apple. Please try again.');
+      case AuthorizationErrorCode.notHandled:
+        return AuthResult.failed('Apple sign-in not configured properly.');
+      case AuthorizationErrorCode.unknown:
+      default:
+        return AuthResult.failed('Apple sign-in error. Please try again.');
+    }
+  }
+
+  /// Build authentication request matching backend API contract
+  Future<Map<String, dynamic>> _buildAuthenticationRequest(
+    GoogleSignInAuthentication googleAuth,
+    GoogleSignInClientAuthorization authorization,
+    Map<String, dynamic>? consentData,
+  ) async {
+    final deviceId = await _getDeviceId();
+    
+    final request = {
+      'provider': 'google', // Specify OAuth provider for unified endpoint
+      'google_token': authorization.accessToken, // Backend expects 'google_token' at root level
       'id_token': googleAuth.idToken, // Backend expects 'id_token' at root level
       'device_info': {
         'platform': Platform.operatingSystem.toLowerCase(),
@@ -423,6 +601,22 @@ class AuthService {
     } on DioException catch (e) {
       debugPrint('Get user profile error: ${e.message}');
       return null;
+    }
+  }
+
+  /// Check if Apple Sign-In is available on current platform
+  Future<bool> isAppleSignInAvailable() async {
+    try {
+      // Only available on iOS/macOS
+      if (!Platform.isIOS && !Platform.isMacOS) {
+        return false;
+      }
+      
+      // Runtime check for Apple Sign-In availability
+      return await SignInWithApple.isAvailable();
+    } catch (e) {
+      debugPrint('Apple Sign-In availability check failed: $e');
+      return false;
     }
   }
 

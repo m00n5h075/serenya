@@ -551,6 +551,7 @@ class ChatPrompt {
   final String category;
   final String promptText;
   final int displayOrder;
+  final bool hasSubOptions;
 
   ChatPrompt({
     required this.id,
@@ -558,6 +559,7 @@ class ChatPrompt {
     required this.category,
     required this.promptText,
     required this.displayOrder,
+    required this.hasSubOptions,
   });
 
   factory ChatPrompt.fromJson(Map<String, dynamic> json) {
@@ -567,6 +569,7 @@ class ChatPrompt {
       category: json['category'] as String,
       promptText: json['prompt_text'] as String,
       displayOrder: json['display_order'] as int,
+      hasSubOptions: json['has_sub_options'] as bool? ?? false,
     );
   }
 
@@ -577,6 +580,7 @@ class ChatPrompt {
       'category': category,
       'prompt_text': promptText,
       'display_order': displayOrder,
+      'has_sub_options': hasSubOptions,
     };
   }
 }

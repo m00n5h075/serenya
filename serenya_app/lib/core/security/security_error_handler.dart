@@ -50,12 +50,15 @@ class SecurityErrorHandler {
         return await _handleTemporaryLockout(context, showUserDialog);
 
       case 'no_auth_methods_available':
+        if (context == null || !context.mounted) return const SecurityErrorResult(handled: false, canRetry: false, userMessage: 'Session expired');
         return await _handleNoAuthMethods(context, showUserDialog);
 
       case 'authentication_system_error':
+        if (context == null || !context.mounted) return const SecurityErrorResult(handled: false, canRetry: false, userMessage: 'Session expired');
         return await _handleSystemError(context, showUserDialog);
 
       default:
+        if (context == null || !context.mounted) return const SecurityErrorResult(handled: false, canRetry: false, userMessage: 'Session expired');
         return await _handleGenericAuthError(context, showUserDialog, authResult.failureReason);
     }
   }
@@ -178,6 +181,7 @@ class SecurityErrorHandler {
     }
 
     if (error.contains('man_in_the_middle') || error.contains('mitm')) {
+      if (context == null || !context.mounted) return const SecurityErrorResult(handled: false, canRetry: false, userMessage: 'Session expired');
       return await _handlePotentialMITMError(context, showUserDialog);
     }
 

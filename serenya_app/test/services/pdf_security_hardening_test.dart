@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/mockito.dart';
 import 'package:serenya_app/services/exceptions/pdf_exceptions.dart';
 import 'package:serenya_app/services/pdf_cleanup_service.dart';
 
@@ -15,7 +14,7 @@ void main() {
     
     group('PDF Exception Handling', () {
       test('should create user-friendly error messages', () {
-        final exception = PdfGenerationException(
+        const exception = PdfGenerationException(
           technicalDetails: 'Internal error with stack trace',
         );
         
@@ -26,7 +25,7 @@ void main() {
       });
       
       test('should handle insufficient storage gracefully', () {
-        final exception = InsufficientStorageException(
+        const exception = InsufficientStorageException(
           technicalDetails: 'Out of disk space on device',
         );
         
@@ -36,7 +35,7 @@ void main() {
       });
       
       test('should handle permission errors appropriately', () {
-        final exception = PermissionException(
+        const exception = PermissionException(
           technicalDetails: 'Access denied to temp directory',
         );
         
@@ -46,7 +45,7 @@ void main() {
       });
       
       test('should handle sharing errors with retry option', () {
-        final exception = PdfSharingException(
+        const exception = PdfSharingException(
           technicalDetails: 'Share intent failed',
         );
         
@@ -56,7 +55,7 @@ void main() {
       });
       
       test('should handle timeout errors', () {
-        final exception = TimeoutException(
+        const exception = TimeoutException(
           technicalDetails: 'PDF generation took too long',
         );
         
@@ -67,10 +66,10 @@ void main() {
       
       test('should never expose technical details in user message', () {
         final exceptions = [
-          PdfGenerationException(technicalDetails: 'SQLException: table not found'),
-          InvalidContentException(technicalDetails: 'NullPointerException at line 123'),
-          SecurityException(technicalDetails: 'SecurityManager blocked access'),
-          UnknownPdfException(technicalDetails: 'Stack overflow in PDF library'),
+          const PdfGenerationException(technicalDetails: 'SQLException: table not found'),
+          const InvalidContentException(technicalDetails: 'NullPointerException at line 123'),
+          const SecurityException(technicalDetails: 'SecurityManager blocked access'),
+          const UnknownPdfException(technicalDetails: 'Stack overflow in PDF library'),
         ];
         
         for (final exception in exceptions) {
@@ -178,10 +177,10 @@ void main() {
       test('should provide appropriate retry guidance', () {
         // Retryable errors should suggest retry
         final retryableExceptions = [
-          PdfGenerationException(technicalDetails: 'Temporary failure', isRetryable: true),
-          PdfSharingException(technicalDetails: 'Share failed'),
-          TimeoutException(technicalDetails: 'Operation timed out'),
-          FileSystemException(technicalDetails: 'Temporary IO error'),
+          const PdfGenerationException(technicalDetails: 'Temporary failure', isRetryable: true),
+          const PdfSharingException(technicalDetails: 'Share failed'),
+          const TimeoutException(technicalDetails: 'Operation timed out'),
+          const FileSystemException(technicalDetails: 'Temporary IO error'),
         ];
         
         for (final exception in retryableExceptions) {
@@ -191,10 +190,10 @@ void main() {
         
         // Non-retryable errors should not suggest retry
         final nonRetryableExceptions = [
-          InsufficientStorageException(technicalDetails: 'No space'),
-          PermissionException(technicalDetails: 'Access denied'),
-          InvalidContentException(technicalDetails: 'Bad data'),
-          SecurityException(technicalDetails: 'Security restriction'),
+          const InsufficientStorageException(technicalDetails: 'No space'),
+          const PermissionException(technicalDetails: 'Access denied'),
+          const InvalidContentException(technicalDetails: 'Bad data'),
+          const SecurityException(technicalDetails: 'Security restriction'),
         ];
         
         for (final exception in nonRetryableExceptions) {
