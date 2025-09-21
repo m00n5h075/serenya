@@ -356,9 +356,11 @@ CREATE TABLE chat_options (
     category chat_category_type NOT NULL,   -- grouping for UI organization
     
     -- Option details
-    option_text TEXT NOT NULL,              -- The suggested question/prompt
+    option_text TEXT NOT NULL,              -- The suggested question/prompt (short UI label)
+    full_prompt_text TEXT,                  -- Detailed conversational prompt sent to Bedrock with [METRIC] placeholders
     display_order INTEGER NOT NULL,         -- For consistent UI ordering
     has_sub_options BOOLEAN DEFAULT FALSE,  -- Whether this option needs sub-option selection
+    requires_health_data BOOLEAN DEFAULT FALSE, -- Whether this prompt requires structured health data
     is_active BOOLEAN DEFAULT TRUE,         -- Enable/disable without deletion
     
     -- Timestamps
@@ -372,6 +374,48 @@ CREATE TABLE chat_options (
 -- Chat options indexes for UI queries
 CREATE INDEX idx_chat_options_content_type ON chat_options(content_type, is_active, display_order);
 CREATE INDEX idx_chat_options_category ON chat_options(category);
+
+-- Chat options dataset - predefined prompts
+INSERT INTO chat_options (
+    content_type, 
+    category, 
+    option_text, 
+    full_prompt_text,
+    display_order, 
+    has_sub_options, 
+    requires_health_data
+) VALUES 
+
+-- Single-Report Analysis (results content type)
+-- Value Clarification (metrics selector)
+('result', 'metrics', 'Explain metric', 'Explain what [METRIC] measures and why it matters for my health.', 1, true, false),
+
+-- Range & Impact (metrics selector)  
+('result', 'clarification', 'Check ranges', 'What does my [METRIC] result mean for my health? What could cause [METRIC] to be at this level?', 2, true, true),
+
+-- Lifestyle Context (metrics selector)
+('result', 'lifestyle', 'Lifestyle impact', 'Are there everyday habits that can influence [METRIC]? How might [METRIC] affect my daily health or long-term wellbeing?', 3, true, true),
+
+-- Doctor Discussion (metrics selector)
+('result', 'doctor_prep', 'Prep for doctor', 'Which questions should I ask my doctor about my [METRIC] result?', 4, true, true),
+
+-- Overall Summary Deep-Dive (no sub-options)
+('result', 'explanation', 'Explain results', 'Expand on the overall health picture from my test results. Give me a comprehensive summary in simple terms.', 5, false, true),
+
+-- Longitudinal/Trend Analysis (report content type)
+('report', 'trends', 'Explain trends', 'Explain how my [METRIC] has changed over time and why these trends matter for my health.', 1, true, true),
+
+-- Stability Analysis  
+('report', 'stability', 'Check stability', 'Which results stayed steady over time and is that good? What patterns should I pay most attention to?', 2, false, true),
+
+-- Emerging Patterns Analysis
+('report', 'patterns', 'Find patterns', 'What patterns should I pay most attention to across all my health data? Are there emerging trends I should be aware of?', 3, false, true),
+
+-- Doctor Questions for Trends
+('report', 'doctor_prep', 'Prep for doctor', 'What questions should I ask my doctor about these health trends? What key points should I share when I meet my primary-care practitioner?', 4, false, true),
+
+-- Lifestyle Reflection (distinct from metric-specific lifestyle)
+('report', 'lifestyle', 'Lifestyle review', 'How could lifestyle changes have influenced these health trends over time? What lifestyle factors might explain the patterns in my data?', 5, false, true);
 
 -- ========================================
 -- 11. SCHEMA VERSION TRACKING

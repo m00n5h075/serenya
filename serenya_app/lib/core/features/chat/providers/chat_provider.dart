@@ -4,6 +4,8 @@ import '../../../api/endpoints/chat_api.dart';
 import '../../../core/database/health_data_repository.dart';
 import '../../../services/chat_integration_service.dart';
 import '../../../services/unified_polling_service.dart';
+import '../../../services/chat_data_export_service.dart';
+import '../../../core/providers/health_data_provider.dart';
 import '../../../models/local_database_models.dart';
 
 /// Chat provider that manages conversation state and integrates with polling service
@@ -13,6 +15,8 @@ class ChatProvider extends ChangeNotifier {
   final HealthDataRepository _repository;
   final UnifiedPollingService _pollingService;
   final ChatIntegrationService _integrationService;
+  final ChatDataExportService _dataExportService;
+  final HealthDataProvider _healthDataProvider;
 
   // Chat state
   List<ChatMessage> _messages = [];
@@ -39,10 +43,13 @@ class ChatProvider extends ChangeNotifier {
     required ChatApi chatApi,
     required HealthDataRepository repository,
     required UnifiedPollingService pollingService,
+    required HealthDataProvider healthDataProvider,
   }) : _chatApi = chatApi,
        _repository = repository,
        _pollingService = pollingService,
-       _integrationService = ChatIntegrationService(repository);
+       _healthDataProvider = healthDataProvider,
+       _integrationService = ChatIntegrationService(repository),
+       _dataExportService = ChatDataExportService(repository: repository);
 
   // Getters
   List<ChatMessage> get messages => List.unmodifiable(_messages);
@@ -103,6 +110,7 @@ class ChatProvider extends ChangeNotifier {
     required String prompt,
     String? suggestedPromptId,
     Map<String, dynamic>? context,
+    ChatPrompt? chatPrompt,
   }) async {
     if (_isSending) return;
 
@@ -111,7 +119,7 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Create and save user message locally first
+      // Step 1: Create and save user message locally immediately (no status field)
       final userMessage = ChatIntegrationService.createUserMessage(
         contentId: contentId,
         message: prompt,
@@ -122,15 +130,45 @@ class ChatProvider extends ChangeNotifier {
       _messages.add(userMessage);
       notifyListeners();
 
-      // Send to API
+      // Step 2: Prepare API request data
+      Map<String, dynamic> apiContext = context ?? {};
+      
+      // Step 3: Check if we need to include structured health data
+      if (chatPrompt?.requiresHealthData == true) {
+        final structuredDataResult = await _extractStructuredDataForPrompt(contentId, chatPrompt!);
+        
+        if (structuredDataResult.success && structuredDataResult.structuredData != null) {
+          apiContext['health_data'] = structuredDataResult.structuredData;
+          apiContext['data_type'] = structuredDataResult.dataType?.name;
+        } else {
+          // Log warning but continue without structured data
+          debugPrint('WARNING: Failed to extract structured data for chat prompt: ${structuredDataResult.errorMessage}');
+        }
+      }
+
+      // Step 4: Prepare final prompt for backend
+      String finalPrompt = prompt;
+      
+      // If we have a ChatPrompt with fullPromptText, use that for backend
+      if (chatPrompt?.fullPromptText != null && chatPrompt!.fullPromptText!.isNotEmpty) {
+        finalPrompt = chatPrompt.fullPromptText!;
+        
+        // Handle metric substitution if this prompt has sub-options
+        if (chatPrompt.hasSubOptions && context != null && context['metric_name'] != null) {
+          final metricName = context['metric_name'] as String;
+          finalPrompt = finalPrompt.replaceAll('[METRIC]', metricName);
+        }
+      }
+
+      // Step 5: Send to API
       final result = await _chatApi.sendMessage(
         conversationId: contentId,
-        message: prompt,
-        context: context,
+        message: finalPrompt,
+        context: apiContext,
       );
 
       if (result.success && result.data != null) {
-        // Start polling for AI response if we have a job ID
+        // Step 6: Handle API response
         if (result.data!.status == 'processing') {
           // Track active message for cleanup
           _activeMessageIds.add(result.data!.messageId);
@@ -144,7 +182,7 @@ class ChatProvider extends ChangeNotifier {
           
           await _pollingService.startMonitoringJob(result.data!.messageId);
         } else {
-          // Immediate response - save locally
+          // Immediate response - create and save AI message locally
           final aiMessage = ChatIntegrationService.fromApiResponse(result.data!, contentId);
           await _repository.insertChatMessage(aiMessage);
           _messages.add(aiMessage);
@@ -230,6 +268,30 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
+  /// Extract structured data for chat prompt based on content type
+  Future<ChatDataResult> _extractStructuredDataForPrompt(String contentId, ChatPrompt chatPrompt) async {
+    try {
+      // Determine extraction mode based on content type
+      if (chatPrompt.contentType == 'result') {
+        // Results chat: Extract from specific document
+        return await _dataExportService.extractResultsChatData(contentId);
+      } else if (chatPrompt.contentType == 'report') {
+        // Report chat: Extract from full health history
+        return await _dataExportService.extractReportChatData(_healthDataProvider);
+      } else {
+        return ChatDataResult(
+          success: false,
+          errorMessage: 'Unknown content type: ${chatPrompt.contentType}',
+        );
+      }
+    } catch (e) {
+      return ChatDataResult(
+        success: false,
+        errorMessage: 'Failed to extract structured data: $e',
+      );
+    }
+  }
+
   /// Handle polling completion (called by polling service)
   Future<void> onPollingComplete(String messageId, dynamic result) async {
     try {
@@ -237,7 +299,7 @@ class ChatProvider extends ChangeNotifier {
       _activeMessageIds.remove(messageId);
       
       if (result is ChatMessageResponse && _currentContentId != null) {
-        // Save AI response locally
+        // Create and save AI response as separate local chat record (no status field)
         final aiMessage = ChatIntegrationService.fromApiResponse(result, _currentContentId!);
         await _repository.insertChatMessage(aiMessage);
         _messages.add(aiMessage);

@@ -511,26 +511,45 @@ Analyze the following health data and generate a comprehensive report:`;
   }
 
   getChatResponsePrompt(version) {
-    // PLACEHOLDER - Actual prompt content TBD  
-    return `## CHAT RESPONSE PROMPT - VERSION ${version}
+    return `## SYSTEM ROLE
+You are Serenya, a warm and empathetic medical AI assistant specialized in health education. You engage in natural, conversational dialogue about health topics while maintaining strict medical accuracy. You must:
+- Provide helpful, educational responses about health and medical information
+- Never provide medical advice, diagnoses, or treatment recommendations
+- Always maintain medical accuracy while avoiding medical jargon
+- Encourage users to consult healthcare providers for medical decisions
+- Focus on education, explanation, and understanding rather than medical decision-making
 
-## SYSTEM ROLE AND CONSTRAINTS
-[TBD: Conversational medical AI role and patient education focus]
+## RESPONSE STYLE
+- Keep responses conversational and warm
+- Limit to 2-3 short paragraphs maximum (50-150 words total)
+- Use simple, everyday language - avoid medical jargon
+- Be supportive and encouraging in tone
+- Focus on education and explanation, not advice
 
-## CONTEXT VALIDATION
-[TBD: Requirements for context awareness from processed documents]
+## STRUCTURED DATA INTEGRATION
+When health data is provided (lab results, vitals), reference the user's specific values naturally in conversation:
+- "Your cholesterol level of 195 mg/dL is..."
+- "I can see your blood pressure readings have been..."
+- Explain what their numbers mean in simple terms
+- Compare to normal ranges when relevant
 
-## RESPONSE INSTRUCTIONS
-[TBD: Patient-friendly language, educational content, safety warnings]
+When no health data is provided, give general educational information about the topic.
 
-## SAFETY AND COMPLIANCE
-[TBD: Medical disclaimer integration and conversational safety protocols]
+## SAFETY GUIDELINES
+- Never diagnose conditions or recommend treatments
+- Don't give specific medical advice
+- For concerning questions, suggest consulting their healthcare provider
+- Keep the conversation educational and supportive
 
 ## RESPONSE FORMAT
-[TBD: Conversational response structure with follow-up suggestions]
+Provide only plain text - no markdown, no JSON, no special formatting. Keep it short and conversational.
 
 ## INPUT CONTENT
-Respond to this medical question:`;
+User Question: [USER_QUESTION]
+
+Health Data (if provided): [STRUCTURED_DATA]
+
+Respond naturally and conversationally:`;
   }
 
   customizePrompt(template, customizations) {
@@ -576,10 +595,7 @@ Respond to this medical question:`;
         ];
       case 'chat_response':
         return [
-          ...commonFields,
-          'response_content',
-          'follow_up_suggestions',
-          'disclaimers'
+          // Chat responses are plain text, no required fields
         ];
       default:
         return commonFields;
@@ -656,9 +672,22 @@ Respond to this medical question:`;
   }
 
   validateChatResponseResponse(response) {
-    // Validate chat response specific requirements
-    if (!response.response_content || response.response_content.trim().length === 0) {
-      return { valid: false, error: 'Chat response must have content' };
+    // Chat responses are plain text - validate it's not empty and reasonable length
+    if (typeof response !== 'string') {
+      return { valid: false, error: 'Chat response must be plain text string' };
+    }
+
+    if (!response || response.trim().length === 0) {
+      return { valid: false, error: 'Chat response cannot be empty' };
+    }
+
+    // Check for reasonable length (50-300 words approximately)
+    const wordCount = response.trim().split(/\s+/).length;
+    if (wordCount < 10) {
+      return { valid: false, error: 'Chat response too short (minimum 10 words)' };
+    }
+    if (wordCount > 300) {
+      return { valid: false, error: 'Chat response too long (maximum 300 words)' };
     }
     
     return { valid: true };

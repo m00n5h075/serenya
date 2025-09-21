@@ -550,16 +550,20 @@ class ChatPrompt {
   final String contentType;
   final String category;
   final String promptText;
+  final String? fullPromptText;
   final int displayOrder;
   final bool hasSubOptions;
+  final bool requiresHealthData;
 
   ChatPrompt({
     required this.id,
     required this.contentType,
     required this.category,
     required this.promptText,
+    this.fullPromptText,
     required this.displayOrder,
     required this.hasSubOptions,
+    required this.requiresHealthData,
   });
 
   factory ChatPrompt.fromJson(Map<String, dynamic> json) {
@@ -568,8 +572,10 @@ class ChatPrompt {
       contentType: json['content_type'] as String,
       category: json['category'] as String,
       promptText: json['prompt_text'] as String,
+      fullPromptText: json['full_prompt_text'] as String?,
       displayOrder: json['display_order'] as int,
       hasSubOptions: json['has_sub_options'] as bool? ?? false,
+      requiresHealthData: json['requires_health_data'] as bool? ?? false,
     );
   }
 
@@ -579,8 +585,10 @@ class ChatPrompt {
       'content_type': contentType,
       'category': category,
       'prompt_text': promptText,
+      'full_prompt_text': fullPromptText,
       'display_order': displayOrder,
       'has_sub_options': hasSubOptions,
+      'requires_health_data': requiresHealthData,
     };
   }
 }

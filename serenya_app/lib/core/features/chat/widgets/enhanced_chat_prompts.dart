@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/chat_provider.dart';
 import '../../../services/chat_integration_service.dart';
 import '../../../core/constants/design_tokens.dart';
+import '../../../api/endpoints/chat_api.dart';
 
 /// Enhanced chat prompts widget supporting two-level prompt system
 class EnhancedChatPromptsBottomSheet extends StatelessWidget {
@@ -129,6 +130,7 @@ class EnhancedChatPromptsBottomSheet extends StatelessWidget {
           promptText: chatPrompt.hasSubOptions ? null : chatPrompt.promptText,
           onTap: chatPrompt.hasSubOptions ? () => chatProvider.loadMetrics(contentId) : null,
           isMetricSelector: chatPrompt.hasSubOptions,
+          chatPrompt: chatPrompt, // Pass the full ChatPrompt object
         );
       }).toList();
     } else {
@@ -291,6 +293,7 @@ class EnhancedChatPromptsBottomSheet extends StatelessWidget {
                   chatProvider.sendMessage(
                     contentId: contentId,
                     prompt: prompt.promptText!,
+                    chatPrompt: prompt.chatPrompt,
                   );
                   onClose();
                 }
@@ -534,6 +537,7 @@ class ChatPromptOption {
   final String? promptText;
   final VoidCallback? onTap;
   final bool isMetricSelector;
+  final ChatPrompt? chatPrompt;
 
   const ChatPromptOption({
     required this.title,
@@ -542,5 +546,6 @@ class ChatPromptOption {
     this.promptText,
     this.onTap,
     this.isMetricSelector = false,
+    this.chatPrompt,
   });
 }
