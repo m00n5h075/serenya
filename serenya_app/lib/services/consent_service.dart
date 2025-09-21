@@ -8,8 +8,14 @@ class ConsentService {
 
   // Check if onboarding is completed
   Future<bool> isOnboardingCompleted() async {
-    final completed = await _storage.read(key: _onboardingCompletedKey);
-    return completed == 'true';
+    try {
+      final completed = await _storage.read(key: _onboardingCompletedKey);
+      return completed == 'true';
+    } catch (e) {
+      // If secure storage fails, assume onboarding is not completed
+      print('ConsentService: Failed to read onboarding status: $e');
+      return false;
+    }
   }
 
   // Track slide view

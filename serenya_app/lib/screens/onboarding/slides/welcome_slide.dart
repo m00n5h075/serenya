@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/onboarding_button.dart';
+import '../../../core/constants/design_tokens.dart';
 
 class WelcomeSlide extends StatelessWidget {
   final VoidCallback onGetStarted;
@@ -15,7 +16,12 @@ class WelcomeSlide extends StatelessWidget {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.only(
+            left: 24.0,
+            right: 24.0,
+            top: 24.0,
+            bottom: 0.0, // Remove bottom padding
+          ),
           child: Column(
             children: [
               Expanded(
@@ -37,7 +43,6 @@ class WelcomeSlide extends StatelessWidget {
                 ),
               ),
               _buildButton(),
-              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -53,21 +58,17 @@ class WelcomeSlide extends StatelessWidget {
           header: true,
           child: Text(
             'Welcome to Serenya',
-            style: TextStyle(
-              fontSize: 32,
+            style: HealthcareTypography.headingH1.copyWith(
+              color: HealthcareColors.serenyaBluePrimary,
               fontWeight: FontWeight.bold,
-              color: Colors.blue[800],
-              height: 1.2,
             ),
           ),
         ),
         const SizedBox(height: 8),
         Text(
           'Your AI Health Agent',
-          style: TextStyle(
-            fontSize: 20,
-            color: Colors.grey[600],
-            fontWeight: FontWeight.w500,
+          style: HealthcareTypography.headingH3.copyWith(
+            color: HealthcareColors.textSecondary,
           ),
         ),
       ],
@@ -77,10 +78,8 @@ class WelcomeSlide extends StatelessWidget {
   Widget _buildMainDescription() {
     return Text(
       'We help you understand your lab results in plain language and prepare for confident conversations with your doctor.',
-      style: TextStyle(
-        fontSize: 16,
-        color: Colors.grey[800],
-        height: 1.5,
+      style: HealthcareTypography.bodyLarge.copyWith(
+        color: HealthcareColors.textPrimary,
       ),
     );
   }
@@ -106,10 +105,9 @@ class WelcomeSlide extends StatelessWidget {
       children: [
         Text(
           'What We Do:',
-          style: TextStyle(
-            fontSize: 18,
+          style: HealthcareTypography.headingH4.copyWith(
             fontWeight: FontWeight.w600,
-            color: Colors.grey[800],
+            color: HealthcareColors.textPrimary,
           ),
         ),
         const SizedBox(height: 16),
@@ -142,19 +140,16 @@ class WelcomeSlide extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: TextStyle(
-                    fontSize: 16,
+                  style: HealthcareTypography.bodyLarge.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
+                    color: HealthcareColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   description,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                    height: 1.3,
+                  style: HealthcareTypography.bodyMedium.copyWith(
+                    color: HealthcareColors.textSecondary,
                   ),
                 ),
               ],
@@ -175,11 +170,9 @@ class WelcomeSlide extends StatelessWidget {
       ),
       child: Text(
         'Like having a knowledgeable friend help you understand your health data.',
-        style: TextStyle(
-          fontSize: 16,
-          color: Colors.blue[800],
+        style: HealthcareTypography.bodyLarge.copyWith(
+          color: HealthcareColors.serenyaBluePrimary,
           fontStyle: FontStyle.italic,
-          height: 1.4,
         ),
         textAlign: TextAlign.center,
       ),

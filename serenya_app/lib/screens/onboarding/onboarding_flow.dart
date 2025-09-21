@@ -7,6 +7,7 @@ import 'slides/disclaimer_slide.dart';
 import 'slides/consent_slide.dart';
 import 'widgets/progress_dots.dart';
 import 'widgets/biometric_setup_dialog.dart';
+import '../../core/constants/design_tokens.dart';
 
 class OnboardingFlow extends StatefulWidget {
   final VoidCallback? onComplete;
@@ -87,16 +88,26 @@ class _OnboardingFlowState extends State<OnboardingFlow>
     if (authSuccess) {
       // Authentication was successful - show biometric setup
       _showBiometricSetup();
+      // Only mark onboarding complete on successful authentication
+      if (widget.onComplete != null) {
+        widget.onComplete!();
+      }
     } else {
-      // Authentication failed - show error
+      // Authentication failed - show error but stay on onboarding
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Row(
+            content: Row(
               children: [
-                Icon(Icons.error_outline, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Authentication failed. Please try again.'),
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Authentication failed. Please try again.',
+                    overflow: TextOverflow.visible,
+                    softWrap: true,
+                  ),
+                ),
               ],
             ),
             backgroundColor: Colors.red[600],
@@ -111,11 +122,7 @@ class _OnboardingFlowState extends State<OnboardingFlow>
           ),
         );
       }
-    }
-    
-    // Always call completion callback for any cleanup
-    if (widget.onComplete != null) {
-      widget.onComplete!();
+      // Do NOT call onComplete - keep user on onboarding flow
     }
   }
 
@@ -149,19 +156,7 @@ class _OnboardingFlowState extends State<OnboardingFlow>
       backgroundColor: Colors.white,
       body: Column(
         children: [
-          // Progress indicator
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 20.0, bottom: 8.0),
-              child: ProgressDots(
-                currentIndex: _currentIndex,
-                totalCount: _totalSlides,
-                slideNames: _slideNames,
-              ),
-            ),
-          ),
-          
-          // Main content
+          // Main content - takes most of the space
           Expanded(
             child: Semantics(
               container: true,
@@ -201,6 +196,21 @@ class _OnboardingFlowState extends State<OnboardingFlow>
                     ),
                   ),
                 ],
+              ),
+            ),
+          ),
+          
+          // Progress indicator at bottom
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.only(
+                bottom: HealthcareSpacing.md,
+                top: HealthcareSpacing.xs,
+              ),
+              child: ProgressDots(
+                currentIndex: _currentIndex,
+                totalCount: _totalSlides,
+                slideNames: _slideNames,
               ),
             ),
           ),

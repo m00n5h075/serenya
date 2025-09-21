@@ -3,6 +3,7 @@ import 'package:flutter/gestures.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../../../services/auth_service.dart';
 import '../../../core/utils/platform_utils.dart';
+import '../../../core/constants/design_tokens.dart';
 import '../widgets/legal_document_viewer.dart';
 import '../widgets/auth_error_handler.dart';
 
@@ -71,6 +72,12 @@ class _ConsentSlideState extends State<ConsentSlide> {
       };
       
       final result = await _authService.signInWithGoogle(consentData: consentData);
+      
+      // Always reset loading state when auth completes
+      setState(() {
+        _isLoading = false;
+      });
+      
       widget.onAgree(_agreedToTerms, _understoodDisclaimer, result.success);
     } catch (e) {
       // Enhanced healthcare-compliant error handling
@@ -118,6 +125,12 @@ class _ConsentSlideState extends State<ConsentSlide> {
       };
       
       final result = await _authService.signInWithApple(consentData: consentData);
+      
+      // Always reset loading state when auth completes
+      setState(() {
+        _isAppleLoading = false;
+      });
+      
       widget.onAgree(_agreedToTerms, _understoodDisclaimer, result.success);
     } catch (e) {
       // Enhanced healthcare-compliant error handling for Apple Sign-In
@@ -223,32 +236,6 @@ class _ConsentSlideState extends State<ConsentSlide> {
     };
   }
 
-  void _showAppleSignInGuidance() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Apple Sign-In Setup'),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('To use Apple Sign-In:'),
-            SizedBox(height: 12),
-            Text('• Make sure you\'re signed in to iCloud'),
-            Text('• Go to Settings > Sign-In & Security'),
-            Text('• Enable Two-Factor Authentication'),
-            Text('• Return to Serenya to continue'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
 
   /// Categorize error for healthcare-appropriate error handling
   Map<String, dynamic> _categorizeError(dynamic error) {
@@ -286,6 +273,32 @@ class _ConsentSlideState extends State<ConsentSlide> {
     };
   }
 
+  void _showAppleSignInGuidance() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Apple Sign-In Setup'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('To use Apple Sign-In:'),
+            SizedBox(height: 12),
+            Text('• Make sure you\'re signed in to iCloud'),
+            Text('• Go to Settings > Sign-In & Security'),
+            Text('• Enable Two-Factor Authentication'),
+            Text('• Return to Serenya to continue'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _showBiometricGuidance() {
     showDialog(
@@ -357,7 +370,12 @@ class _ConsentSlideState extends State<ConsentSlide> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.only(
+            left: 24.0,
+            right: 24.0,
+            top: 24.0,
+            bottom: 0.0, // Remove bottom padding
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -376,9 +394,8 @@ class _ConsentSlideState extends State<ConsentSlide> {
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: HealthcareSpacing.md),
               _buildButton(),
-              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -555,15 +572,6 @@ class _ConsentSlideState extends State<ConsentSlide> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Includes: Terms, Privacy Policy, Healthcare Consultation Agreement',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.blue[600],
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -628,17 +636,6 @@ class _ConsentSlideState extends State<ConsentSlide> {
                         style: TextStyle(
                           fontSize: 11,
                           color: Colors.blue[600],
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ],
-                    if (isMedicalBundle) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Includes: Medical Disclaimer, Emergency Care Limitations',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.orange[600],
                           fontStyle: FontStyle.italic,
                         ),
                       ),

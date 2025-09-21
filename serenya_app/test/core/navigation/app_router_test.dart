@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:serenya_app/core/navigation/app_router.dart';
 import 'package:serenya_app/core/providers/app_state_provider.dart';

@@ -122,33 +122,38 @@ class AuthService {
 
   /// Check if user is currently authenticated
   Future<bool> isLoggedIn() async {
-    final accessToken = await _storage.read(key: _accessTokenKey);
-    final refreshToken = await _storage.read(key: _refreshTokenKey);
-    
-    if (accessToken == null || refreshToken == null) {
-      return await _checkOfflineAuthentication();
-    }
-    
-    // Check if access token is still valid
-    if (!SecurityUtils.isTokenExpired(accessToken)) {
-      final isValid = await _checkHealthcareSessionValidity();
-      if (isValid) {
-        await _updateOfflineAuthCache();
-      }
-      return isValid;
-    }
-    
-    // Try to refresh if access token expired
     try {
-      final refreshed = await _refreshTokenSilently();
-      if (refreshed) {
-        await _updateOfflineAuthCache();
+      final accessToken = await _storage.read(key: _accessTokenKey);
+      final refreshToken = await _storage.read(key: _refreshTokenKey);
+      
+      if (accessToken == null || refreshToken == null) {
+        return await _checkOfflineAuthentication();
       }
-      return refreshed;
+      
+      // Check if access token is still valid
+      if (!SecurityUtils.isTokenExpired(accessToken)) {
+        final isValid = await _checkHealthcareSessionValidity();
+        if (isValid) {
+          await _updateOfflineAuthCache();
+        }
+        return isValid;
+      }
+      
+      // Try to refresh if access token expired
+      try {
+        final refreshed = await _refreshTokenSilently();
+        if (refreshed) {
+          await _updateOfflineAuthCache();
+        }
+        return refreshed;
+      } catch (e) {
+        // Network error - check offline cache
+        debugPrint('Network error during token refresh, checking offline cache: $e');
+        return await _checkOfflineAuthentication();
+      }
     } catch (e) {
-      // Network error - check offline cache
-      debugPrint('Network error during token refresh, checking offline cache: $e');
-      return await _checkOfflineAuthentication();
+      print('AuthService: Failed to read authentication status: $e');
+      return false;
     }
   }
 

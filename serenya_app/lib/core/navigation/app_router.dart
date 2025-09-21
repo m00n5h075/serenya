@@ -1,41 +1,67 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../screens/onboarding/onboarding_flow.dart';
-import '../../screens/login_screen.dart';
 import '../../screens/home_screen.dart';
 import '../providers/app_state_provider.dart';
 
 class AppRouter {
-  static final GoRouter router = GoRouter(
-    initialLocation: '/loading',
-    redirect: (context, state) {
+  static GoRouter createRouter(AppStateProvider appStateProvider) {
+    return GoRouter(
+      initialLocation: '/loading',
+      refreshListenable: appStateProvider,
+      redirect: (context, state) {
       final appState = context.read<AppStateProvider>();
       final currentPath = state.fullPath;
       
+      if (kDebugMode) {
+        print('ROUTER: Current path: $currentPath');
+        print('ROUTER: isLoading: ${appState.isLoading}');
+        print('ROUTER: error: ${appState.error}');
+        print('ROUTER: isOnboardingComplete: ${appState.isOnboardingComplete}');
+        print('ROUTER: isLoggedIn: ${appState.isLoggedIn}');
+      }
+      
       // If still loading, stay on loading screen
       if (appState.isLoading) {
+        if (kDebugMode) {
+          print('ROUTER: Staying on loading screen');
+        }
         return currentPath != '/loading' ? '/loading' : null;
       }
       
-      // If error occurred, go to error screen
+      // If error occurred, show error but allow fallback to onboarding
       if (appState.error != null) {
+        if (kDebugMode) {
+          print('ROUTER: Error occurred: ${appState.error}');
+        }
+        // For now, if there's an error during startup, go to onboarding as fallback
+        // This prevents users from being stuck on error screens
+        if (!appState.isOnboardingComplete) {
+          if (kDebugMode) {
+            print('ROUTER: Error occurred but redirecting to onboarding as fallback');
+          }
+          return currentPath != '/onboarding' ? '/onboarding' : null;
+        }
         return currentPath != '/error' ? '/error' : null;
       }
       
       // If onboarding not complete, redirect to onboarding
       if (!appState.isOnboardingComplete) {
+        if (kDebugMode) {
+          print('ROUTER: Redirecting to onboarding');
+        }
         return currentPath != '/onboarding' ? '/onboarding' : null;
       }
       
-      // If not logged in, redirect to login
+      // If not logged in, redirect to onboarding
       if (!appState.isLoggedIn) {
-        return currentPath != '/login' ? '/login' : null;
+        return currentPath != '/onboarding' ? '/onboarding' : null;
       }
       
-      // If logged in and on auth screens, redirect to home
-      if (appState.isLoggedIn && 
-          (currentPath == '/login' || currentPath == '/onboarding')) {
+      // If logged in and on onboarding, redirect to home
+      if (appState.isLoggedIn && currentPath == '/onboarding') {
         return '/home';
       }
       
@@ -63,15 +89,12 @@ class AppRouter {
         ),
       ),
       GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginScreen(),
-      ),
-      GoRoute(
         path: '/home',
         builder: (context, state) => const HomeScreen(),
       ),
     ],
-  );
+    );
+  }
 }
 
 class LoadingScreen extends StatelessWidget {

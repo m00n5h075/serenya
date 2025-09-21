@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite_sqlcipher/sqflite.dart' as sqlcipher;
+import 'dart:io';
 import 'core/providers/app_state_provider.dart';
 import 'core/providers/health_data_provider.dart';
 import 'core/theme/healthcare_theme.dart';
@@ -8,7 +11,19 @@ import 'services/auth_service.dart';
 import 'services/unified_polling_service.dart';
 import 'services/pdf_cleanup_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize database factory for Android
+  if (Platform.isAndroid) {
+    // Use sqflite_sqlcipher for Android
+    databaseFactory = sqlcipher.databaseFactory;
+  } else {
+    // Use sqflite_common_ffi for other platforms
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+  
   runApp(const MyApp());
 }
 
@@ -46,11 +61,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Future<void> _initializeApp() async {
     await _appStateProvider.initialize();
     
-    // Initialize the unified polling service for job monitoring
-    await _pollingService.initialize(_healthDataProvider);
+    // Only initialize polling service after user is authenticated and has jobs to monitor
+    // This will be called later when user logs in
     
-    // Initialize PDF cleanup service for security hardening (CTO recommendation)
-    await _pdfCleanupService.onAppStartup();
+    // Only initialize PDF cleanup service after user is authenticated
+    // No PDFs to clean during onboarding flow
   }
   
   @override
@@ -115,7 +130,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             HealthcareThemeExtensions.medicalSafetyTheme,
           ],
         ),
-        routerConfig: AppRouter.router,
+        routerConfig: AppRouter.createRouter(_appStateProvider),
         debugShowCheckedModeBanner: false,
       ),
     );

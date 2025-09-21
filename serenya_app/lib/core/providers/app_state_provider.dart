@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../../services/auth_service.dart';
 import '../../services/consent_service.dart';
@@ -21,26 +22,76 @@ class AppStateProvider extends ChangeNotifier {
   Future<void> initialize() async {
     if (_isInitialized) return;
 
+    if (kDebugMode) {
+      print('APP_STATE: Starting initialization...');
+    }
     _setLoading(true);
     _clearError();
 
     try {
-      await _checkAppState();
+      if (kDebugMode) {
+        print('APP_STATE: Checking app state...');
+      }
+      // Add timeout to prevent perpetual loading
+      await _checkAppState().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          if (kDebugMode) {
+            print('APP_STATE: Initialization timed out after 10 seconds');
+          }
+          throw TimeoutException('App initialization timed out', const Duration(seconds: 10));
+        },
+      );
+      if (kDebugMode) {
+        print('APP_STATE: App state checked successfully');
+      }
       _isInitialized = true;
+      if (kDebugMode) {
+        print('APP_STATE: Initialization complete');
+      }
     } catch (e) {
-      _setError('Failed to initialize app: $e');
+      if (kDebugMode) {
+        print('APP_STATE: Error during initialization: $e');
+      }
+      if (e is TimeoutException) {
+        _setError('App took too long to load. Please try restarting the app.');
+      } else {
+        _setError('Failed to initialize app: $e');
+      }
     } finally {
+      if (kDebugMode) {
+        print('APP_STATE: Setting loading to false');
+      }
       _setLoading(false);
     }
   }
 
   Future<void> _checkAppState() async {
+    if (kDebugMode) {
+      print('APP_STATE: Checking onboarding status...');
+    }
     final onboardingComplete = await _consentService.isOnboardingCompleted();
+    if (kDebugMode) {
+      print('APP_STATE: Onboarding complete: $onboardingComplete');
+    }
+    
+    if (kDebugMode) {
+      print('APP_STATE: Checking login status...');
+    }
     final loggedIn = await _authService.isLoggedIn();
+    if (kDebugMode) {
+      print('APP_STATE: Logged in: $loggedIn');
+    }
     
     _isOnboardingComplete = onboardingComplete;
     _isLoggedIn = loggedIn;
+    if (kDebugMode) {
+      print('APP_STATE: Notifying listeners...');
+    }
     notifyListeners();
+    if (kDebugMode) {
+      print('APP_STATE: Listeners notified');
+    }
   }
 
   Future<void> completeOnboarding() async {
@@ -70,6 +121,8 @@ class AppStateProvider extends ChangeNotifier {
       
       if (result.success) {
         _isLoggedIn = true;
+        // Now that user is authenticated, initialize polling service for job monitoring
+        // TODO: Add polling service initialization here
         notifyListeners();
       } else if (result.cancelled) {
         _setError('Sign in was cancelled');

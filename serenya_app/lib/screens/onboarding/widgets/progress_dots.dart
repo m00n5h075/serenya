@@ -81,33 +81,12 @@ class _ProgressDotsState extends State<ProgressDots>
 
     return Semantics(
       label: '$currentSlideName, page ${widget.currentIndex + 1} of ${widget.totalCount}',
-      child: Column(
-        children: [
-          // Progress dots
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-              widget.totalCount,
-              (index) => _buildProgressDot(index),
-            ),
-          ),
-          
-          // Current slide name
-          const SizedBox(height: 8),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 250),
-            child: Text(
-              currentSlideName,
-              key: ValueKey(widget.currentIndex),
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[600],
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ],
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: List.generate(
+          widget.totalCount,
+          (index) => _buildProgressDot(index),
+        ),
       ),
     );
   }

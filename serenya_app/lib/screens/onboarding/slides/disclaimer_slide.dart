@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/onboarding_button.dart';
+import '../../../core/constants/design_tokens.dart';
 
 class DisclaimerSlide extends StatelessWidget {
   final VoidCallback onUnderstand;
@@ -15,30 +16,37 @@ class DisclaimerSlide extends StatelessWidget {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.only(
+            left: 24.0,
+            right: 24.0,
+            top: 24.0,
+            bottom: 0.0, // Remove bottom padding
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 40),
-                    _buildHeader(),
-                    const SizedBox(height: 24),
-                    _buildIntroduction(),
-                    const SizedBox(height: 32),
-                    _buildWhatWeAre(),
-                    const SizedBox(height: 24),
-                    _buildWhatWeAreNot(),
-                    const SizedBox(height: 32),
-                    _buildSafetyStatement(),
-                  ],
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 40),
+                      _buildHeader(),
+                      const SizedBox(height: 24),
+                      _buildIntroduction(),
+                      const SizedBox(height: 32),
+                      _buildWhatWeAre(),
+                      const SizedBox(height: 24),
+                      _buildWhatWeAreNot(),
+                      const SizedBox(height: 32),
+                      _buildSafetyStatement(),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: HealthcareSpacing.md),
               _buildButton(),
-              const SizedBox(height: 24),
             ],
           ),
         ),

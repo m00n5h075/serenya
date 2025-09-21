@@ -112,42 +112,54 @@ class _AuthErrorWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.5,
+      maxChildSize: 0.9,
+      builder: (context, scrollController) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             children: [
               // Handle bar
               Container(
                 width: 40,
                 height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
                 decoration: BoxDecoration(
                   color: Colors.grey[300],
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-
-              // Error icon and message
-              _buildErrorHeader(),
               
-              const SizedBox(height: 24),
-              
-              // Recovery guidance
-              _buildRecoverySection(),
-              
-              const SizedBox(height: 32),
-              
-              // Action buttons
-              _buildActionButtons(context),
-              
-              const SizedBox(height: 16),
+              // Scrollable content
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                  child: Column(
+                    children: [
+                      // Error icon and message
+                      _buildErrorHeader(),
+                      
+                      const SizedBox(height: 24),
+                      
+                      // Recovery guidance
+                      _buildRecoverySection(),
+                      
+                      const SizedBox(height: 32),
+                      
+                      // Action buttons
+                      _buildActionButtons(context),
+                      
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -184,6 +196,8 @@ class _AuthErrorWidget extends StatelessWidget {
               color: Colors.grey[800],
             ),
             textAlign: TextAlign.center,
+            softWrap: true,
+            overflow: TextOverflow.visible,
           ),
         ),
         
@@ -197,6 +211,8 @@ class _AuthErrorWidget extends StatelessWidget {
             height: 1.4,
           ),
           textAlign: TextAlign.center,
+          softWrap: true,
+          overflow: TextOverflow.visible,
         ),
       ],
     );
@@ -223,12 +239,16 @@ class _AuthErrorWidget extends StatelessWidget {
                 color: Colors.blue[600],
               ),
               const SizedBox(width: 8),
-              Text(
-                'What you can try:',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[800],
+              Expanded(
+                child: Text(
+                  'What you can try:',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[800],
+                  ),
+                  softWrap: true,
+                  overflow: TextOverflow.visible,
                 ),
               ),
             ],
@@ -258,6 +278,8 @@ class _AuthErrorWidget extends StatelessWidget {
                       color: Colors.grey[700],
                       height: 1.4,
                     ),
+                    softWrap: true,
+                    overflow: TextOverflow.visible,
                   ),
                 ),
               ],

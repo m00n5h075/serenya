@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/onboarding_button.dart';
+import '../../../core/constants/design_tokens.dart';
 
 class PrivacySlide extends StatelessWidget {
   final VoidCallback onContinue;
@@ -15,28 +16,35 @@ class PrivacySlide extends StatelessWidget {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.only(
+            left: 24.0,
+            right: 24.0,
+            top: 24.0,
+            bottom: 0.0, // Remove bottom padding
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 40),
-                    _buildHeader(),
-                    const SizedBox(height: 24),
-                    _buildMainDescription(),
-                    const SizedBox(height: 32),
-                    _buildPrivacyFeatures(),
-                    const SizedBox(height: 32),
-                    _buildClosingStatement(),
-                  ],
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 40),
+                      _buildHeader(),
+                      const SizedBox(height: 24),
+                      _buildMainDescription(),
+                      const SizedBox(height: 32),
+                      _buildPrivacyFeatures(),
+                      const SizedBox(height: 32),
+                      _buildClosingStatement(),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: HealthcareSpacing.md),
               _buildButton(),
-              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -49,11 +57,9 @@ class PrivacySlide extends StatelessWidget {
       header: true,
       child: Text(
         'Your Privacy Comes First',
-        style: TextStyle(
-          fontSize: 32,
+        style: HealthcareTypography.headingH1.copyWith(
+          color: HealthcareColors.serenyaBluePrimary,
           fontWeight: FontWeight.bold,
-          color: Colors.blue[800],
-          height: 1.2,
         ),
       ),
     );
@@ -62,10 +68,8 @@ class PrivacySlide extends StatelessWidget {
   Widget _buildMainDescription() {
     return Text(
       'We understand health data is deeply personal. Here\'s how we protect yours:',
-      style: TextStyle(
-        fontSize: 16,
-        color: Colors.grey[800],
-        height: 1.5,
+      style: HealthcareTypography.bodyLarge.copyWith(
+        color: HealthcareColors.textPrimary,
       ),
     );
   }
@@ -94,10 +98,9 @@ class PrivacySlide extends StatelessWidget {
       children: [
         Text(
           'Privacy Features:',
-          style: TextStyle(
-            fontSize: 18,
+          style: HealthcareTypography.headingH4.copyWith(
             fontWeight: FontWeight.w600,
-            color: Colors.grey[800],
+            color: HealthcareColors.textPrimary,
           ),
         ),
         const SizedBox(height: 16),
@@ -136,19 +139,16 @@ class PrivacySlide extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: TextStyle(
-                    fontSize: 16,
+                  style: HealthcareTypography.bodyLarge.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
+                    color: HealthcareColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   description,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                    height: 1.4,
+                  style: HealthcareTypography.bodyMedium.copyWith(
+                    color: HealthcareColors.textSecondary,
                   ),
                 ),
               ],
@@ -178,9 +178,8 @@ class PrivacySlide extends StatelessWidget {
           Expanded(
             child: Text(
               'Your trust is everything to us.',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.green[800],
+              style: HealthcareTypography.bodyLarge.copyWith(
+                color: HealthcareColors.safeGreen,
                 fontWeight: FontWeight.w600,
               ),
             ),
