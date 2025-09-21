@@ -13,8 +13,8 @@ import '../models/local_database_models.dart';
 import '../api/endpoints/chat_api.dart';
 import '../core/database/health_data_repository.dart';
 import '../services/unified_polling_service.dart';
-import '../features/chat/providers/chat_provider.dart';
-import '../features/chat/widgets/enhanced_chat_prompts.dart';
+import '../core/features/chat/providers/chat_provider.dart';
+import '../core/features/chat/widgets/enhanced_chat_prompts.dart';
 import '../services/pdf_generation_service.dart';
 import '../services/exceptions/pdf_exceptions.dart';
 
@@ -50,6 +50,7 @@ class _ResultsScreenState extends State<ResultsScreen>
       chatApi: context.read<ChatApi>(),
       repository: context.read<HealthDataRepository>(),
       pollingService: context.read<UnifiedPollingService>(),
+      healthDataProvider: context.read<HealthDataProvider>(),
     );
     
     WidgetsBinding.instance.addPostFrameCallback((_) {

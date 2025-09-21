@@ -77,8 +77,8 @@ class PrivacySlide extends StatelessWidget {
   Widget _buildPrivacyFeatures() {
     final features = [
       {
-        'title': 'Files processed instantly, then deleted—all your data stays on your device',
-        'description': 'We analyze your documents instantly, then delete them—all results stay local',
+        'title': 'All your data stays on your device',
+        'description': 'We analyze your documents instantly, then delete them. All results stay local',
         'icon': Icons.delete_forever_outlined,
       },
       {

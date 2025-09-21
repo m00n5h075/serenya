@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:convert';
 
@@ -13,7 +14,7 @@ class ConsentService {
       return completed == 'true';
     } catch (e) {
       // If secure storage fails, assume onboarding is not completed
-      print('ConsentService: Failed to read onboarding status: $e');
+      debugPrint('ConsentService: Failed to read onboarding status: $e');
       return false;
     }
   }

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../models/local_database_models.dart';
 import '../core/providers/health_data_provider.dart';
 import '../core/database/health_data_repository.dart';
+import '../api/endpoints/chat_api.dart';
 
 /// Chat Data Export Service
 /// 
@@ -149,33 +150,48 @@ class ChatDataExportService {
     };
 
     try {
-      // Get health data entries for this document
-      final healthDataEntries = await _repository.getHealthDataForContent(document.id);
+      // Get lab results for this document
+      final labResults = await _repository.getLabResultsForContent(document.id);
       
-      for (final entry in healthDataEntries) {
-        if (entry.dataType == HealthDataType.labResult) {
-          // Add lab result data
-          structuredData['lab_results']!.add({
-            'name': entry.metricName,
-            'value': entry.value,
-            'unit': entry.unit,
-            'reference_range': entry.referenceRange,
-            'timestamp': entry.timestamp?.toIso8601String(),
-            'document_id': document.id,
-            'confidence_score': entry.confidenceScore,
-          });
-        } else if (entry.dataType == HealthDataType.vitalSign) {
-          // Add vital sign data
-          structuredData['vitals']!.add({
-            'name': entry.metricName,
-            'value': entry.value,
-            'unit': entry.unit,
-            'timestamp': entry.timestamp?.toIso8601String(),
-            'document_id': document.id,
-            'confidence_score': entry.confidenceScore,
-          });
+      for (final labResult in labResults) {
+        // Add lab result data
+        structuredData['lab_results']!.add({
+          'name': labResult.testName,
+          'value': labResult.testValue,
+          'unit': labResult.testUnit,
+          'reference_range_low': labResult.referenceRangeLow,
+          'reference_range_high': labResult.referenceRangeHigh,
+          'reference_range_text': labResult.referenceRangeText,
+          'is_abnormal': labResult.isAbnormal,
+          'timestamp': labResult.testDate?.toIso8601String(),
+          'document_id': document.id,
+          'confidence_score': labResult.confidenceScore,
+        });
+      }
+      
+      // Get vitals for this document
+      final vitals = await _repository.getVitalsForContent(document.id);
+      
+      for (final vital in vitals) {
+        // Add vital sign data
+        // Determine the value based on vital type
+        dynamic vitalValue;
+        if (vital.systolicValue != null && vital.diastolicValue != null) {
+          vitalValue = '${vital.systolicValue}/${vital.diastolicValue}';
+        } else if (vital.numericValue != null) {
+          vitalValue = vital.numericValue;
+        } else {
+          vitalValue = null;
         }
-        // Ignore other data types (AI analysis, documents, etc.)
+        
+        structuredData['vitals']!.add({
+          'name': vital.vitalType.toString(),
+          'value': vitalValue,
+          'unit': vital.unit,
+          'timestamp': vital.measurementDate?.toIso8601String(),
+          'document_id': document.id,
+          'confidence_score': vital.confidenceScore,
+        });
       }
 
     } catch (e) {

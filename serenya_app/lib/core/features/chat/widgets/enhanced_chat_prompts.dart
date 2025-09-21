@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/chat_provider.dart';
-import '../../../services/chat_integration_service.dart';
-import '../../../core/constants/design_tokens.dart';
-import '../../../api/endpoints/chat_api.dart';
+import '../../../../services/chat_integration_service.dart';
+import '../../../constants/design_tokens.dart';
+import '../../../../api/endpoints/chat_api.dart';
 
 /// Enhanced chat prompts widget supporting two-level prompt system
 class EnhancedChatPromptsBottomSheet extends StatelessWidget {

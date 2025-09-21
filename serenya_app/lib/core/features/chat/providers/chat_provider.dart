@@ -1,12 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import '../../../api/endpoints/chat_api.dart';
-import '../../../core/database/health_data_repository.dart';
-import '../../../services/chat_integration_service.dart';
-import '../../../services/unified_polling_service.dart';
-import '../../../services/chat_data_export_service.dart';
-import '../../../core/providers/health_data_provider.dart';
-import '../../../models/local_database_models.dart';
+import '../../../../api/endpoints/chat_api.dart';
+import '../../../database/health_data_repository.dart';
+import '../../../../services/chat_integration_service.dart';
+import '../../../../services/unified_polling_service.dart';
+import '../../../../services/chat_data_export_service.dart';
+import '../../../providers/health_data_provider.dart';
+import '../../../../models/local_database_models.dart';
 
 /// Chat provider that manages conversation state and integrates with polling service
 /// Addresses CTO architectural fixes #2 and #3: Real-time integration and state management

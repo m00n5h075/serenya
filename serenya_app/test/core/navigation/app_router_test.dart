@@ -71,7 +71,7 @@ void main() {
           ChangeNotifierProvider(create: (_) => HealthDataProvider()),
         ],
         child: MaterialApp.router(
-          routerConfig: AppRouter.router,
+          routerConfig: AppRouter.createRouter(mockAppStateProvider),
         ),
       );
     }

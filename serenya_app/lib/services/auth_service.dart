@@ -152,7 +152,7 @@ class AuthService {
         return await _checkOfflineAuthentication();
       }
     } catch (e) {
-      print('AuthService: Failed to read authentication status: $e');
+      debugPrint('AuthService: Failed to read authentication status: $e');
       return false;
     }
   }
