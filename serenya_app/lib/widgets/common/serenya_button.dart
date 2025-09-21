@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/constants/design_tokens.dart';
+import '../serenya_spinner.dart';
 
 /// Reusable button component for Serenya healthcare platform
 /// 
@@ -73,9 +74,10 @@ class SerenyaButton extends StatelessWidget {
     if (isLoading) {
       return SizedBox(
         height: _getButtonHeight() - 24, // Account for padding
-        child: const CircularProgressIndicator(
+        child: const SerenyaSpinnerStatic(
+          size: 20,
           strokeWidth: 2,
-          valueColor: AlwaysStoppedAnimation<Color>(HealthcareColors.serenyaWhite),
+          color: HealthcareColors.serenyaWhite,
         ),
       );
     }

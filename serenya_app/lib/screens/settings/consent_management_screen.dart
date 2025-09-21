@@ -3,6 +3,7 @@ import '../../services/consent_service.dart';
 import '../../core/error_handling/unified_error.dart';
 import '../../core/error_handling/error_widgets.dart';
 import '../../core/navigation/swipe_back_wrapper.dart';
+import '../../widgets/serenya_spinner.dart';
 
 /// Consent Management Screen
 /// 
@@ -137,7 +138,7 @@ class _ConsentManagementScreenState extends State<ConsentManagementScreen> {
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: SerenyaSpinnerLarge())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/security/biometric_auth_service.dart';
 import 'dart:io';
+import '../../../widgets/serenya_spinner.dart';
 
 /// Biometric Setup Dialog with Platform-Specific Guidance
 /// 
@@ -119,7 +120,7 @@ class _BiometricSetupDialogState extends State<BiometricSetupDialog> {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          CircularProgressIndicator(),
+          SerenyaSpinnerMedium(),
           SizedBox(height: 16),
           Text('Checking biometric capabilities...'),
         ],

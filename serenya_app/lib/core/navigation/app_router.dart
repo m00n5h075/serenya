@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../screens/onboarding/onboarding_flow.dart';
 import '../../screens/home_screen.dart';
 import '../providers/app_state_provider.dart';
+import '../../widgets/serenya_spinner.dart';
 
 class AppRouter {
   static GoRouter createRouter(AppStateProvider appStateProvider) {
@@ -109,7 +110,7 @@ class LoadingScreen extends StatelessWidget {
 
     return const Scaffold(
       body: Center(
-        child: CircularProgressIndicator(),
+        child: SerenyaSpinnerLarge(),
       ),
     );
   }

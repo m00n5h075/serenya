@@ -10,6 +10,7 @@ import '../login_screen.dart';
 import 'privacy_data_screen.dart';
 import 'consent_management_screen.dart';
 import '../../core/navigation/swipe_back_wrapper.dart';
+import '../../widgets/serenya_spinner.dart';
 
 /// Main Settings Screen
 /// 
@@ -290,7 +291,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
           
           if (_isLoadingProfile)
-            const Center(child: CircularProgressIndicator())
+            const Center(child: SerenyaSpinnerLarge())
           else ...[
             // Profile header with avatar
             Row(
@@ -534,7 +535,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           padding: const EdgeInsets.all(16),
           child: _isLoadingSubscription
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: SerenyaSpinnerMedium())
               : Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/providers/health_data_provider.dart';
 import '../../core/utils/encryption_utils.dart';
+import '../serenya_spinner.dart';
 import '../../services/processing_service.dart';
 import '../../services/notification_service.dart';
 
@@ -57,7 +58,7 @@ class _UploadDialogState extends State<UploadDialog> {
             const Center(
               child: Column(
                 children: [
-                  CircularProgressIndicator(),
+                  SerenyaSpinnerMedium(),
                   SizedBox(height: 16),
                   Text('Uploading document...'),
                 ],

@@ -18,6 +18,7 @@ import '../core/features/chat/widgets/enhanced_chat_prompts.dart';
 import '../services/pdf_generation_service.dart';
 import '../services/exceptions/pdf_exceptions.dart';
 import '../core/navigation/swipe_back_wrapper.dart';
+import '../widgets/serenya_spinner.dart';
 
 /// Updated Results Screen with integrated chat functionality
 /// Addresses CTO Fix #3: Complete results screen integration
@@ -376,9 +377,7 @@ class _ResultsScreenState extends State<ResultsScreen>
         // Show loading state
         if (chatProvider.isLoading) {
           return const Center(
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(HealthcareColors.serenyaBluePrimary),
-            ),
+            child: SerenyaSpinnerLarge(),
           );
         }
         
@@ -728,9 +727,10 @@ class _ResultsScreenState extends State<ResultsScreen>
                 SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(
+                  child: SerenyaSpinnerStatic(
+                    size: 20,
                     strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    color: Colors.white,
                   ),
                 ),
                 SizedBox(width: 12),
@@ -772,9 +772,10 @@ class _ResultsScreenState extends State<ResultsScreen>
                 SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(
+                  child: SerenyaSpinnerStatic(
+                    size: 20,
                     strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    color: Colors.white,
                   ),
                 ),
                 SizedBox(width: 12),

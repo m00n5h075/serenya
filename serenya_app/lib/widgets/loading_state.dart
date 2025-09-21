@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/constants/app_constants.dart';
+import 'serenya_spinner.dart';
 
 class LoadingState extends StatelessWidget {
   final String message;
@@ -31,10 +32,7 @@ class LoadingState extends StatelessWidget {
                 valueColor: AlwaysStoppedAnimation<Color>(Colors.blue[600]!),
               )
             else
-              CircularProgressIndicator(
-                strokeWidth: 3,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.blue[600]!),
-              ),
+              const SerenyaSpinnerMedium(),
             const SizedBox(height: AppConstants.defaultPadding),
             Text(
               message,
