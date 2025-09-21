@@ -9,6 +9,7 @@ import '../../core/error_handling/error_widgets.dart';
 import '../login_screen.dart';
 import 'privacy_data_screen.dart';
 import 'consent_management_screen.dart';
+import '../../core/navigation/swipe_back_wrapper.dart';
 
 /// Main Settings Screen
 /// 
@@ -257,7 +258,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
-    );
+    ).withSwipeBack();
   }
 
   /// Build profile information section

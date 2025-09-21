@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/navigation/swipe_back_wrapper.dart';
 
 /// Legal Document Viewer for Terms of Service and Privacy Policy
 /// 
@@ -48,7 +49,7 @@ class LegalDocumentViewer extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ).withSwipeBack();
   }
 
   Widget _buildDocumentContent() {

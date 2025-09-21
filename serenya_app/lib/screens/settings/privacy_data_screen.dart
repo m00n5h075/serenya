@@ -3,6 +3,7 @@ import '../../services/data_export_service.dart';
 import '../../services/api_service.dart';
 import '../../core/error_handling/unified_error.dart';
 import '../../core/error_handling/error_widgets.dart';
+import '../../core/navigation/swipe_back_wrapper.dart';
 
 /// Privacy & Data Management Screen
 /// 
@@ -62,7 +63,7 @@ class _PrivacyDataScreenState extends State<PrivacyDataScreen> {
           ],
         ),
       ),
-    );
+    ).withSwipeBack();
   }
 
   /// Build header section with main description

@@ -17,6 +17,7 @@ import '../core/features/chat/providers/chat_provider.dart';
 import '../core/features/chat/widgets/enhanced_chat_prompts.dart';
 import '../services/pdf_generation_service.dart';
 import '../services/exceptions/pdf_exceptions.dart';
+import '../core/navigation/swipe_back_wrapper.dart';
 
 /// Updated Results Screen with integrated chat functionality
 /// Addresses CTO Fix #3: Complete results screen integration
@@ -96,7 +97,8 @@ class _ResultsScreenState extends State<ResultsScreen>
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
       value: _chatProvider,
-      child: Scaffold(
+      child: SwipeBackWrapper(
+        child: Scaffold(
         backgroundColor: HealthcareColors.backgroundPrimary,
         appBar: AppBar(
           title: Text(
@@ -170,6 +172,7 @@ class _ResultsScreenState extends State<ResultsScreen>
                 ],
               ),
         floatingActionButton: _buildFloatingActionButton(),
+        ),
       ),
     );
   }

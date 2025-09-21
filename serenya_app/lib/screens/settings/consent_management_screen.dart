@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/consent_service.dart';
 import '../../core/error_handling/unified_error.dart';
 import '../../core/error_handling/error_widgets.dart';
+import '../../core/navigation/swipe_back_wrapper.dart';
 
 /// Consent Management Screen
 /// 
@@ -155,7 +156,7 @@ class _ConsentManagementScreenState extends State<ConsentManagementScreen> {
                 ],
               ),
             ),
-    );
+    ).withSwipeBack();
   }
 
   /// Build header section with main description
