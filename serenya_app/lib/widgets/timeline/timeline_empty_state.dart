@@ -11,12 +11,13 @@ class TimelineEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppConstants.largePadding),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min, // Allow column to shrink
-          children: [
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(AppConstants.largePadding),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min, // Allow column to shrink
+            children: [
             // Medical illustration (warm, not clinical)
             Container(
               width: 120,
@@ -90,6 +91,7 @@ class TimelineEmptyState extends StatelessWidget {
               ),
             ),
           ],
+        ),
         ),
       ),
     );

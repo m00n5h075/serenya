@@ -13,9 +13,44 @@ class AppStateProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
   final ConsentService _consentService = ConsentService();
 
+  AppStateProvider() {
+    // Set up the circular reference so AuthService can notify us
+    _authService.setAppStateProvider(this);
+  }
+
   bool get isInitialized => _isInitialized;
   bool get isOnboardingComplete => _isOnboardingComplete;
-  bool get isLoggedIn => _isLoggedIn;
+  
+  /// Expose AuthService for components that need direct access (like ConsentSlide)
+  AuthService get authService => _authService;
+  bool get isLoggedIn {
+    // Check actual token existence instead of cached state
+    // This ensures isLoggedIn reflects current authentication status immediately
+    try {
+      final result = _authService.hasValidTokensSync();
+      print('🔍 APP_STATE: isLoggedIn getter called - hasValidTokensSync() returned: $result');
+      // Update cached state if it changed
+      if (result != _isLoggedIn) {
+        print('🔍 APP_STATE: Cached login state changed from $_isLoggedIn to $result');
+        _isLoggedIn = result;
+        // Don't call notifyListeners here to avoid infinite loops
+      }
+      return result;
+    } catch (e) {
+      print('🔍 APP_STATE: ERROR in isLoggedIn getter: $e - returning false');
+      return false;
+    }
+  }
+
+  /// Force refresh the authentication state and notify listeners
+  void refreshAuthState() {
+    final newState = _authService.hasValidTokensSync();
+    if (newState != _isLoggedIn) {
+      _isLoggedIn = newState;
+      debugPrint('APP_STATE: Authentication state changed to: $newState');
+      notifyListeners();
+    }
+  }
   bool get isLoading => _isLoading;
   String? get error => _error;
 
@@ -32,16 +67,23 @@ class AppStateProvider extends ChangeNotifier {
       if (kDebugMode) {
         print('APP_STATE: Checking app state...');
       }
-      // Add timeout to prevent perpetual loading
-      await _checkAppState().timeout(
-        const Duration(seconds: 10),
+      
+      // Start both the state check and minimum loading time
+      final stateCheckFuture = _checkAppState().timeout(
+        const Duration(seconds: 30),
         onTimeout: () {
           if (kDebugMode) {
-            print('APP_STATE: Initialization timed out after 10 seconds');
+            print('APP_STATE: Initialization timed out after 30 seconds');
           }
-          throw TimeoutException('App initialization timed out', const Duration(seconds: 10));
+          throw TimeoutException('App initialization timed out', const Duration(seconds: 30));
         },
       );
+      
+      // Ensure minimum loading time to show spinner (iOS fix)
+      final minimumLoadingFuture = Future.delayed(const Duration(milliseconds: 800));
+      
+      await Future.wait([stateCheckFuture, minimumLoadingFuture]);
+      
       if (kDebugMode) {
         print('APP_STATE: App state checked successfully');
       }
@@ -78,7 +120,8 @@ class AppStateProvider extends ChangeNotifier {
     if (kDebugMode) {
       print('APP_STATE: Checking login status...');
     }
-    final loggedIn = await _authService.isLoggedIn();
+    // During initialization, just use the fast sync check to avoid expensive crypto operations
+    final loggedIn = _authService.hasValidTokensSync();
     if (kDebugMode) {
       print('APP_STATE: Logged in: $loggedIn');
     }
@@ -95,17 +138,25 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   Future<void> completeOnboarding() async {
+    print('🔍 APP_STATE: completeOnboarding() called');
+    print('🔍 APP_STATE: Before - isOnboardingComplete: $_isOnboardingComplete, isLoggedIn: $_isLoggedIn');
     _setLoading(true);
     _clearError();
 
     try {
       await _consentService.markOnboardingCompleted();
       _isOnboardingComplete = true;
+      print('🔍 APP_STATE: After storage write - isOnboardingComplete: $_isOnboardingComplete, isLoggedIn: $_isLoggedIn');
+      print('🔍 APP_STATE: About to notify listeners');
       notifyListeners();
+      print('🔍 APP_STATE: Listeners notified - onboarding completion should trigger router redirect');
     } catch (e) {
+      print('🔍 APP_STATE: ERROR completing onboarding: $e');
       _setError('Failed to complete onboarding: $e');
     } finally {
+      print('🔍 APP_STATE: Setting loading to false');
       _setLoading(false);
+      print('🔍 APP_STATE: completeOnboarding() method complete');
     }
   }
 
@@ -187,5 +238,13 @@ class AppStateProvider extends ChangeNotifier {
   void setLoggedIn(bool loggedIn) {
     _isLoggedIn = loggedIn;
     notifyListeners();
+  }
+
+  // Method to refresh app state after authentication changes
+  Future<void> refreshAppState() async {
+    if (kDebugMode) {
+      print('APP_STATE: Refreshing app state...');
+    }
+    await _checkAppState();
   }
 }

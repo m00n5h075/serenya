@@ -158,8 +158,11 @@ class _BiometricSetupDialogState extends State<BiometricSetupDialog> {
       actions: [
         TextButton(
           onPressed: () {
+            print('🔍 BIOMETRIC_DIALOG: Continue button pressed - calling onSkipped callback');
             widget.onSkipped?.call();
+            print('🔍 BIOMETRIC_DIALOG: onSkipped callback completed - closing dialog');
             Navigator.of(context).pop();
+            print('🔍 BIOMETRIC_DIALOG: Dialog closed');
           },
           child: const Text('Continue'),
         ),

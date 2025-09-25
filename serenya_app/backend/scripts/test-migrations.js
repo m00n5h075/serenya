@@ -22,7 +22,7 @@ const TEST_DB_CONFIG = {
 class MigrationTester {
   constructor() {
     this.client = null;
-    this.migrationsPath = path.join(__dirname, '..', 'migrations');
+    this.migrationsPath = path.join(__dirname, '..', 'lambdas', 'db-init', 'migrations');
     this.testResults = [];
   }
 
@@ -414,10 +414,8 @@ class MigrationTester {
 
       // Step 2: Run all migrations in order
       const migrationFiles = [
-        '001_initial_schema.sql',
-        '002_encryption_schema_updates.sql', 
-        '003_complete_schema_updates.sql',
-        '004_audit_infrastructure.sql'
+        '001_complete_core_schema.sql',
+        '002_audit_infrastructure.sql'
       ];
 
       for (const migrationFile of migrationFiles) {

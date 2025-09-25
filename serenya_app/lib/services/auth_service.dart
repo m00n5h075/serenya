@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -9,6 +10,7 @@ import '../core/constants/app_constants.dart';
 import '../core/utils/encryption_utils.dart';
 import '../core/security/biometric_auth_service.dart';
 import '../core/security/device_key_manager.dart';
+import '../core/providers/app_state_provider.dart';
 
 /// Enhanced Authentication Service for Healthcare Platform
 /// 
@@ -45,7 +47,7 @@ class AuthService {
   static const Duration _healthcareSessionTimeout = Duration(hours: 1);
   static const Duration _biometricReauthInterval = Duration(minutes: 30);
   
-  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
+  late final GoogleSignIn _googleSignIn;
   bool _isGoogleSignInInitialized = false;
   
   final Dio _dio = Dio(BaseOptions(
@@ -56,8 +58,11 @@ class AuthService {
   ));
 
   // Note: BiometricAuthService uses static methods, no instance needed
+  bool _isAuthenticated = false;
+  AppStateProvider? _appStateProvider;
 
   AuthService() {
+    _googleSignIn = GoogleSignIn.instance;
     _setupDioInterceptors();
     _initializeGoogleSignIn();
   }
@@ -67,7 +72,10 @@ class AuthService {
     if (_isGoogleSignInInitialized) return;
     
     try {
-      await _googleSignIn.initialize();
+      // Initialize with web client ID for server-side verification
+      await _googleSignIn.initialize(
+        serverClientId: '623522924605-8j72v19u9an2q4srhn69ohsfaarkj835.apps.googleusercontent.com',
+      );
       _isGoogleSignInInitialized = true;
     } catch (e) {
       // Use a logging framework in production instead of print
@@ -82,10 +90,22 @@ class AuthService {
   void _setupDioInterceptors() {
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
-        // Add authentication headers for authenticated endpoints
-        final token = await _getValidAccessToken();
-        if (token != null && !options.path.contains('/auth/')) {
-          options.headers['Authorization'] = 'Bearer $token';
+        debugPrint('🔧 INTERCEPTOR: Processing request to ${options.path}');
+        
+        // Skip token validation for authentication endpoints to avoid infinite loops
+        if (!options.path.contains('/auth/')) {
+          debugPrint('🔧 INTERCEPTOR: Non-auth endpoint, checking for token');
+          try {
+            final token = await _storage.read(key: _accessTokenKey);
+            if (token != null && !SecurityUtils.isTokenExpired(token)) {
+              options.headers['Authorization'] = 'Bearer $token';
+              debugPrint('🔧 INTERCEPTOR: Added auth token');
+            }
+          } catch (e) {
+            debugPrint('🔧 INTERCEPTOR: Error getting token: $e');
+          }
+        } else {
+          debugPrint('🔧 INTERCEPTOR: Auth endpoint, skipping token validation');
         }
         
         // Add device info headers
@@ -93,35 +113,55 @@ class AuthService {
         options.headers['X-App-Version'] = AppConstants.appVersion;
         options.headers['X-Device-ID'] = await _getDeviceId();
         
+        debugPrint('🔧 INTERCEPTOR: Final headers: ${options.headers}');
+        debugPrint('🔧 INTERCEPTOR: Passing request to next handler');
+        
         handler.next(options);
       },
       
       onError: (error, handler) async {
-        // Handle token expiry with automatic refresh
-        if (error.response?.statusCode == 401) {
+        debugPrint('🔧 INTERCEPTOR: Error caught - ${error.type}, Status: ${error.response?.statusCode}');
+        debugPrint('🔧 INTERCEPTOR: Error message: ${error.message}');
+        
+        // Skip token refresh for authentication endpoints to avoid infinite loops
+        if (error.response?.statusCode == 401 && !error.requestOptions.path.contains('/auth/')) {
+          debugPrint('🔧 INTERCEPTOR: 401 error on non-auth endpoint - attempting token refresh');
           try {
             final refreshed = await _refreshTokenSilently();
             if (refreshed) {
               // Retry the original request with new token
-              final token = await _getValidAccessToken();
-              error.requestOptions.headers['Authorization'] = 'Bearer $token';
-              
-              final retryResponse = await _dio.fetch(error.requestOptions);
-              return handler.resolve(retryResponse);
+              final token = await _storage.read(key: _accessTokenKey);
+              if (token != null) {
+                error.requestOptions.headers['Authorization'] = 'Bearer $token';
+                
+                debugPrint('🔧 INTERCEPTOR: Retrying request with new token');
+                final retryResponse = await _dio.fetch(error.requestOptions);
+                return handler.resolve(retryResponse);
+              }
             }
           } catch (e) {
+            debugPrint('🔧 INTERCEPTOR: Token refresh failed: $e');
             // Refresh failed, user needs to re-authenticate
             await _clearAllAuthData();
           }
+        } else {
+          debugPrint('🔧 INTERCEPTOR: Auth endpoint or non-401 error, skipping token refresh');
         }
         
+        debugPrint('🔧 INTERCEPTOR: Passing error to next handler');
         handler.next(error);
       },
     ));
   }
 
   /// Check if user is currently authenticated
-  Future<bool> isLoggedIn() async {
+  /// [isInitialization] - if true, avoids biometric prompts during app startup
+  Future<bool> isLoggedIn({bool isInitialization = false}) async {
+    // During initialization, skip expensive crypto operations entirely
+    if (isInitialization) {
+      return false;
+    }
+    
     try {
       final accessToken = await _storage.read(key: _accessTokenKey);
       final refreshToken = await _storage.read(key: _refreshTokenKey);
@@ -133,10 +173,15 @@ class AuthService {
       // Check if access token is still valid
       if (!SecurityUtils.isTokenExpired(accessToken)) {
         final isValid = await _checkHealthcareSessionValidity();
-        if (isValid) {
+        if (isValid && !isInitialization) {
           await _updateOfflineAuthCache();
         }
         return isValid;
+      }
+      
+      // During initialization, don't try to refresh tokens (avoid network calls)
+      if (isInitialization) {
+        return false;
       }
       
       // Try to refresh if access token expired
@@ -163,14 +208,23 @@ class AuthService {
     bool requireBiometric = true,
   }) async {
     try {
+      debugPrint('🔑 AUTH_DEBUG: Starting Google authentication...');
+      
       // Ensure Google Sign-In is initialized
       await _initializeGoogleSignIn();
       if (!_isGoogleSignInInitialized) {
+        debugPrint('❌ AUTH_DEBUG: Google Sign-In initialization failed');
         return AuthResult.failed('Google Sign-In initialization failed');
       }
+      
+      debugPrint('✅ AUTH_DEBUG: Google Sign-In initialized, starting authentication...');
 
-      // Step 1: Google OAuth authentication
-      final GoogleSignInAccount googleUser = await _googleSignIn.authenticate();
+      // Step 1: Google OAuth authentication  
+      final GoogleSignInAccount? googleUser = await _googleSignIn.authenticate();
+      if (googleUser == null) {
+        return AuthResult.cancelled('User cancelled Google sign-in');
+      }
+      debugPrint('✅ AUTH_DEBUG: Google authentication completed for user: ${googleUser.email}');
 
       // Get authorization for the required scopes to access tokens
       const scopes = ['email', 'profile'];
@@ -195,16 +249,28 @@ class AuthService {
       }
 
       // Step 3: Prepare backend authentication request
+      debugPrint('🚀 AUTH_DEBUG: Building authentication request...');
       final authRequest = await _buildAuthenticationRequest(
         googleAuth, 
         authorization,
         consentData,
       );
+      debugPrint('🚀 AUTH_DEBUG: Authentication request built successfully');
+      
+      debugPrint('🚀 AUTH_DEBUG: About to make network request to ${_dio.options.baseUrl}/auth/oauth-onboarding');
+      debugPrint('🚀 AUTH_DEBUG: Request headers: ${_dio.options.headers}');
+      debugPrint('🚀 AUTH_DEBUG: Request data: ${jsonEncode(authRequest)}');
       
       // Step 4: Backend authentication via unified OAuth endpoint
-      final response = await _dio.post('/auth/oauth-onboarding', data: authRequest);
-      
-      if (response.statusCode == 200) {
+      debugPrint('🚀 AUTH_DEBUG: Making POST request...');
+      try {
+        debugPrint('🚀 AUTH_DEBUG: Dio configuration - connectTimeout: ${_dio.options.connectTimeout}');
+        debugPrint('🚀 AUTH_DEBUG: Dio configuration - receiveTimeout: ${_dio.options.receiveTimeout}');
+        final response = await _dio.post('/auth/oauth-onboarding', data: authRequest);
+        debugPrint('🚀 AUTH_DEBUG: Got response with status: ${response.statusCode}');
+        debugPrint('🚀 AUTH_DEBUG: Response data: ${response.data}');
+        
+        if (response.statusCode == 200) {
         final authData = response.data;
         
         // Check if this is an error response
@@ -224,6 +290,9 @@ class AuthService {
           await _markBiometricSession();
         }
         
+        // Step 7: Mark user as authenticated for UI state updates
+        _markAuthenticated();
+        
         return AuthResult.success(
           'Authentication successful',
           userData: authData['user'],
@@ -233,15 +302,32 @@ class AuthService {
             'expires_in': authData['expires_in'],
           },
         );
+        } else {
+          // Handle non-200 status codes
+          debugPrint('❌ AUTH_DEBUG: Non-200 status code: ${response.statusCode}');
+          return AuthResult.failed('Authentication failed with status: ${response.statusCode}');
+        }
+      } on DioException catch (e) {
+      debugPrint('🔥 AUTH_DEBUG: DioException caught: ${e.type}');
+      debugPrint('🔥 AUTH_DEBUG: Error message: ${e.message}');
+      debugPrint('🔥 AUTH_DEBUG: Response status: ${e.response?.statusCode}');
+      debugPrint('🔥 AUTH_DEBUG: Response data: ${e.response?.data}');
+      debugPrint('🔥 AUTH_DEBUG: Response headers: ${e.response?.headers}');
+      await _googleSignIn.signOut();
+      
+      // Handle specific backend errors
+      if (e.response?.statusCode == 400 && e.response?.data != null) {
+        final errorData = e.response!.data;
+        if (errorData is Map && errorData.containsKey('error')) {
+          return AuthResult.failed('Google authentication failed: ${errorData['error_description'] ?? errorData['error']}');
+        }
       }
       
-      // Handle non-200 status codes
-      return AuthResult.failed('Authentication failed with status: ${response.statusCode}');
-      
-    } on DioException catch (e) {
-      await _googleSignIn.signOut();
       return _handleDioError(e, 'Google authentication');
+    }
     } catch (e) {
+      debugPrint('💥 AUTH_DEBUG: General exception caught: $e');
+      debugPrint('💥 AUTH_DEBUG: Exception type: ${e.runtimeType}');
       await _googleSignIn.signOut();
       return AuthResult.failed('Authentication error: $e');
     }
@@ -297,6 +383,9 @@ class AuthService {
         if (requireBiometric && await BiometricAuthService.isBiometricAvailable()) {
           await _markBiometricSession();
         }
+        
+        // Step 7: Mark user as authenticated for UI state updates
+        _markAuthenticated();
         
         return AuthResult.success(
           'Authentication successful',
@@ -363,6 +452,10 @@ class AuthService {
     } catch (e) {
       // Encryption context optional - continue without it
       debugPrint('Warning: Could not build encryption context: $e');
+      // Log the specific error for debugging
+      if (kDebugMode) {
+        print('DeviceKeyManager initialization failed during auth: $e');
+      }
     }
     
     return request;
@@ -395,7 +488,7 @@ class AuthService {
     
     final request = {
       'provider': 'google', // Specify OAuth provider for unified endpoint
-      'google_token': authorization.accessToken, // Backend expects 'google_token' at root level
+      'google_token': googleAuth.idToken, // Use ID token for backend verification
       'id_token': googleAuth.idToken, // Backend expects 'id_token' at root level
       'device_info': {
         'platform': Platform.operatingSystem.toLowerCase(),
@@ -417,6 +510,10 @@ class AuthService {
     } catch (e) {
       // Encryption context optional - continue without it
       debugPrint('Warning: Could not build encryption context: $e');
+      // Log the specific error for debugging
+      if (kDebugMode) {
+        print('DeviceKeyManager initialization failed during auth: $e');
+      }
     }
     
     return request;
@@ -426,7 +523,14 @@ class AuthService {
   Future<Map<String, dynamic>> _buildEncryptionContext() async {
     // Get device key material for server integration
     // Note: Using initialize to ensure device key system is ready
-    await DeviceKeyManager.initialize();
+    try {
+      await DeviceKeyManager.initialize();
+    } catch (e) {
+      // If device key initialization fails, continue with basic context
+      if (kDebugMode) {
+        print('DeviceKeyManager initialization failed in _buildEncryptionContext: $e');
+      }
+    }
     
     // FIXED: Match backend API contract exactly
     return {
@@ -445,6 +549,8 @@ class AuthService {
       _storage.write(key: _sessionDataKey, value: jsonEncode(authData['session'])),
       _storage.write(key: _lastAuthTimeKey, value: DateTime.now().toIso8601String()),
     ]);
+    
+    // Don't mark authenticated yet - let the caller do it after callback completes
   }
 
   /// Get valid access token with automatic refresh
@@ -562,6 +668,9 @@ class AuthService {
       _storage.delete(key: _biometricSessionKey),
       _storage.delete(key: _offlineAuthKey),
     ]);
+    
+    // Clear authentication flag
+    _isAuthenticated = false;
   }
 
   /// Get current user data
@@ -593,20 +702,12 @@ class AuthService {
     return await _getValidAccessToken();
   }
 
-  /// Get user profile from backend
+  /// Get user profile from local storage (replaces redundant API call)
+  /// Profile data is already available from authentication response
   Future<Map<String, dynamic>?> getUserProfile() async {
-    try {
-      final response = await _dio.get('/user/profile');
-      
-      if (response.statusCode == 200 && response.data['success'] == true) {
-        return response.data['data'];
-      }
-      
-      return null;
-    } on DioException catch (e) {
-      debugPrint('Get user profile error: ${e.message}');
-      return null;
-    }
+    // Use locally stored profile data instead of making API call
+    // This data comes from the authentication response and is already current
+    return await getCurrentUser();
   }
 
   /// Check if Apple Sign-In is available on current platform
@@ -753,12 +854,49 @@ class AuthService {
 
   /// Get current session ID
   Future<String?> getSessionId() async {
-    final sessionData = await _storage.read(key: _sessionDataKey);
-    if (sessionData != null) {
-      final data = jsonDecode(sessionData);
-      return data['session_id'] as String?;
+    try {
+      final sessionData = await _storage.read(key: _sessionDataKey);
+      if (sessionData != null && sessionData.isNotEmpty) {
+        final data = jsonDecode(sessionData);
+        if (data != null && data is Map<String, dynamic>) {
+          return data['session_id'] as String?;
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error getting session ID: $e');
+      }
     }
     return null;
+  }
+
+  /// Synchronously check if user has valid tokens (for UI state checks)
+  bool hasValidTokensSync() {
+    debugPrint('🔍 AUTH_DEBUG: hasValidTokensSync called - _isAuthenticated: $_isAuthenticated');
+    return _isAuthenticated;
+  }
+
+  /// Set reference to app state provider for notifications
+  void setAppStateProvider(AppStateProvider provider) {
+    _appStateProvider = provider;
+  }
+
+  /// Mark that user has successfully authenticated (for sync checks)
+  void _markAuthenticated() {
+    debugPrint('🔍 AUTH_DEBUG: _markAuthenticated() called - setting _isAuthenticated = true');
+    _isAuthenticated = true;
+    debugPrint('🔍 AUTH_DEBUG: Authentication state set - AppStateProvider will be notified later by onboarding flow');
+  }
+  
+  /// Notify app state provider of authentication change (called by onboarding flow after biometric setup)
+  void notifyAuthenticationComplete() {
+    debugPrint('🔍 AUTH_DEBUG: notifyAuthenticationComplete() called');
+    if (_appStateProvider != null) {
+      _appStateProvider!.refreshAuthState();
+      debugPrint('🔍 AUTH_DEBUG: Notified AppStateProvider of authentication state change');
+    } else {
+      debugPrint('🔍 AUTH_DEBUG: No AppStateProvider reference - cannot notify');
+    }
   }
 }
 

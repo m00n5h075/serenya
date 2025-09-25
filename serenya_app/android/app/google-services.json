@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "623522924605",
+    "project_id": "serenya-472900",
+    "storage_bucket": "serenya-472900.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:623522924605:android:a9cntbv1d8pnl4hv4ujf7nqegh7dc5gl",
+        "android_client_info": {
+          "package_name": "com.serenya.serenya_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "623522924605-a9cntbv1d8pnl4hv4ujf7nqegh7dc5gl.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.serenya.serenya_app",
+            "certificate_hash": "cdbcf51cf7964c39745ceedf5fc1b0f14eb48e2e"
+          }
+        },
+        {
+          "client_id": "623522924605-8j72v19u9an2q4srhn69ohsfaarkj835.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDummyKeyForSerenya"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "623522924605-8j72v19u9an2q4srhn69ohsfaarkj835.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

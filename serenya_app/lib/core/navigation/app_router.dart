@@ -13,8 +13,9 @@ class AppRouter {
       initialLocation: '/loading',
       refreshListenable: appStateProvider,
       redirect: (context, state) {
-      final appState = context.read<AppStateProvider>();
-      final currentPath = state.fullPath;
+      try {
+        final appState = context.read<AppStateProvider>();
+        final currentPath = state.fullPath;
       
       if (kDebugMode) {
         print('ROUTER: Current path: $currentPath');
@@ -48,26 +49,37 @@ class AppRouter {
         return currentPath != '/error' ? '/error' : null;
       }
       
-      // If onboarding not complete, redirect to onboarding
+      // Simplified routing logic
+      print('🔍 ROUTER: Evaluating redirect logic - isOnboardingComplete: ${appState.isOnboardingComplete}, isLoggedIn: ${appState.isLoggedIn}');
+      
       if (!appState.isOnboardingComplete) {
-        if (kDebugMode) {
-          print('ROUTER: Redirecting to onboarding');
-        }
+        // If onboarding not complete, always go to onboarding (handles both logged in and not logged in states)
+        print('🔍 ROUTER: CONDITION 1 - Onboarding not complete, redirecting to onboarding');
         return currentPath != '/onboarding' ? '/onboarding' : null;
       }
       
-      // If not logged in, redirect to onboarding
-      if (!appState.isLoggedIn) {
+      // If onboarding complete but not logged in, go to onboarding for re-authentication
+      if (appState.isOnboardingComplete && !appState.isLoggedIn) {
+        print('🔍 ROUTER: CONDITION 2 - Onboarding complete but not logged in, redirecting to onboarding');
         return currentPath != '/onboarding' ? '/onboarding' : null;
       }
       
-      // If logged in and on onboarding, redirect to home
-      if (appState.isLoggedIn && currentPath == '/onboarding') {
+      // If both onboarding complete and logged in, go to home
+      if (appState.isOnboardingComplete && appState.isLoggedIn && currentPath != '/home') {
+        print('🔍 ROUTER: CONDITION 3 - Both onboarding complete and logged in, redirecting to home');
         return '/home';
       }
       
       // No redirect needed
+      print('🔍 ROUTER: NO REDIRECT NEEDED - staying on current path: $currentPath');
       return null;
+      } catch (e) {
+        // Context may be disposed during navigation - return null to avoid crash
+        if (kDebugMode) {
+          print('ROUTER: Error accessing AppStateProvider (context disposed): $e');
+        }
+        return null;
+      }
     },
     routes: [
       GoRoute(
@@ -81,11 +93,30 @@ class AppRouter {
       GoRoute(
         path: '/onboarding',
         builder: (context, state) => OnboardingFlow(
-          onComplete: () => context.read<AppStateProvider>().completeOnboarding(),
+          onComplete: () {
+            print('🔍 ROUTER: onComplete callback RECEIVED from OnboardingFlow');
+            try {
+              final appStateProvider = context.read<AppStateProvider>();
+              print('🔍 ROUTER: Got AppStateProvider, calling completeOnboarding()');
+              appStateProvider.completeOnboarding();
+              print('🔍 ROUTER: completeOnboarding() call completed');
+            } catch (e) {
+              print('🔍 ROUTER: ERROR in onComplete callback: $e');
+              if (kDebugMode) {
+                print('ROUTER: Error completing onboarding (context disposed): $e');
+              }
+            }
+          },
           onAuthenticationSuccess: () {
-            final appState = context.read<AppStateProvider>();
-            appState.completeOnboarding();
-            appState.setLoggedIn(true);
+            try {
+              final appState = context.read<AppStateProvider>();
+              appState.completeOnboarding();
+              appState.setLoggedIn(true);
+            } catch (e) {
+              if (kDebugMode) {
+                print('ROUTER: Error in auth success (context disposed): $e');
+              }
+            }
           },
         ),
       ),

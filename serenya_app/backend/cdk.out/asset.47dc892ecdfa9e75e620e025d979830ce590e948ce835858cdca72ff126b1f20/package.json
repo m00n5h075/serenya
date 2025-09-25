@@ -1,0 +1,9 @@
+{
+  "name": "serenya-chat-prompts-lambda",
+  "version": "1.0.0",
+  "description": "Chat prompts retrieval for conversation starters",
+  "main": "chatPrompts.js",
+  "dependencies": {
+    "aws-sdk": "^2.1481.0"
+  }
+}

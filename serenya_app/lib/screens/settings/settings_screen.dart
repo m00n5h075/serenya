@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/app_state_provider.dart';
 import '../../services/premium_user_service.dart';
@@ -7,6 +8,7 @@ import '../../core/security/biometric_auth_service.dart';
 import '../../core/error_handling/unified_error.dart';
 import '../../core/error_handling/error_widgets.dart';
 import '../login_screen.dart';
+import '../onboarding/widgets/legal_document_viewer.dart';
 import 'privacy_data_screen.dart';
 import 'consent_management_screen.dart';
 import '../../core/navigation/swipe_back_wrapper.dart';
@@ -775,9 +777,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// Build legal item helper
   Widget _buildLegalItem(String title) {
     return InkWell(
-      onTap: () {
-        // TODO: Open external links to website
-      },
+      onTap: () => _handleLegalItemTap(title),
       child: Container(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -791,15 +791,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
-            const Icon(
-              Icons.open_in_new,
+            Icon(
+              title == 'Contact Support' ? Icons.open_in_new : Icons.arrow_forward_ios,
               size: 16,
-              color: Color(0xFFBDBDBD),
+              color: const Color(0xFFBDBDBD),
             ),
           ],
         ),
       ),
     );
+  }
+
+  /// Handle legal item taps
+  void _handleLegalItemTap(String title) {
+    switch (title) {
+      case 'Terms of Service':
+        LegalDocumentViewer.showTerms(context);
+        break;
+      case 'Privacy Policy':
+        LegalDocumentViewer.showPrivacy(context);
+        break;
+      case 'Contact Support':
+        _launchSupportEmail();
+        break;
+    }
+  }
+
+  /// Handle support contact by copying email to clipboard
+  Future<void> _launchSupportEmail() async {
+    await Clipboard.setData(const ClipboardData(text: 'support@serenya.ai'));
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.copy, color: Colors.white, size: 20),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Email address copied to clipboard: support@serenya.ai',
+                  style: TextStyle(fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+          duration: Duration(seconds: 4),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
   /// Build logout button

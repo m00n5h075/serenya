@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../../services/consent_service.dart';
+import '../../core/providers/app_state_provider.dart';
 import 'slides/welcome_slide.dart';
 import 'slides/privacy_slide.dart';
 import 'slides/disclaimer_slide.dart';
@@ -41,11 +43,13 @@ class _OnboardingFlowState extends State<OnboardingFlow>
   @override
   void initState() {
     super.initState();
+    print('ONBOARDING_FLOW: initState called');
     _trackSlideView(_currentIndex);
   }
 
   @override
   void dispose() {
+    print('ONBOARDING_FLOW: dispose called');
     _pageController.dispose();
     super.dispose();
   }
@@ -82,17 +86,17 @@ class _OnboardingFlowState extends State<OnboardingFlow>
   }
 
   Future<void> _handleConsentComplete(bool agreedToTerms, bool understoodDisclaimer, bool authSuccess) async {
+    print('ONBOARDING_FLOW: _handleConsentComplete called with authSuccess: $authSuccess, mounted: $mounted');
+    
     // Record the consent first
     await _consentService.recordConsent(agreedToTerms, understoodDisclaimer);
+    print('ONBOARDING_FLOW: Consent recorded, mounted: $mounted');
     
-    if (authSuccess) {
-      // Authentication was successful - show biometric setup
-      _showBiometricSetup();
-      // Only mark onboarding complete on successful authentication
-      if (widget.onComplete != null) {
-        widget.onComplete!();
-      }
-    } else {
+    // Biometric setup and onboarding completion are now handled in consent slide
+    // This callback is just for consent recording and any additional processing
+    print('ONBOARDING_FLOW: Consent processing complete');
+    
+    if (!authSuccess) {
       // Authentication failed - show error but stay on onboarding
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -123,30 +127,66 @@ class _OnboardingFlowState extends State<OnboardingFlow>
         );
       }
       // Do NOT call onComplete - keep user on onboarding flow
+    } else {
+      // Authentication successful - show biometric setup dialog
+      print('ONBOARDING_FLOW: Authentication successful, showing biometric setup');
+      if (mounted) {
+        _showBiometricSetupDialog();
+      }
     }
   }
 
   /// Show biometric setup dialog after successful authentication
-  Future<void> _showBiometricSetup() async {
-    await showDialog<void>(
+  Future<void> _showBiometricSetupDialog() async {
+    print('ONBOARDING_FLOW: Showing biometric setup dialog');
+    
+    showDialog(
       context: context,
-      barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        return BiometricSetupDialog(
-          onSetupComplete: () {
-            // Biometric setup completed successfully
-            if (widget.onAuthenticationSuccess != null) {
-              widget.onAuthenticationSuccess!();
-            }
-          },
-          onSkipped: () {
-            // User skipped biometric setup - still proceed
-            if (widget.onAuthenticationSuccess != null) {
-              widget.onAuthenticationSuccess!();
-            }
-          },
-        );
-      },
+      barrierDismissible: false, // User must complete or skip biometric setup
+      builder: (context) => BiometricSetupDialog(
+        onSetupComplete: () async {
+          print('🔍 ONBOARDING_FLOW: Biometric setup completed, completing onboarding');
+          // Small delay to ensure dialog is fully closed
+          await Future.delayed(const Duration(milliseconds: 100));
+          
+          // Notify AuthService that authentication is complete so router can redirect
+          if (mounted) {
+            final authService = context.read<AppStateProvider>().authService;
+            authService.notifyAuthenticationComplete();
+            print('🔍 ONBOARDING_FLOW: Notified AuthService of authentication completion');
+          }
+          
+          if (widget.onComplete != null && mounted) {
+            print('🔍 ONBOARDING_FLOW: Calling widget.onComplete callback');
+            widget.onComplete!();
+          } else {
+            print('🔍 ONBOARDING_FLOW: onComplete is null or widget unmounted');
+          }
+        },
+        onSkipped: () async {
+          print('🔍 ONBOARDING_FLOW: onSkipped callback RECEIVED from BiometricSetupDialog');
+          print('🔍 ONBOARDING_FLOW: widget.onComplete is ${widget.onComplete != null ? 'NOT NULL' : 'NULL'}');
+          print('🔍 ONBOARDING_FLOW: mounted is $mounted');
+          
+          // Small delay to ensure dialog is fully closed
+          await Future.delayed(const Duration(milliseconds: 100));
+          
+          // Notify AuthService that authentication is complete so router can redirect
+          if (mounted) {
+            final authService = context.read<AppStateProvider>().authService;
+            authService.notifyAuthenticationComplete();
+            print('🔍 ONBOARDING_FLOW: Notified AuthService of authentication completion');
+          }
+          
+          if (widget.onComplete != null && mounted) {
+            print('🔍 ONBOARDING_FLOW: About to call widget.onComplete!()');
+            widget.onComplete!();
+            print('🔍 ONBOARDING_FLOW: widget.onComplete!() call completed');
+          } else {
+            print('🔍 ONBOARDING_FLOW: CANNOT call onComplete - onComplete is null: ${widget.onComplete == null}, unmounted: ${!mounted}');
+          }
+        },
+      ),
     );
   }
 
@@ -201,17 +241,15 @@ class _OnboardingFlowState extends State<OnboardingFlow>
           ),
           
           // Progress indicator at bottom
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.only(
-                bottom: HealthcareSpacing.md,
-                top: HealthcareSpacing.xs,
-              ),
-              child: ProgressDots(
-                currentIndex: _currentIndex,
-                totalCount: _totalSlides,
-                slideNames: _slideNames,
-              ),
+          Padding(
+            padding: const EdgeInsets.only(
+              bottom: HealthcareSpacing.md,
+              top: HealthcareSpacing.xs,
+            ),
+            child: ProgressDots(
+              currentIndex: _currentIndex,
+              totalCount: _totalSlides,
+              slideNames: _slideNames,
             ),
           ),
         ],

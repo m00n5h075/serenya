@@ -1,0 +1,11 @@
+{
+  "name": "serenya-upload-lambda",
+  "version": "1.0.0",
+  "description": "File upload with virus scanning and validation",
+  "main": "upload.js",
+  "dependencies": {
+    "aws-sdk": "^2.1481.0",
+    "aws-lambda-multipart-parser": "^1.0.1",
+    "sharp": "^0.32.6"
+  }
+}

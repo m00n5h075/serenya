@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:cryptography/cryptography.dart';
@@ -31,9 +32,31 @@ class DeviceKeyManager {
   static const String _keyVersionKey = 'serenya_key_version';
   static const String _deviceIdentifierKey = 'serenya_device_id';
   
+  // Prevent multiple simultaneous initializations
+  static bool _isInitializing = false;
+  static bool _isInitialized = false;
+  
   /// Initialize the device root key system
   static Future<void> initialize() async {
+    // Return immediately if already initialized or currently initializing
+    if (_isInitialized) {
+      return;
+    }
+    
+    if (_isInitializing) {
+      // If currently initializing, wait for completion
+      while (_isInitializing && !_isInitialized) {
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+      return;
+    }
+    
+    _isInitializing = true;
+    
     try {
+      // Ensure Flutter's services binding is initialized before accessing secure storage
+      await _ensureFlutterBindingInitialized();
+      
       // Check if device root key exists
       if (!await _deviceRootKeyExists()) {
         await _generateAndStoreDeviceRootKey();
@@ -42,11 +65,24 @@ class DeviceKeyManager {
       // Verify key integrity
       await _verifyKeyIntegrity();
       
+      _isInitialized = true;
       await _logSecurityEvent('device_key_manager_initialized');
     } catch (e) {
       await _logSecurityEvent('device_key_manager_init_failed', error: e.toString());
       rethrow;
+    } finally {
+      _isInitializing = false;
     }
+  }
+
+  /// Ensure Flutter's services binding is initialized before accessing platform channels
+  static Future<void> _ensureFlutterBindingInitialized() async {
+    // This ensures that the platform channels are ready before accessing secure storage
+    // WidgetsBinding.instance is never null in modern Flutter, but ensure it's initialized
+    WidgetsFlutterBinding.ensureInitialized();
+    
+    // Add a small delay to ensure platform channels are fully ready
+    await Future.delayed(const Duration(milliseconds: 100));
   }
 
   /// Generate and securely store the device root key
@@ -155,15 +191,37 @@ class DeviceKeyManager {
   /// Retrieve device root key with biometric authentication
   static Future<Uint8List> getDeviceRootKeyWithAuth() async {
     try {
-      // Require authentication to access root key
-      final authResult = await BiometricAuthService.authenticate(
-        reason: 'Access your secure medical data encryption key',
-      );
+      String authMethod = 'none';
       
-      if (!authResult.success) {
-        await _logSecurityEvent('key_access_denied', 
-            reason: authResult.failureReason ?? 'authentication_failed');
-        throw SecurityException('Authentication failed: ${authResult.failureReason}');
+      // Check if biometric authentication is available
+      final isAvailable = await BiometricAuthService.isBiometricAvailable();
+      
+      if (isAvailable) {
+        // Require authentication to access root key
+        final authResult = await BiometricAuthService.authenticate(
+          reason: 'Access your secure medical data encryption key',
+        );
+        
+        if (!authResult.success) {
+          await _logSecurityEvent('key_access_denied', 
+              reason: authResult.failureReason ?? 'authentication_failed');
+          throw SecurityException('Authentication failed: ${authResult.failureReason}');
+        }
+        
+        authMethod = authResult.method.toString();
+      } else {
+        // Fallback for development/testing environments without biometrics
+        if (kDebugMode) {
+          await _logSecurityEvent('key_access_no_biometrics', 
+              reason: 'biometric_not_available_development_mode');
+          print('DEVICE_KEY_MANAGER: No biometrics available, allowing access in debug mode');
+          authMethod = 'debug_fallback';
+        } else {
+          // In production, require some form of authentication
+          await _logSecurityEvent('key_access_denied', 
+              reason: 'no_auth_methods_available');
+          throw SecurityException('Authentication failed: no_auth_methods_available');
+        }
       }
       
       // Retrieve key from secure storage
@@ -175,7 +233,7 @@ class DeviceKeyManager {
       final rootKey = base64.decode(base64Key);
       
       await _logSecurityEvent('device_root_key_accessed', 
-          authMethod: authResult.method.toString());
+          authMethod: authMethod);
       
       return Uint8List.fromList(rootKey);
       

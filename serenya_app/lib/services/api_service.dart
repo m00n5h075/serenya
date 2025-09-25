@@ -263,14 +263,18 @@ class ApiService {
     }
   }
 
-  /// Get user profile information
+  /// Get user profile information from local storage
+  /// Profile data is already available from authentication response
   Future<ApiResult<Map<String, dynamic>>> getUserProfile() async {
     try {
-      final response = await _dio.get('/user/profile');
-      return _handleResponse(response, 'User profile retrieval');
-
-    } on DioException catch (e) {
-      return _handleDioError(e, 'User profile retrieval');
+      final userData = await _authService.getCurrentUser();
+      if (userData != null) {
+        return ApiResult.success(userData, 'User profile retrieved successfully');
+      } else {
+        return ApiResult.failed('No user profile data available');
+      }
+    } catch (e) {
+      return ApiResult.failed('Failed to retrieve user profile: $e');
     }
   }
 

@@ -429,6 +429,21 @@ const SubscriptionService = {
     return result.rows[0];
   },
   
+  async getUserLatestSubscription(userId) {
+    const result = await query(`
+      SELECT * FROM subscriptions 
+      WHERE user_id = $1 
+      ORDER BY created_at DESC 
+      LIMIT 1
+    `, [userId]);
+    
+    if (result.rows[0]) {
+      // Decrypt sensitive subscription data
+      return await decryptFields(result.rows[0], ['external_subscription_id']);
+    }
+    return result.rows[0];
+  },
+  
   async getUserSubscriptionHistory(userId) {
     const result = await query(`
       SELECT * FROM subscriptions 

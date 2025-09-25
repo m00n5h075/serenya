@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../widgets/serenya_spinner.dart';
 
 /// Enhanced Onboarding Button with Healthcare Accessibility
 /// 
@@ -70,14 +71,9 @@ class OnboardingButton extends StatelessWidget {
     if (isLoading) {
       return Semantics(
         liveRegion: true,
-        child: SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            valueColor: AlwaysStoppedAnimation<Color>(_getTextColor(context)),
-            semanticsLabel: 'Loading',
-          ),
+        child: SerenyaSpinnerStatic(
+          size: 20,
+          color: _getTextColor(context),
         ),
       );
     }

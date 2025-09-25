@@ -10,6 +10,7 @@ import 'core/navigation/app_router.dart';
 import 'services/auth_service.dart';
 import 'services/unified_polling_service.dart';
 import 'services/pdf_cleanup_service.dart';
+import 'widgets/serenya_spinner.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,7 +60,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
   
   Future<void> _initializeApp() async {
-    await _appStateProvider.initialize();
+    // Start initialization in background - don't await it here
+    // This allows the UI to render immediately with loading state
+    _appStateProvider.initialize();
     
     // Only initialize polling service after user is authenticated and has jobs to monitor
     // This will be called later when user logs in
@@ -122,16 +125,62 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         ChangeNotifierProvider.value(value: _appStateProvider),
         ChangeNotifierProvider.value(value: _healthDataProvider),
       ],
-      child: MaterialApp.router(
-        title: 'Serenya',
-        theme: HealthcareTheme.lightTheme.copyWith(
-          extensions: <ThemeExtension<dynamic>>[
-            HealthcareThemeExtensions.confidenceTheme,
-            HealthcareThemeExtensions.medicalSafetyTheme,
+      child: Consumer<AppStateProvider>(
+        builder: (context, appState, child) {
+          // Show immediate loading screen if not initialized
+          if (!appState.isInitialized) {
+            return MaterialApp(
+              title: 'Serenya',
+              theme: HealthcareTheme.lightTheme.copyWith(
+                extensions: <ThemeExtension<dynamic>>[
+                  HealthcareThemeExtensions.confidenceTheme,
+                  HealthcareThemeExtensions.medicalSafetyTheme,
+                ],
+              ),
+              home: _buildLoadingScreen(),
+              debugShowCheckedModeBanner: false,
+            );
+          }
+          
+          // Show main app once initialized
+          return MaterialApp.router(
+            title: 'Serenya',
+            theme: HealthcareTheme.lightTheme.copyWith(
+              extensions: <ThemeExtension<dynamic>>[
+                HealthcareThemeExtensions.confidenceTheme,
+                HealthcareThemeExtensions.medicalSafetyTheme,
+              ],
+            ),
+            routerConfig: AppRouter.createRouter(_appStateProvider),
+            debugShowCheckedModeBanner: false,
+          );
+        },
+      ),
+    );
+  }
+  
+  Widget _buildLoadingScreen() {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SerenyaSpinnerStatic(
+              size: 40,
+              color: Color(0xFF2196F3),
+            ),
+            SizedBox(height: 24),
+            Text(
+              'Loading Serenya...',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF2196F3),
+              ),
+            ),
           ],
         ),
-        routerConfig: AppRouter.createRouter(_appStateProvider),
-        debugShowCheckedModeBanner: false,
       ),
     );
   }

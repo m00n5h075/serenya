@@ -59,8 +59,16 @@ class LocalAuditLogger {
         version: 1,
         onCreate: _createAuditTables,
         onOpen: (db) async {
-          // Enable WAL mode for better performance
-          await db.execute('PRAGMA journal_mode=WAL;');
+          try {
+            // Enable WAL mode for better performance
+            // Handle Android emulator limitations gracefully
+            await db.execute('PRAGMA journal_mode=WAL;');
+          } catch (e) {
+            if (kDebugMode) {
+              print('AUDIT_INIT: WAL mode not supported, using default journal mode: $e');
+            }
+            // Continue without WAL mode - not critical for audit functionality
+          }
         },
       );
 

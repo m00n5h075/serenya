@@ -54,10 +54,12 @@ class MockAuthService extends _i1.Mock implements _i2.AuthService {
   }
 
   @override
-  _i4.Future<bool> isLoggedIn() => (super.noSuchMethod(
+  _i4.Future<bool> isLoggedIn({bool? isInitialization = false}) =>
+      (super.noSuchMethod(
         Invocation.method(
           #isLoggedIn,
           [],
+          {#isInitialization: isInitialization},
         ),
         returnValue: _i4.Future<bool>.value(false),
       ) as _i4.Future<bool>);

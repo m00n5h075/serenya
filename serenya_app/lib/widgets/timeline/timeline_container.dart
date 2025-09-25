@@ -83,19 +83,15 @@ class _TimelineContainerState extends State<TimelineContainer> {
         final isLoadingMore = widget.provider.isLoadingMore;
         final error = widget.provider.error;
         
-        // Error state
-        if (error != null) {
-          return _buildErrorState(error);
+        // For any errors or issues, show the welcoming empty state instead of anxiety-inducing error messages
+        // This prioritizes user emotional experience over technical error reporting
+        if (error != null || (documents.isEmpty && !isLoading)) {
+          return _buildEmptyState();
         }
 
         // Loading state (first load)
         if (isLoading && documents.isEmpty) {
           return _buildLoadingState();
-        }
-
-        // Empty state
-        if (documents.isEmpty && !isLoading) {
-          return _buildEmptyState();
         }
 
         // Timeline list with documents and infinite scroll
@@ -160,61 +156,6 @@ class _TimelineContainerState extends State<TimelineContainer> {
     await widget.provider.loadMoreContent(contentType: widget.filterType);
   }
 
-  /// Build error state with refresh capability
-  Widget _buildErrorState(String error) {
-    return RefreshIndicator(
-      onRefresh: _loadInitialContent,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: SizedBox(
-          height: 400,
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.error_outline, 
-                  size: 64, 
-                  color: Colors.red[400],
-                ),
-                const SizedBox(height: AppConstants.defaultPadding),
-                Text(
-                  'Unable to load documents',
-                  style: TextStyle(
-                    fontSize: 18, 
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
-                  ),
-                ),
-                const SizedBox(height: AppConstants.smallPadding),
-                Container(
-                  constraints: const BoxConstraints(maxWidth: 280),
-                  child: Text(
-                    error,
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      height: 1.4,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const SizedBox(height: AppConstants.largePadding),
-                ElevatedButton.icon(
-                  onPressed: _loadInitialContent,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Try Again'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[600],
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   /// Build empty state with refresh capability
   Widget _buildEmptyState() {

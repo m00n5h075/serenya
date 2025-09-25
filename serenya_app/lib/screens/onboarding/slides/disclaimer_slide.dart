@@ -32,20 +32,19 @@ class DisclaimerSlide extends StatelessWidget {
                     children: [
                       const SizedBox(height: 40),
                       _buildHeader(),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
                       _buildIntroduction(),
                       const SizedBox(height: 32),
                       _buildWhatWeAre(),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
                       _buildWhatWeAreNot(),
                       const SizedBox(height: 32),
                       _buildSafetyStatement(),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
                     ],
                   ),
                 ),
               ),
-              const SizedBox(height: HealthcareSpacing.md),
               _buildButton(),
             ],
           ),
@@ -59,11 +58,9 @@ class DisclaimerSlide extends StatelessWidget {
       header: true,
       child: Text(
         'Important Things to Know',
-        style: TextStyle(
-          fontSize: 32,
+        style: HealthcareTypography.headingH1.copyWith(
+          color: HealthcareColors.serenyaBluePrimary,
           fontWeight: FontWeight.bold,
-          color: Colors.blue[800],
-          height: 1.2,
         ),
       ),
     );

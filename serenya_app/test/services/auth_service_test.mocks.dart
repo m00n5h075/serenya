@@ -319,6 +319,7 @@ class MockGoogleSignIn extends _i1.Mock implements _i2.GoogleSignIn {
 /// A class which mocks [GoogleSignInAccount].
 ///
 /// See the documentation for Mockito's code generation for more information.
+// ignore: must_be_immutable
 class MockGoogleSignInAccount extends _i1.Mock
     implements _i2.GoogleSignInAccount {
   MockGoogleSignInAccount() {
@@ -366,6 +367,7 @@ class MockGoogleSignInAccount extends _i1.Mock
 /// A class which mocks [GoogleSignInAuthentication].
 ///
 /// See the documentation for Mockito's code generation for more information.
+// ignore: must_be_immutable
 class MockGoogleSignInAuthentication extends _i1.Mock
     implements _i3.GoogleSignInAuthentication {
   MockGoogleSignInAuthentication() {
@@ -435,11 +437,24 @@ class MockGoogleSignInAuthorizationClient extends _i1.Mock
         ),
         returnValue: _i11.Future<_i3.GoogleSignInServerAuthorization?>.value(),
       ) as _i11.Future<_i3.GoogleSignInServerAuthorization?>);
+
+  @override
+  _i11.Future<void> clearAuthorizationToken({required String? accessToken}) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #clearAuthorizationToken,
+          [],
+          {#accessToken: accessToken},
+        ),
+        returnValue: _i11.Future<void>.value(),
+        returnValueForMissingStub: _i11.Future<void>.value(),
+      ) as _i11.Future<void>);
 }
 
 /// A class which mocks [GoogleSignInClientAuthorization].
 ///
 /// See the documentation for Mockito's code generation for more information.
+// ignore: must_be_immutable
 class MockGoogleSignInClientAuthorization extends _i1.Mock
     implements _i3.GoogleSignInClientAuthorization {
   MockGoogleSignInClientAuthorization() {

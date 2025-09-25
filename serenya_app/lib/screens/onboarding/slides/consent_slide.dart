@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:provider/provider.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../../../services/auth_service.dart';
+import '../../../core/providers/app_state_provider.dart';
 import '../../../core/utils/platform_utils.dart';
 import '../../../core/constants/design_tokens.dart';
 import '../widgets/legal_document_viewer.dart';
 import '../widgets/auth_error_handler.dart';
+import '../../../widgets/serenya_spinner.dart';
 
 class ConsentSlide extends StatefulWidget {
   final Function(bool agreedToTerms, bool understoodDisclaimer, bool authSuccess) onAgree;
@@ -25,10 +28,12 @@ class _ConsentSlideState extends State<ConsentSlide> {
   bool _isLoading = false;
   bool _isAppleLoading = false;
   bool _appleSignInAvailable = false;
-  final AuthService _authService = AuthService();
 
   bool get _canProceed => _understoodDisclaimer && _agreedToTerms;
   bool get _isAnyLoading => _isLoading || _isAppleLoading;
+  
+  /// Get AuthService from AppStateProvider to ensure we use the same instance
+  AuthService get _authService => context.read<AppStateProvider>().authService;
 
   @override
   void initState() {
@@ -71,19 +76,32 @@ class _ConsentSlideState extends State<ConsentSlide> {
         'consent_method': 'bundled_consent',
       };
       
-      final result = await _authService.signInWithGoogle(consentData: consentData);
+      final result = await _authService.signInWithGoogle(
+        consentData: consentData,
+        requireBiometric: true,
+      );
       
       // Always reset loading state when auth completes
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
       
+      print('CONSENT_SLIDE: Authentication result - success: ${result.success}, message: ${result.message}');
+      
+      // Authentication state is now automatically updated via token storage
+      
+      // Call the callback for any other processing
+      print('CONSENT_SLIDE: Calling widget.onAgree with authSuccess: ${result.success}');
       widget.onAgree(_agreedToTerms, _understoodDisclaimer, result.success);
     } catch (e) {
       // Enhanced healthcare-compliant error handling
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
       
       if (mounted) {
         final errorInfo = _categorizeError(e);
@@ -237,6 +255,7 @@ class _ConsentSlideState extends State<ConsentSlide> {
   }
 
 
+
   /// Categorize error for healthcare-appropriate error handling
   Map<String, dynamic> _categorizeError(dynamic error) {
     String errorCode = 'UNKNOWN_ERROR';
@@ -386,7 +405,7 @@ class _ConsentSlideState extends State<ConsentSlide> {
                     children: [
                       const SizedBox(height: 40),
                       _buildHeader(),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
                       _buildBenefitsIntro(),
                       const SizedBox(height: 32),
                       _buildConsentSection(),
@@ -394,7 +413,6 @@ class _ConsentSlideState extends State<ConsentSlide> {
                   ),
                 ),
               ),
-              const SizedBox(height: HealthcareSpacing.md),
               _buildButton(),
             ],
           ),
@@ -408,11 +426,9 @@ class _ConsentSlideState extends State<ConsentSlide> {
       header: true,
       child: Text(
         'Ready to Get Started?',
-        style: TextStyle(
-          fontSize: 32,
+        style: HealthcareTypography.headingH1.copyWith(
+          color: HealthcareColors.serenyaBluePrimary,
           fontWeight: FontWeight.bold,
-          color: Colors.blue[800],
-          height: 1.2,
         ),
       ),
     );
@@ -682,7 +698,7 @@ class _ConsentSlideState extends State<ConsentSlide> {
             ),
           ],
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 12),
         
         // Apple Sign-In Button (iOS only, top position per Apple HIG)
         if (_appleSignInAvailable) ...[
@@ -733,13 +749,9 @@ class _ConsentSlideState extends State<ConsentSlide> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
           ),
           child: _isLoading
-              ? SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.grey[600]!),
-                  ),
+              ? SerenyaSpinnerStatic(
+                  size: 20,
+                  color: Colors.grey[600]!,
                 )
               : Row(
                   mainAxisSize: MainAxisSize.min,

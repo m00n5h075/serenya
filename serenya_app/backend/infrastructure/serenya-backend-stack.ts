@@ -25,7 +25,7 @@ export class SerenyaBackendStack extends cdk.Stack {
   public readonly api: apigateway.RestApi;
   public readonly tempFilesBucket: s3.Bucket;
   public readonly vpc: ec2.Vpc;
-  public readonly database: rds.DatabaseInstance;
+  public readonly database: rds.DatabaseCluster;
   public readonly dbSecret: secretsmanager.Secret;
 
   constructor(scope: Construct, id: string, props: SerenyaBackendStackProps) {
@@ -100,31 +100,28 @@ export class SerenyaBackendStack extends cdk.Stack {
       'Allow Lambda access to PostgreSQL'
     );
 
-    // PostgreSQL RDS Instance
-    this.database = new rds.DatabaseInstance(this, 'SerenyaDatabase', {
-      engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_15_8,
+    // Aurora Serverless v2 PostgreSQL Cluster
+    this.database = new rds.DatabaseCluster(this, 'SerenyaDatabase', {
+      engine: rds.DatabaseClusterEngine.auroraPostgres({
+        version: rds.AuroraPostgresEngineVersion.VER_15_8,
       }),
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        environment === 'prod' ? ec2.InstanceSize.SMALL : ec2.InstanceSize.MICRO
-      ),
+      serverlessV2MinCapacity: 0.5, // Minimum 0.5 ACU for cost optimization
+      serverlessV2MaxCapacity: 16,  // Maximum 16 ACU for scalability
       credentials: rds.Credentials.fromSecret(this.dbSecret),
       vpc: this.vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
       },
       securityGroups: [dbSecurityGroup],
-      databaseName: 'serenya',
+      defaultDatabaseName: 'serenya',
       storageEncrypted: true,
       storageEncryptionKey: encryptionKey,
-      backupRetention: environment === 'prod' ? cdk.Duration.days(7) : cdk.Duration.days(1),
-      deleteAutomatedBackups: environment !== 'prod',
+      backup: {
+        retention: cdk.Duration.days(7),
+      },
       deletionProtection: environment === 'prod',
-      multiAz: environment === 'prod',
-      allocatedStorage: 20,
-      maxAllocatedStorage: environment === 'prod' ? 100 : 50,
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.SNAPSHOT : cdk.RemovalPolicy.DESTROY,
+      writer: rds.ClusterInstance.serverlessV2('writer'),
     });
 
     // Secrets Manager for API keys
@@ -195,7 +192,7 @@ export class SerenyaBackendStack extends cdk.Stack {
                 'rds-db:connect',
               ],
               resources: [
-                `arn:aws:rds-db:${config.region}:${this.account}:dbuser:${this.database.instanceResourceId}/serenya_app`,
+                `arn:aws:rds-db:${config.region}:${this.account}:dbuser:${this.database.clusterResourceIdentifier}/serenya_app`,
               ],
             }),
             // S3 permissions
@@ -249,8 +246,8 @@ export class SerenyaBackendStack extends cdk.Stack {
     const commonLambdaEnvironment = {
       REGION: config.region,
       ENVIRONMENT: environment,
-      DB_HOST: this.database.instanceEndpoint.hostname,
-      DB_PORT: this.database.instanceEndpoint.port.toString(),
+      DB_HOST: this.database.clusterEndpoint.hostname,
+      DB_PORT: this.database.clusterEndpoint.port.toString(),
       DB_NAME: 'serenya',
       DB_SECRET_ARN: this.dbSecret.secretArn,
       TEMP_BUCKET_NAME: this.tempFilesBucket.bucketName,
@@ -508,6 +505,23 @@ export class SerenyaBackendStack extends cdk.Stack {
       description: 'Chat response status polling',
     });
 
+    const subscriptionsFunction = new lambda.Function(this, 'SubscriptionsFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'subscriptions.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/subscriptions')),
+      role: lambdaExecutionRole,
+      environment: commonLambdaEnvironment,
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [lambdaSecurityGroup],
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 256,
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      description: 'Subscription management and billing',
+    });
+
     // Custom authorizer
     const jwtAuthorizer = new apigateway.TokenAuthorizer(this, 'JWTAuthorizer', {
       handler: authorizerFunction,
@@ -562,6 +576,7 @@ export class SerenyaBackendStack extends cdk.Stack {
       chatPrompts: chatPromptsFunction,
       chatMessages: chatMessagesFunction,
       chatStatus: chatStatusFunction,
+      subscriptions: subscriptionsFunction,
     });
 
     // CloudWatch Log Groups with retention
@@ -599,13 +614,13 @@ export class SerenyaBackendStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'DatabaseHost', {
-      value: this.database.instanceEndpoint.hostname,
+      value: this.database.clusterEndpoint.hostname,
       description: 'PostgreSQL database hostname',
       exportName: `serenya-db-host-${environment}`,
     });
 
     new cdk.CfnOutput(this, 'DatabasePort', {
-      value: this.database.instanceEndpoint.port.toString(),
+      value: this.database.clusterEndpoint.port.toString(),
       description: 'PostgreSQL database port',
       exportName: `serenya-db-port-${environment}`,
     });
@@ -630,7 +645,59 @@ export class SerenyaBackendStack extends cdk.Stack {
     // Auth routes (no authorization required)
     const auth = this.api.root.addResource('auth');
     const googleAuth = auth.addResource('google');
+    const googleOnboardingAuth = auth.addResource('google-onboarding');
+    const oauthOnboardingAuth = auth.addResource('oauth-onboarding');
+    
+    // Both routes point to the same auth function for backward compatibility
     googleAuth.addMethod('POST', new apigateway.LambdaIntegration(functions.auth), {
+      methodResponses: [
+        {
+          statusCode: '200',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': true,
+          },
+        },
+        {
+          statusCode: '400',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': true,
+          },
+        },
+        {
+          statusCode: '500',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': true,
+          },
+        },
+      ],
+    });
+
+    // Google onboarding auth route (same as above for Flutter app compatibility)
+    googleOnboardingAuth.addMethod('POST', new apigateway.LambdaIntegration(functions.auth), {
+      methodResponses: [
+        {
+          statusCode: '200',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': true,
+          },
+        },
+        {
+          statusCode: '400',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': true,
+          },
+        },
+        {
+          statusCode: '500',
+          responseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': true,
+          },
+        },
+      ],
+    });
+
+    // OAuth onboarding auth route (what Flutter app actually calls)
+    oauthOnboardingAuth.addMethod('POST', new apigateway.LambdaIntegration(functions.auth), {
       methodResponses: [
         {
           statusCode: '200',
@@ -760,6 +827,16 @@ export class SerenyaBackendStack extends cdk.Stack {
       requestParameters: {
         'method.request.path.job_id': true,
       },
+    });
+
+    // Subscriptions API endpoints (authorization required)
+    const subscriptions = this.api.root.addResource('subscriptions');
+
+    // Current subscription endpoint - GET /subscriptions/current
+    const current = subscriptions.addResource('current');
+    current.addMethod('GET', new apigateway.LambdaIntegration(functions.subscriptions), {
+      authorizer,
+      authorizationType: apigateway.AuthorizationType.CUSTOM,
     });
   }
 }

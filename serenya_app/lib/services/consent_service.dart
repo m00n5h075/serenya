@@ -69,7 +69,8 @@ class ConsentService {
     };
 
     await _storage.write(key: _consentDataKey, value: jsonEncode(consentData));
-    await _storage.write(key: _onboardingCompletedKey, value: 'true');
+    // Note: Do NOT mark onboarding as completed here
+    // Onboarding completion should happen after biometric setup in the onboarding flow
   }
 
   // Get consent data for audit/compliance
@@ -93,7 +94,13 @@ class ConsentService {
 
   // Mark onboarding as completed
   Future<void> markOnboardingCompleted() async {
+    print('🔍 CONSENT_SERVICE: markOnboardingCompleted() called - writing to storage');
     await _storage.write(key: _onboardingCompletedKey, value: 'true');
+    print('🔍 CONSENT_SERVICE: Storage write completed');
+    
+    // Verify it was written
+    final verification = await _storage.read(key: _onboardingCompletedKey);
+    print('🔍 CONSENT_SERVICE: Verification read: $verification');
   }
 
   // Clear all consent (for app reset)

@@ -27,7 +27,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-eu-west-1",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-eu-west-1",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1/3ab16f030ceb00dd1333b3260a7604671fa488d6600e1b93eb15da744370694f.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-eu-west-1/44295e85533ef197a91ae4d1ea3e2efdd1f5fce98c5d518dbc91552b97590fe0.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -301,16 +301,22 @@
             "data": "LambdaSecurityGroup0BD9FC99"
           }
         ],
-        "/SerenyaBackend-dev/SerenyaDatabase/SubnetGroup/Default": [
+        "/SerenyaBackend-dev/SerenyaDatabase/Subnets/Default": [
           {
             "type": "aws:cdk:logicalId",
-            "data": "SerenyaDatabaseSubnetGroup50CA9027"
+            "data": "SerenyaDatabaseSubnets4D69499B"
           }
         ],
         "/SerenyaBackend-dev/SerenyaDatabase/Resource": [
           {
             "type": "aws:cdk:logicalId",
             "data": "SerenyaDatabase21D84656"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaDatabase/writer/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaDatabasewriter29A3C8A9"
           }
         ],
         "/SerenyaBackend-dev/SerenyaApiSecrets/Resource": [
@@ -475,6 +481,18 @@
             "data": "DoctorReportFunctionLogRetention7F741CDF"
           }
         ],
+        "/SerenyaBackend-dev/CleanupFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CleanupFunction1604930F"
+          }
+        ],
+        "/SerenyaBackend-dev/CleanupFunction/LogRetention/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CleanupFunctionLogRetentionC95BF5FA"
+          }
+        ],
         "/SerenyaBackend-dev/AuthorizerFunction/Resource": [
           {
             "type": "aws:cdk:logicalId",
@@ -505,6 +523,54 @@
             "data": "DatabaseInitFunctionLogRetention1C9B6487"
           }
         ],
+        "/SerenyaBackend-dev/ChatPromptsFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ChatPromptsFunction55316BDE"
+          }
+        ],
+        "/SerenyaBackend-dev/ChatPromptsFunction/LogRetention/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ChatPromptsFunctionLogRetention4CB13192"
+          }
+        ],
+        "/SerenyaBackend-dev/ChatMessagesFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ChatMessagesFunction8684B75C"
+          }
+        ],
+        "/SerenyaBackend-dev/ChatMessagesFunction/LogRetention/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ChatMessagesFunctionLogRetention9485EA7D"
+          }
+        ],
+        "/SerenyaBackend-dev/ChatStatusFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ChatStatusFunction10E23594"
+          }
+        ],
+        "/SerenyaBackend-dev/ChatStatusFunction/LogRetention/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ChatStatusFunctionLogRetention51C4ABEE"
+          }
+        ],
+        "/SerenyaBackend-dev/SubscriptionsFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SubscriptionsFunctionDABFA3A1"
+          }
+        ],
+        "/SerenyaBackend-dev/SubscriptionsFunction/LogRetention/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SubscriptionsFunctionLogRetention05000638"
+          }
+        ],
         "/SerenyaBackend-dev/JWTAuthorizer/Resource": [
           {
             "type": "aws:cdk:logicalId",
@@ -532,7 +598,7 @@
         "/SerenyaBackend-dev/SerenyaApi/Deployment/Resource": [
           {
             "type": "aws:cdk:logicalId",
-            "data": "SerenyaApiDeployment9A430DAEb1f7cf150d6faa49132bf0d3eef4c827"
+            "data": "SerenyaApiDeployment9A430DAE9138719efe654df833b6c3921fa35284"
           }
         ],
         "/SerenyaBackend-dev/SerenyaApi/DeploymentStage.dev/Resource": [
@@ -593,6 +659,66 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "SerenyaApiauthgooglePOST7615B967"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/auth/google-onboarding/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiauthgoogleonboardingDDFF4576"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/auth/google-onboarding/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiauthgoogleonboardingOPTIONSED100D93"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/auth/google-onboarding/POST/ApiPermission.SerenyaBackenddevSerenyaApiC0B2749B.POST..auth.google-onboarding": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiauthgoogleonboardingPOSTApiPermissionSerenyaBackenddevSerenyaApiC0B2749BPOSTauthgoogleonboarding876DE332"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/auth/google-onboarding/POST/ApiPermission.Test.SerenyaBackenddevSerenyaApiC0B2749B.POST..auth.google-onboarding": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiauthgoogleonboardingPOSTApiPermissionTestSerenyaBackenddevSerenyaApiC0B2749BPOSTauthgoogleonboarding49BA7A60"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/auth/google-onboarding/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiauthgoogleonboardingPOSTD5B3ED8D"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/auth/oauth-onboarding/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiauthoauthonboardingB9E1B993"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/auth/oauth-onboarding/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiauthoauthonboardingOPTIONS5E62831C"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/auth/oauth-onboarding/POST/ApiPermission.SerenyaBackenddevSerenyaApiC0B2749B.POST..auth.oauth-onboarding": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiauthoauthonboardingPOSTApiPermissionSerenyaBackenddevSerenyaApiC0B2749BPOSTauthoauthonboarding35F9B9F1"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/auth/oauth-onboarding/POST/ApiPermission.Test.SerenyaBackenddevSerenyaApiC0B2749B.POST..auth.oauth-onboarding": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiauthoauthonboardingPOSTApiPermissionTestSerenyaBackenddevSerenyaApiC0B2749BPOSTauthoauthonboarding43ACBB9F"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/auth/oauth-onboarding/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiauthoauthonboardingPOSTC701B10C"
           }
         ],
         "/SerenyaBackend-dev/SerenyaApi/Default/user/Resource": [
@@ -857,6 +983,228 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "SerenyaApiapiv1processdoctorreportPOST398F6D27"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/cleanup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1processcleanup4190E7D7"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/cleanup/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1processcleanupOPTIONS508BF04D"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/cleanup/{jobId}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1processcleanupjobId3B533B40"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/cleanup/{jobId}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1processcleanupjobIdOPTIONS50D0B731"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/cleanup/{jobId}/DELETE/ApiPermission.SerenyaBackenddevSerenyaApiC0B2749B.DELETE..api.v1.process.cleanup.{jobId}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1processcleanupjobIdDELETEApiPermissionSerenyaBackenddevSerenyaApiC0B2749BDELETEapiv1processcleanupjobId82CC7E60"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/cleanup/{jobId}/DELETE/ApiPermission.Test.SerenyaBackenddevSerenyaApiC0B2749B.DELETE..api.v1.process.cleanup.{jobId}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1processcleanupjobIdDELETEApiPermissionTestSerenyaBackenddevSerenyaApiC0B2749BDELETEapiv1processcleanupjobId15570580"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/process/cleanup/{jobId}/DELETE/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1processcleanupjobIdDELETEB15C5132"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/reports/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1reports3CDA505F"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/reports/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1reportsOPTIONS9B520504"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chat5272FD55"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatOPTIONS9EC0928D"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/prompts/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatpromptsCB3C7F05"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/prompts/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatpromptsOPTIONS11C9023D"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/prompts/GET/ApiPermission.SerenyaBackenddevSerenyaApiC0B2749B.GET..api.v1.chat.prompts": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatpromptsGETApiPermissionSerenyaBackenddevSerenyaApiC0B2749BGETapiv1chatprompts653A84C0"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/prompts/GET/ApiPermission.Test.SerenyaBackenddevSerenyaApiC0B2749B.GET..api.v1.chat.prompts": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatpromptsGETApiPermissionTestSerenyaBackenddevSerenyaApiC0B2749BGETapiv1chatpromptsF9CC67A9"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/prompts/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatpromptsGET25E3A57C"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/messages/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatmessagesE71B885B"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/messages/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatmessagesOPTIONS6C28A037"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/messages/POST/ApiPermission.SerenyaBackenddevSerenyaApiC0B2749B.POST..api.v1.chat.messages": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatmessagesPOSTApiPermissionSerenyaBackenddevSerenyaApiC0B2749BPOSTapiv1chatmessagesE08A13D5"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/messages/POST/ApiPermission.Test.SerenyaBackenddevSerenyaApiC0B2749B.POST..api.v1.chat.messages": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatmessagesPOSTApiPermissionTestSerenyaBackenddevSerenyaApiC0B2749BPOSTapiv1chatmessages7202E49D"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/messages/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatmessagesPOSTEC8715FC"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/jobs/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatjobs788103A9"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/jobs/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatjobsOPTIONS20360B42"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/jobs/{job_id}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatjobsjobid1BFC6554"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/jobs/{job_id}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatjobsjobidOPTIONSFDD48B36"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/jobs/{job_id}/status/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatjobsjobidstatus2443EF7B"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/jobs/{job_id}/status/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatjobsjobidstatusOPTIONS8B9A272B"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/jobs/{job_id}/status/GET/ApiPermission.SerenyaBackenddevSerenyaApiC0B2749B.GET..api.v1.chat.jobs.{job_id}.status": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatjobsjobidstatusGETApiPermissionSerenyaBackenddevSerenyaApiC0B2749BGETapiv1chatjobsjobidstatus096A63FC"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/jobs/{job_id}/status/GET/ApiPermission.Test.SerenyaBackenddevSerenyaApiC0B2749B.GET..api.v1.chat.jobs.{job_id}.status": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatjobsjobidstatusGETApiPermissionTestSerenyaBackenddevSerenyaApiC0B2749BGETapiv1chatjobsjobidstatusC29C425E"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/api/v1/chat/jobs/{job_id}/status/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApiapiv1chatjobsjobidstatusGETA9F5B75B"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/subscriptions/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApisubscriptions59DE7B79"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/subscriptions/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApisubscriptionsOPTIONSFFA8CA34"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/subscriptions/current/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApisubscriptionscurrent82971FD7"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/subscriptions/current/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApisubscriptionscurrentOPTIONS0E11872C"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/subscriptions/current/GET/ApiPermission.SerenyaBackenddevSerenyaApiC0B2749B.GET..subscriptions.current": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApisubscriptionscurrentGETApiPermissionSerenyaBackenddevSerenyaApiC0B2749BGETsubscriptionscurrentDE7965CB"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/subscriptions/current/GET/ApiPermission.Test.SerenyaBackenddevSerenyaApiC0B2749B.GET..subscriptions.current": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApisubscriptionscurrentGETApiPermissionTestSerenyaBackenddevSerenyaApiC0B2749BGETsubscriptionscurrent81738295"
+          }
+        ],
+        "/SerenyaBackend-dev/SerenyaApi/Default/subscriptions/current/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SerenyaApisubscriptionscurrentGET6EBEEBAE"
           }
         ],
         "/SerenyaBackend-dev/ApiGatewayLogGroup/Resource": [
