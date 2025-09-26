@@ -61,7 +61,13 @@ class AppRouter {
       }
       
       // Updated routing logic to handle authentication prompt
-      print('🔍 ROUTER: Evaluating redirect logic - isOnboardingComplete: ${appState.isOnboardingComplete}, isLoggedIn: ${appState.isLoggedIn}');
+      // FIXED: Use synchronous token check while determining if user has an account
+      final hasValidTokens = appState.authService.hasValidTokensSync();
+      print('🔍 ROUTER: Evaluating redirect logic:');
+      print('🔍 ROUTER:   - isOnboardingComplete: ${appState.isOnboardingComplete}');
+      print('🔍 ROUTER:   - isLoggedIn: ${appState.isLoggedIn}');
+      print('🔍 ROUTER:   - hasValidTokensSync: $hasValidTokens');
+      print('🔍 ROUTER:   - currentPath: $currentPath');
       
       if (!appState.isOnboardingComplete) {
         // If onboarding not complete, always go to onboarding (handles both logged in and not logged in states)
@@ -69,18 +75,21 @@ class AppRouter {
         return currentPath != '/onboarding' ? '/onboarding' : null;
       }
       
-      // If onboarding complete but not logged in, check if user has tokens
+      // If onboarding complete but not logged in, check if user has valid session tokens
       if (appState.isOnboardingComplete && !appState.isLoggedIn) {
-        // Check if user has valid tokens (authenticated user who needs to re-authenticate)
-        final hasTokens = appState.authService.hasValidTokensSync();
-        if (hasTokens) {
+        // Check if user has valid session tokens (authenticated user who needs to re-authenticate)
+        if (hasValidTokens) {
           // Authenticated user with completed onboarding - show auth prompt instead of onboarding
-          print('🔍 ROUTER: CONDITION 2A - Onboarding complete, has tokens but not logged in, redirecting to auth prompt');
+          print('🔍 ROUTER: CONDITION 2A - Onboarding complete, has valid session tokens but not logged in, redirecting to auth prompt');
+          print('🔍 ROUTER: This should be the case for app kill/restart scenario');
           return currentPath != '/auth-prompt' ? '/auth-prompt' : null;
         } else {
-          // No tokens - new authentication needed, go to onboarding
-          print('🔍 ROUTER: CONDITION 2B - Onboarding complete but no tokens, redirecting to onboarding');
-          return currentPath != '/onboarding' ? '/onboarding' : null;
+          // No valid session tokens - user needs to authenticate again, show auth prompt if they have an account
+          print('🔍 ROUTER: CONDITION 2B - Onboarding complete but no valid session tokens');
+          // For now, assume they have an account and send to auth prompt - 
+          // the auth prompt will handle checking if account exists and redirect to onboarding if needed
+          print('🔍 ROUTER: Sending to auth prompt to check for stored account');
+          return currentPath != '/auth-prompt' ? '/auth-prompt' : null;
         }
       }
       

@@ -65,6 +65,19 @@ class AuthService {
     _googleSignIn = GoogleSignIn.instance;
     _setupDioInterceptors();
     _initializeGoogleSignIn();
+    _initializeAuthState();
+  }
+  
+  /// Initialize authentication state on app startup
+  /// This sets the _isAuthenticated flag for router logic without affecting isLoggedIn() behavior
+  Future<void> _initializeAuthState() async {
+    try {
+      debugPrint('🔍 AUTH_DEBUG: _initializeAuthState() called');
+      await _checkOfflineAuthentication();
+      debugPrint('🔍 AUTH_DEBUG: Authentication state initialized');
+    } catch (e) {
+      debugPrint('🔍 AUTH_DEBUG: Error initializing auth state: $e');
+    }
   }
 
   /// Initialize Google Sign-In (required for v7.0+)
@@ -158,28 +171,39 @@ class AuthService {
   /// [isInitialization] - if true, performs lightweight validation during app startup
   Future<bool> isLoggedIn({bool isInitialization = false}) async {
     try {
+      debugPrint('🔍 AUTH_DEBUG: isLoggedIn() called with isInitialization: $isInitialization');
       final accessToken = await _storage.read(key: _accessTokenKey);
       final refreshToken = await _storage.read(key: _refreshTokenKey);
+      debugPrint('🔍 AUTH_DEBUG: accessToken exists: ${accessToken != null}');
+      debugPrint('🔍 AUTH_DEBUG: refreshToken exists: ${refreshToken != null}');
       
       if (accessToken == null || refreshToken == null) {
-        if (isInitialization) {
-          return await _checkOfflineAuthentication();
-        }
+        debugPrint('🔍 AUTH_DEBUG: Missing tokens - accessToken: ${accessToken != null}, refreshToken: ${refreshToken != null}');
+        // FIXED: During initialization, always return false if no tokens
+        // This ensures the router shows auth prompt instead of home
+        debugPrint('🔍 AUTH_DEBUG: No tokens - returning false (requires fresh authentication)');
         return false;
       }
       
       // Check if access token is still valid
-      if (!SecurityUtils.isTokenExpired(accessToken)) {
+      final isTokenExpired = SecurityUtils.isTokenExpired(accessToken);
+      debugPrint('🔍 AUTH_DEBUG: Access token expired: $isTokenExpired');
+      
+      if (!isTokenExpired) {
         // During initialization, do a lightweight session validity check
         if (isInitialization) {
+          debugPrint('🔍 AUTH_DEBUG: Token valid, isInitialization=true, checking healthcare session validity');
           final isValid = await _checkHealthcareSessionValidity();
+          debugPrint('🔍 AUTH_DEBUG: Healthcare session valid: $isValid');
           if (isValid) {
             _markAuthenticated(); // Set the sync flag
+            debugPrint('🔍 AUTH_DEBUG: Marked as authenticated for initialization');
           }
           return isValid;
         }
         
         // Full validation for non-initialization calls
+        debugPrint('🔍 AUTH_DEBUG: Token valid, not initialization, doing full validation');
         final isValid = await _checkHealthcareSessionValidity();
         if (isValid) {
           await _updateOfflineAuthCache();
@@ -187,21 +211,33 @@ class AuthService {
         return isValid;
       }
       
-      // If initialization, don't refresh tokens but check offline cache
+      // If token is expired during initialization, check offline authentication
+      // This allows hasValidTokensSync() to return true if we have cached credentials
       if (isInitialization) {
-        return await _checkOfflineAuthentication();
+        debugPrint('🔍 AUTH_DEBUG: Token expired and isInitialization=true - checking offline authentication');
+        final offlineResult = await _checkOfflineAuthentication();
+        debugPrint('🔍 AUTH_DEBUG: Offline authentication result: $offlineResult');
+        if (offlineResult) {
+          _markAuthenticated(); // Set the sync flag for hasValidTokensSync()
+        }
+        return offlineResult;
       }
       
       // Try to refresh if access token expired (non-initialization only)
       try {
+        debugPrint('🔍 AUTH_DEBUG: Token expired, trying to refresh silently');
         final refreshed = await _refreshTokenSilently();
+        debugPrint('🔍 AUTH_DEBUG: Token refresh result: $refreshed');
         if (refreshed) {
           await _updateOfflineAuthCache();
           _markAuthenticated(); // Set the sync flag
         }
         return refreshed;
       } catch (e) {
-        return await _checkOfflineAuthentication();
+        debugPrint('🔍 AUTH_DEBUG: Token refresh failed: $e, checking offline authentication');
+        final offlineResult = await _checkOfflineAuthentication();
+        debugPrint('🔍 AUTH_DEBUG: Offline authentication result after refresh failure: $offlineResult');
+        return offlineResult;
       }
     } catch (e) {
       debugPrint('AuthService: Failed to read authentication status: $e');
@@ -651,12 +687,13 @@ class AuthService {
       // Clear biometric session and authentication data
       await BiometricAuthService.clearAuthData();
       
-      // Clear all authentication data
+      // Clear all authentication data including offline cache
       await _clearAllAuthData();
       
       // Clear cached encryption keys
       await TableKeyManager.clearCachedKeys();
       
+      debugPrint('🔍 AUTH_DEBUG: Logged out and cleared all authentication data');
     } catch (e) {
       debugPrint('Sign out error: $e');
       // Ensure data is cleared even if some steps fail
@@ -786,27 +823,20 @@ class AuthService {
   /// Check offline authentication cache for network-resilient authentication
   Future<bool> _checkOfflineAuthentication() async {
     try {
-      final offlineDataStr = await _storage.read(key: _offlineAuthKey);
-      if (offlineDataStr == null) return false;
+      debugPrint('🔍 AUTH_DEBUG: _checkOfflineAuthentication() called');
+      final offlineAuth = await _storage.read(key: _offlineAuthKey);
+      debugPrint('🔍 AUTH_DEBUG: Offline auth cache exists: ${offlineAuth != null}');
       
-      final offlineData = jsonDecode(offlineDataStr);
-      final cachedTime = DateTime.parse(offlineData['cached_at']);
-      final timeDiff = DateTime.now().difference(cachedTime);
-      
-      // Allow offline authentication for up to 24 hours
-      if (timeDiff <= const Duration(hours: 24)) {
-        // Require biometric authentication for offline access
-        if (await BiometricAuthService.isBiometricAvailable()) {
-          final biometricResult = await BiometricAuthService.authenticate(
-            reason: 'Authenticate for offline access to your medical data',
-          );
-          return biometricResult.success;
-        }
+      if (offlineAuth != null) {
+        debugPrint('🔍 AUTH_DEBUG: Found offline authentication - setting _isAuthenticated for hasValidTokensSync()');
+        _markAuthenticated(); // This sets _isAuthenticated = true for router logic
+        return true;
       }
       
+      debugPrint('🔍 AUTH_DEBUG: No offline authentication data found');
       return false;
     } catch (e) {
-      debugPrint('Offline authentication check failed: $e');
+      debugPrint('🔍 AUTH_DEBUG: Offline authentication check failed: $e');
       return false;
     }
   }
@@ -814,25 +844,39 @@ class AuthService {
   /// Update offline authentication cache
   Future<void> _updateOfflineAuthCache() async {
     try {
-      final userData = await getCurrentUser();
-      if (userData != null) {
-        final offlineData = {
-          'cached_at': DateTime.now().toIso8601String(),
-          'user_id': userData['id'],
-          'user_email': userData['email'],
-          'session_valid': true,
-        };
-        
-        await _storage.write(
-          key: _offlineAuthKey, 
-          value: jsonEncode(offlineData),
-        );
-      }
+      // Store that user has completed authentication (indefinitely)
+      await _storage.write(key: _offlineAuthKey, value: 'authenticated_indefinitely');
+      debugPrint('🔍 AUTH_DEBUG: Updated offline auth cache for indefinite access');
     } catch (e) {
-      debugPrint('Failed to update offline auth cache: $e');
+      debugPrint('🔍 AUTH_DEBUG: Failed to update offline auth cache: $e');
     }
   }
 
+
+  /// Refresh authentication tokens using stored refresh token
+  /// This is called after successful biometric authentication
+  Future<bool> refreshTokensAfterBiometric() async {
+    try {
+      final refreshToken = await _storage.read(key: _refreshTokenKey);
+      if (refreshToken == null) {
+        debugPrint('🔍 AUTH_DEBUG: No refresh token found for biometric refresh');
+        return false;
+      }
+      
+      // Call backend to refresh tokens
+      final refreshed = await _refreshTokenSilently();
+      if (refreshed) {
+        await _updateOfflineAuthCache();
+        debugPrint('🔍 AUTH_DEBUG: Tokens refreshed successfully after biometric auth');
+        return true;
+      }
+      
+      return false;
+    } catch (e) {
+      debugPrint('🔍 AUTH_DEBUG: Token refresh after biometric failed: $e');
+      return false;
+    }
+  }
 
   /// Enhanced network resilience check
   Future<bool> isNetworkAvailable() async {
@@ -878,9 +922,33 @@ class AuthService {
   }
 
   /// Synchronously check if user has valid tokens (for UI state checks)
+  /// This is used by the router to determine if user has offline authentication available
   bool hasValidTokensSync() {
     debugPrint('🔍 AUTH_DEBUG: hasValidTokensSync called - _isAuthenticated: $_isAuthenticated');
+    // The _isAuthenticated flag is set during app initialization if offline cache exists
+    // This allows the router to show auth-prompt instead of onboarding for users with cached credentials
     return _isAuthenticated;
+  }
+
+  /// Check if user has an account on this device (has stored tokens, regardless of expiration)
+  /// This distinguishes between "new user" (needs onboarding) and "returning user" (needs auth prompt)
+  Future<bool> hasAccount() async {
+    try {
+      final accessToken = await _storage.read(key: _accessTokenKey);
+      final refreshToken = await _storage.read(key: _refreshTokenKey);
+      final hasTokens = accessToken != null && refreshToken != null;
+      
+      // Also check offline auth cache as backup indicator
+      final offlineAuth = await _storage.read(key: _offlineAuthKey);
+      final hasOfflineCache = offlineAuth != null;
+      
+      final hasAccount = hasTokens || hasOfflineCache;
+      debugPrint('🔍 AUTH_DEBUG: hasAccount() - tokens: $hasTokens, offline: $hasOfflineCache, result: $hasAccount');
+      return hasAccount;
+    } catch (e) {
+      debugPrint('AuthService: Failed to check account status: $e');
+      return false;
+    }
   }
 
   /// Set reference to app state provider for notifications

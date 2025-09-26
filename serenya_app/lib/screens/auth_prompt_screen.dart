@@ -33,15 +33,45 @@ class _AuthPromptScreenState extends State<AuthPromptScreen> {
     });
 
     try {
+      // FIXED: First check if user actually has an account on this device
+      final appState = context.read<AppStateProvider>();
+      final authService = appState.authService;
+      
+      final hasAccount = await authService.hasAccount();
+      if (!hasAccount) {
+        // User doesn't have an account - redirect to onboarding
+        if (mounted) {
+          debugPrint('🔍 AUTH_PROMPT: No account found - redirecting to onboarding');
+          if (context.mounted) {
+            // Go back to onboarding flow
+            await appState.resetApp(); // This will clear states and redirect to onboarding
+            return;
+          }
+        }
+        return;
+      }
+      
+      debugPrint('🔍 AUTH_PROMPT: Account found - proceeding with authentication');
+      
+      // User has an account - proceed with authentication
       final authResult = await BiometricAuthService.authenticate(
         reason: 'Authenticate to access your medical data',
         allowPinFallback: true,
       );
       
       if (authResult.success && mounted) {
-        final appState = context.read<AppStateProvider>();
-        appState.setLoggedIn(true);
-        // Router will automatically redirect to home
+        // NEW: Refresh tokens from backend after biometric success
+        
+        try {
+          await authService.refreshTokensAfterBiometric();
+          
+          appState.setLoggedIn(true);
+          // Router will automatically redirect to home
+        } catch (e) {
+          // If token refresh fails, still allow offline access
+          debugPrint('Token refresh failed but allowing offline access: $e');
+          appState.setLoggedIn(true);
+        }
       } else if (mounted) {
         setState(() {
           _errorMessage = authResult.failureReason ?? 'Authentication failed';
