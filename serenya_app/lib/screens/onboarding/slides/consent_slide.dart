@@ -94,16 +94,12 @@ class _ConsentSlideState extends State<ConsentSlide> {
       
       print('CONSENT_SLIDE: Authentication result - success: ${result.success}, message: ${result.message}');
       
-      // STRATEGIC FIX: If authentication successful, complete onboarding BEFORE enabling router redirects
+      // STRATEGIC FIX: If authentication successful, DON'T complete onboarding yet
       if (result.success && mounted) {
-        print('CONSENT_SLIDE: Authentication successful - completing onboarding before enabling redirects');
+        print('CONSENT_SLIDE: Authentication successful - NOT completing onboarding yet, waiting for PIN setup');
         
-        // Complete onboarding synchronously to prevent race conditions
-        final appStateProvider = context.read<AppStateProvider>();
-        await appStateProvider.completeOnboarding();
-        
-        // Now enable router redirects after onboarding is complete
-        appStateProvider.completeAuthentication();
+        // DON'T complete onboarding here - let onboarding flow handle it after PIN setup
+        // DON'T call completeAuthentication() here - let onboarding flow handle it after PIN setup
         
         // Call callback to notify parent (OnboardingFlow)
         print('CONSENT_SLIDE: Calling widget.onAgree with authSuccess: true');

@@ -9,7 +9,9 @@ import 'slides/disclaimer_slide.dart';
 import 'slides/consent_slide.dart';
 import 'widgets/progress_dots.dart';
 import 'widgets/biometric_setup_dialog.dart';
+import 'widgets/pin_setup_dialog.dart';
 import '../../core/constants/design_tokens.dart';
+import '../../core/security/biometric_auth_service.dart';
 
 class OnboardingFlow extends StatefulWidget {
   final VoidCallback? onComplete;
@@ -92,10 +94,6 @@ class _OnboardingFlowState extends State<OnboardingFlow>
     await _consentService.recordConsent(agreedToTerms, understoodDisclaimer);
     print('ONBOARDING_FLOW: Consent recorded, mounted: $mounted');
     
-    // Biometric setup and onboarding completion are now handled in consent slide
-    // This callback is just for consent recording and any additional processing
-    print('ONBOARDING_FLOW: Consent processing complete');
-    
     if (!authSuccess) {
       // Authentication failed - show error but stay on onboarding
       if (mounted) {
@@ -126,13 +124,119 @@ class _OnboardingFlowState extends State<OnboardingFlow>
           ),
         );
       }
-      // Do NOT call onComplete - keep user on onboarding flow
-    } else {
-      // Authentication successful - show biometric setup dialog
-      print('ONBOARDING_FLOW: Authentication successful, showing biometric setup');
-      if (mounted) {
-        _showBiometricSetupDialog();
+      return; // Stay on onboarding
+    }
+    
+    // Authentication successful - now check if user needs to set up PIN/biometrics
+    print('ONBOARDING_FLOW: Authentication successful, checking authentication setup');
+    await _checkAndSetupAuthentication();
+  }
+
+  /// Check if user has authentication set up, and guide them through setup if needed
+  Future<void> _checkAndSetupAuthentication() async {
+    try {
+      final biometricAvailable = await BiometricAuthService.isBiometricAvailable();
+      final biometricEnabled = await BiometricAuthService.isBiometricEnabled();
+      final pinSet = await BiometricAuthService.isPinSet();
+      
+      print('ONBOARDING_FLOW: Auth status - biometric available: $biometricAvailable, enabled: $biometricEnabled, PIN set: $pinSet');
+      
+      if (!biometricEnabled && !pinSet) {
+        // User has no authentication method set up - show PIN setup dialog first
+        print('ONBOARDING_FLOW: No authentication methods set up, showing PIN setup dialog');
+        if (mounted && context.mounted) {
+          _showPinSetupDialog();
+        }
+      } else {
+        // User has authentication set up - complete onboarding
+        print('ONBOARDING_FLOW: Authentication already set up, completing onboarding');
+        _completeOnboarding();
       }
+    } catch (e) {
+      print('ONBOARDING_FLOW: Error checking authentication setup: $e');
+      // If there's an error checking auth status, show PIN setup as fallback
+      if (mounted && context.mounted) {
+        _showPinSetupDialog();
+      }
+    }
+  }
+
+  /// Show PIN setup dialog - required for accessing encrypted data
+  Future<void> _showPinSetupDialog() async {
+    print('ONBOARDING_FLOW: Showing PIN setup dialog');
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false, // User must complete PIN setup
+      builder: (context) => PinSetupDialog(
+        onSetupComplete: () async {
+          print('🔐 PIN_DIALOG: PIN setup completed successfully');
+          Navigator.of(context).pop();
+          // PIN is now set up - complete onboarding and optionally show biometric setup
+          _completeOnboarding();
+        },
+        onSkipped: () async {
+          print('🔐 PIN_DIALOG: PIN setup skipped by user');
+          Navigator.of(context).pop();
+          // Show error - PIN is required for the app to work
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text(
+                  'A PIN is required to secure your medical data. Please set up a PIN to continue.',
+                  style: TextStyle(color: Colors.white),
+                ),
+                backgroundColor: Colors.orange[600],
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          }
+          // Show PIN setup dialog again
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted && context.mounted) {
+              _showPinSetupDialog();
+            }
+          });
+        },
+      ),
+    );
+  }
+
+  /// Complete onboarding and optionally show biometric setup
+  Future<void> _completeOnboarding() async {
+    print('ONBOARDING_FLOW: Completing onboarding');
+    
+    if (mounted) {
+      // First complete onboarding in AppStateProvider
+      try {
+        final appStateProvider = context.read<AppStateProvider>();
+        await appStateProvider.completeOnboarding();
+        print('ONBOARDING_FLOW: Called completeOnboarding() on AppStateProvider');
+        
+        // THEN call completeAuthentication() to enable router redirects
+        appStateProvider.completeAuthentication();
+        print('ONBOARDING_FLOW: Called completeAuthentication() - router redirects now enabled');
+      } catch (e) {
+        print('ONBOARDING_FLOW: Error in completion flow: $e');
+      }
+      
+      // Complete onboarding widget
+      if (widget.onComplete != null) {
+        print('ONBOARDING_FLOW: Calling widget.onComplete to finish onboarding');
+        widget.onComplete!();
+      }
+      
+      // Then show biometric setup dialog in the background (non-blocking) if biometrics are available
+      Future.delayed(const Duration(milliseconds: 500), () async {
+        if (mounted && context.mounted) {
+          final biometricAvailable = await BiometricAuthService.isBiometricAvailable();
+          final biometricEnabled = await BiometricAuthService.isBiometricEnabled();
+          
+          if (biometricAvailable && !biometricEnabled) {
+            _showBiometricSetupDialog();
+          }
+        }
+      });
     }
   }
 
@@ -145,46 +249,14 @@ class _OnboardingFlowState extends State<OnboardingFlow>
       barrierDismissible: false, // User must complete or skip biometric setup
       builder: (context) => BiometricSetupDialog(
         onSetupComplete: () async {
-          print('🔍 ONBOARDING_FLOW: Biometric setup completed, completing onboarding');
-          // Small delay to ensure dialog is fully closed
-          await Future.delayed(const Duration(milliseconds: 100));
-          
-          // Notify AuthService that authentication is complete so router can redirect
-          if (mounted) {
-            final authService = context.read<AppStateProvider>().authService;
-            authService.notifyAuthenticationComplete();
-            print('🔍 ONBOARDING_FLOW: Notified AuthService of authentication completion');
-          }
-          
-          if (widget.onComplete != null && mounted) {
-            print('🔍 ONBOARDING_FLOW: Calling widget.onComplete callback');
-            widget.onComplete!();
-          } else {
-            print('🔍 ONBOARDING_FLOW: onComplete is null or widget unmounted');
-          }
+          print('🔍 BIOMETRIC_DIALOG: Biometric setup completed successfully');
+          // Onboarding is already complete - just close dialog
+          Navigator.of(context).pop();
         },
         onSkipped: () async {
-          print('🔍 ONBOARDING_FLOW: onSkipped callback RECEIVED from BiometricSetupDialog');
-          print('🔍 ONBOARDING_FLOW: widget.onComplete is ${widget.onComplete != null ? 'NOT NULL' : 'NULL'}');
-          print('🔍 ONBOARDING_FLOW: mounted is $mounted');
-          
-          // Small delay to ensure dialog is fully closed
-          await Future.delayed(const Duration(milliseconds: 100));
-          
-          // Notify AuthService that authentication is complete so router can redirect
-          if (mounted) {
-            final authService = context.read<AppStateProvider>().authService;
-            authService.notifyAuthenticationComplete();
-            print('🔍 ONBOARDING_FLOW: Notified AuthService of authentication completion');
-          }
-          
-          if (widget.onComplete != null && mounted) {
-            print('🔍 ONBOARDING_FLOW: About to call widget.onComplete!()');
-            widget.onComplete!();
-            print('🔍 ONBOARDING_FLOW: widget.onComplete!() call completed');
-          } else {
-            print('🔍 ONBOARDING_FLOW: CANNOT call onComplete - onComplete is null: ${widget.onComplete == null}, unmounted: ${!mounted}');
-          }
+          print('🔍 BIOMETRIC_DIALOG: Biometric setup skipped by user');  
+          // Onboarding is already complete - just close dialog
+          Navigator.of(context).pop();
         },
       ),
     );

@@ -188,40 +188,20 @@ class DeviceKeyManager {
     }
   }
 
-  /// Retrieve device root key with biometric authentication
+  /// Retrieve device root key with biometric authentication and PIN fallback
   static Future<Uint8List> getDeviceRootKeyWithAuth() async {
     try {
-      String authMethod = 'none';
+      // Always use the full BiometricAuthService.authenticate() method
+      // This handles biometric -> PIN fallback automatically
+      final authResult = await BiometricAuthService.authenticate(
+        reason: 'Access your secure medical data encryption key',
+        allowPinFallback: true,
+      );
       
-      // Check if biometric authentication is available
-      final isAvailable = await BiometricAuthService.isBiometricAvailable();
-      
-      if (isAvailable) {
-        // Require authentication to access root key
-        final authResult = await BiometricAuthService.authenticate(
-          reason: 'Access your secure medical data encryption key',
-        );
-        
-        if (!authResult.success) {
-          await _logSecurityEvent('key_access_denied', 
-              reason: authResult.failureReason ?? 'authentication_failed');
-          throw SecurityException('Authentication failed: ${authResult.failureReason}');
-        }
-        
-        authMethod = authResult.method.toString();
-      } else {
-        // Fallback for development/testing environments without biometrics
-        if (kDebugMode) {
-          await _logSecurityEvent('key_access_no_biometrics', 
-              reason: 'biometric_not_available_development_mode');
-          print('DEVICE_KEY_MANAGER: No biometrics available, allowing access in debug mode');
-          authMethod = 'debug_fallback';
-        } else {
-          // In production, require some form of authentication
-          await _logSecurityEvent('key_access_denied', 
-              reason: 'no_auth_methods_available');
-          throw SecurityException('Authentication failed: no_auth_methods_available');
-        }
+      if (!authResult.success) {
+        await _logSecurityEvent('key_access_denied', 
+            reason: authResult.failureReason ?? 'authentication_failed');
+        throw SecurityException('Authentication failed: ${authResult.failureReason}');
       }
       
       // Retrieve key from secure storage
@@ -233,7 +213,7 @@ class DeviceKeyManager {
       final rootKey = base64.decode(base64Key);
       
       await _logSecurityEvent('device_root_key_accessed', 
-          authMethod: authMethod);
+          authMethod: authResult.method.toString());
       
       return Uint8List.fromList(rootKey);
       
