@@ -505,9 +505,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// Build subscription section
   Widget _buildSubscriptionSection() {
+    // Only show subscription section if we have actual subscription data
+    if (!_isLoadingSubscription && _subscriptionDetails == null) {
+      // No subscription data available - don't show the section
+      return const SizedBox.shrink();
+    }
+    
     // Determine if user is premium and get plan details
     final isPremium = _subscriptionDetails != null;
-    final planName = _subscriptionDetails?.planName ?? 'Free';
+    final planName = _subscriptionDetails?.planName ?? 'Unknown Plan';
     final isActive = _subscriptionDetails?.status == 'active';
     
     return Column(
@@ -549,15 +555,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     decoration: BoxDecoration(
                       color: isPremium 
                           ? const Color(0xFFE8F5E8)  // Green for premium
-                          : const Color(0xFFE3F2FD), // Blue for free
+                          : const Color(0xFFE3F2FD), // Blue for other plans
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
-                      isPremium ? Icons.diamond : Icons.person,
+                      isPremium ? Icons.diamond : Icons.subscriptions,
                       size: 20,
                       color: isPremium 
                           ? const Color(0xFF4CAF50)  // Green for premium
-                          : const Color(0xFF2196F3), // Blue for free
+                          : const Color(0xFF2196F3), // Blue for other plans
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -605,7 +611,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ? const Color(0xFF4CAF50)  // Green for active premium
                               : isPremium
                                   ? const Color(0xFFFF9800)  // Orange for inactive premium
-                                  : const Color(0xFF2196F3), // Blue for free
+                                  : const Color(0xFF2196F3), // Blue for other plans
                         ),
                         const SizedBox(width: 6),
                         Text(
@@ -613,7 +619,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ? 'Active'
                               : isPremium
                                   ? _subscriptionDetails?.status ?? 'Inactive'
-                                  : 'Active',
+                                  : _subscriptionDetails?.status ?? 'Unknown',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
@@ -621,7 +627,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 ? const Color(0xFF4CAF50)  // Green for active premium
                                 : isPremium
                                     ? const Color(0xFFFF9800)  // Orange for inactive premium
-                                    : const Color(0xFF2196F3), // Blue for free
+                                    : const Color(0xFF2196F3), // Blue for other plans
                           ),
                         ),
                       ],

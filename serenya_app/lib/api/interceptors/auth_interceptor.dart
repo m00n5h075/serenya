@@ -14,8 +14,9 @@ import '../../core/security/local_audit_logger.dart';
 class AuthInterceptor extends Interceptor {
   late final AuthService _authService;
 
-  AuthInterceptor() {
-    _authService = AuthService();
+  // CRITICAL FIX: Accept AuthService instance to use shared instance
+  AuthInterceptor({required AuthService authService}) {
+    _authService = authService;
   }
 
   @override

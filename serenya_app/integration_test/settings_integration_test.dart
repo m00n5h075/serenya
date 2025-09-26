@@ -46,7 +46,7 @@ void main() {
 
     group('App State Management', () {
       testWidgets('should initialize app state provider', (tester) async {
-        final appState = AppStateProvider();
+        final appState = AppStateProvider(authService: authService);
         
         // Test that app state provider can be created
         expect(appState, isNotNull);

@@ -269,7 +269,15 @@ class ApiService {
     try {
       final userData = await _authService.getCurrentUser();
       if (userData != null) {
-        return ApiResult.success(userData, 'User profile retrieved successfully');
+        // Map auth response fields to expected profile fields
+        final profileData = Map<String, dynamic>.from(userData);
+        
+        // Map display_name to name for consistency with UI expectations
+        if (profileData.containsKey('display_name')) {
+          profileData['name'] = profileData['display_name'];
+        }
+        
+        return ApiResult.success(profileData, 'User profile retrieved successfully');
       } else {
         return ApiResult.failed('No user profile data available');
       }

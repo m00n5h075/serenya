@@ -5,12 +5,10 @@ import '../../../core/security/biometric_auth_service.dart';
 
 class PinSetupDialog extends StatefulWidget {
   final VoidCallback onSetupComplete;
-  final VoidCallback? onSkipped;
 
   const PinSetupDialog({
     super.key,
     required this.onSetupComplete,
-    this.onSkipped,
   });
 
   @override
@@ -94,6 +92,15 @@ class _PinSetupDialogState extends State<PinSetupDialog>
     _clearPin();
   }
 
+  void _resetPinSetup() {
+    setState(() {
+      _isConfirmationMode = false;
+      _firstPin = '';
+      _errorMessage = null;
+    });
+    _clearPin();
+  }
+
   Future<void> _handlePinComplete() async {
     final pin = _currentPin;
     
@@ -115,11 +122,7 @@ class _PinSetupDialogState extends State<PinSetupDialog>
 
     // Confirmation mode - verify PINs match
     if (pin != _firstPin) {
-      _showError('PINs do not match. Please try again.');
-      setState(() {
-        _isConfirmationMode = false;
-        _firstPin = '';
-      });
+      _showError('PINs do not match.');
       return;
     }
 
@@ -138,10 +141,7 @@ class _PinSetupDialogState extends State<PinSetupDialog>
       
     } catch (e) {
       _showError('Failed to set up PIN: ${e.toString()}');
-      setState(() {
-        _isConfirmationMode = false;
-        _firstPin = '';
-      });
+      _resetPinSetup();
     } finally {
       setState(() {
         _isLoading = false;
@@ -349,32 +349,24 @@ class _PinSetupDialogState extends State<PinSetupDialog>
             
             const SizedBox(height: HealthcareSpacing.lg),
             
-            // Action Buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                if (widget.onSkipped != null)
-                  TextButton(
-                    onPressed: _isLoading ? null : widget.onSkipped,
-                    child: const Text('Skip for now'),
+            // Reset PIN Button (only visible in confirmation mode)
+            if (_isConfirmationMode && !_isLoading)
+              Center(
+                child: TextButton.icon(
+                  onPressed: _resetPinSetup,
+                  icon: const Icon(
+                    Icons.refresh,
+                    size: 16,
                   ),
-                
-                ElevatedButton(
-                  onPressed: _isLoading ? null : () {
-                    // Clear any error and focus first field
-                    setState(() {
-                      _errorMessage = null;
-                    });
-                    _focusNodes[0].requestFocus();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: HealthcareColors.serenyaBlueDark,
-                    foregroundColor: Colors.white,
+                  label: const Text('Reset PIN'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: HealthcareColors.serenyaBlueDark,
+                    textStyle: const TextStyle(
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                  child: Text(_isConfirmationMode ? 'Confirm PIN' : 'Set PIN'),
                 ),
-              ],
-            ),
+              ),
           ],
         ),
       ),

@@ -172,31 +172,17 @@ class _OnboardingFlowState extends State<OnboardingFlow>
         onSetupComplete: () async {
           print('🔐 PIN_DIALOG: PIN setup completed successfully');
           Navigator.of(context).pop();
+          
+          // CRITICAL: Complete authentication ONLY after PIN is set up
+          // This prevents the router from disposing widgets before PIN dialog appears
+          if (mounted) {
+            final appStateProvider = context.read<AppStateProvider>();
+            appStateProvider.completeAuthentication(); // Enable router redirects NOW
+            print('ONBOARDING_FLOW: Called completeAuthentication() after PIN setup - router redirects now enabled');
+          }
+          
           // PIN is now set up - complete onboarding and optionally show biometric setup
           _completeOnboarding();
-        },
-        onSkipped: () async {
-          print('🔐 PIN_DIALOG: PIN setup skipped by user');
-          Navigator.of(context).pop();
-          // Show error - PIN is required for the app to work
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text(
-                  'A PIN is required to secure your medical data. Please set up a PIN to continue.',
-                  style: TextStyle(color: Colors.white),
-                ),
-                backgroundColor: Colors.orange[600],
-                duration: const Duration(seconds: 4),
-              ),
-            );
-          }
-          // Show PIN setup dialog again
-          Future.delayed(const Duration(milliseconds: 500), () {
-            if (mounted && context.mounted) {
-              _showPinSetupDialog();
-            }
-          });
         },
       ),
     );
@@ -213,9 +199,12 @@ class _OnboardingFlowState extends State<OnboardingFlow>
         await appStateProvider.completeOnboarding();
         print('ONBOARDING_FLOW: Called completeOnboarding() on AppStateProvider');
         
-        // THEN call completeAuthentication() to enable router redirects
-        appStateProvider.completeAuthentication();
-        print('ONBOARDING_FLOW: Called completeAuthentication() - router redirects now enabled');
+        // CRITICAL: DO NOT call completeAuthentication() here!
+        // This causes router to dispose OnboardingFlow widget before PIN dialog appears
+        // BUG: authentication-timing-issue - Fixed multiple times, keeps regressing
+        // SOLUTION: completeAuthentication() moved to PIN dialog completion
+        // appStateProvider.completeAuthentication(); // DISABLED - see PIN dialog onSetupComplete
+        // print('ONBOARDING_FLOW: Called completeAuthentication() - router redirects now enabled');
       } catch (e) {
         print('ONBOARDING_FLOW: Error in completion flow: $e');
       }

@@ -155,45 +155,52 @@ class AuthService {
   }
 
   /// Check if user is currently authenticated
-  /// [isInitialization] - if true, avoids biometric prompts during app startup
+  /// [isInitialization] - if true, performs lightweight validation during app startup
   Future<bool> isLoggedIn({bool isInitialization = false}) async {
-    // During initialization, skip expensive crypto operations entirely
-    if (isInitialization) {
-      return false;
-    }
-    
     try {
       final accessToken = await _storage.read(key: _accessTokenKey);
       final refreshToken = await _storage.read(key: _refreshTokenKey);
       
       if (accessToken == null || refreshToken == null) {
-        return await _checkOfflineAuthentication();
+        if (isInitialization) {
+          return await _checkOfflineAuthentication();
+        }
+        return false;
       }
       
       // Check if access token is still valid
       if (!SecurityUtils.isTokenExpired(accessToken)) {
+        // During initialization, do a lightweight session validity check
+        if (isInitialization) {
+          final isValid = await _checkHealthcareSessionValidity();
+          if (isValid) {
+            _markAuthenticated(); // Set the sync flag
+          }
+          return isValid;
+        }
+        
+        // Full validation for non-initialization calls
         final isValid = await _checkHealthcareSessionValidity();
-        if (isValid && !isInitialization) {
+        if (isValid) {
           await _updateOfflineAuthCache();
         }
         return isValid;
       }
       
-      // During initialization, don't try to refresh tokens (avoid network calls)
+      // If initialization, don't refresh tokens but check offline cache
       if (isInitialization) {
-        return false;
+        return await _checkOfflineAuthentication();
       }
       
-      // Try to refresh if access token expired
+      // Try to refresh if access token expired (non-initialization only)
       try {
         final refreshed = await _refreshTokenSilently();
         if (refreshed) {
           await _updateOfflineAuthCache();
+          _markAuthenticated(); // Set the sync flag
         }
         return refreshed;
       } catch (e) {
-        // Network error - check offline cache
-        debugPrint('Network error during token refresh, checking offline cache: $e');
         return await _checkOfflineAuthentication();
       }
     } catch (e) {

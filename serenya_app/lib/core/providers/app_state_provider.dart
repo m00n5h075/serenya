@@ -111,14 +111,13 @@ class AppStateProvider extends ChangeNotifier {
     if (kDebugMode) {
       print('APP_STATE: Checking login status...');
     }
-    // During initialization, just use the fast sync check to avoid expensive crypto operations
-    final loggedIn = _authService.hasValidTokensSync();
+    // FIXED: Use proper authentication check during initialization
+    final loggedIn = await _authService.isLoggedIn(isInitialization: true);
     if (kDebugMode) {
       print('APP_STATE: Logged in: $loggedIn');
     }
     
     _isOnboardingComplete = onboardingComplete;
-    // STRATEGIC FIX: User is only logged in when BOTH authenticated AND onboarded
     _isLoggedIn = loggedIn && onboardingComplete;
     if (kDebugMode) {
       print('APP_STATE: Notifying listeners...');

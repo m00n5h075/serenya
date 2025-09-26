@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../screens/onboarding/onboarding_flow.dart';
 import '../../screens/home_screen.dart';
+import '../../screens/auth_prompt_screen.dart';
 import '../providers/app_state_provider.dart';
 import '../../widgets/serenya_spinner.dart';
 
@@ -59,7 +60,7 @@ class AppRouter {
         return currentPath != '/error' ? '/error' : null;
       }
       
-      // Simplified routing logic
+      // Updated routing logic to handle authentication prompt
       print('🔍 ROUTER: Evaluating redirect logic - isOnboardingComplete: ${appState.isOnboardingComplete}, isLoggedIn: ${appState.isLoggedIn}');
       
       if (!appState.isOnboardingComplete) {
@@ -68,10 +69,19 @@ class AppRouter {
         return currentPath != '/onboarding' ? '/onboarding' : null;
       }
       
-      // If onboarding complete but not logged in, go to onboarding for re-authentication
+      // If onboarding complete but not logged in, check if user has tokens
       if (appState.isOnboardingComplete && !appState.isLoggedIn) {
-        print('🔍 ROUTER: CONDITION 2 - Onboarding complete but not logged in, redirecting to onboarding');
-        return currentPath != '/onboarding' ? '/onboarding' : null;
+        // Check if user has valid tokens (authenticated user who needs to re-authenticate)
+        final hasTokens = appState.authService.hasValidTokensSync();
+        if (hasTokens) {
+          // Authenticated user with completed onboarding - show auth prompt instead of onboarding
+          print('🔍 ROUTER: CONDITION 2A - Onboarding complete, has tokens but not logged in, redirecting to auth prompt');
+          return currentPath != '/auth-prompt' ? '/auth-prompt' : null;
+        } else {
+          // No tokens - new authentication needed, go to onboarding
+          print('🔍 ROUTER: CONDITION 2B - Onboarding complete but no tokens, redirecting to onboarding');
+          return currentPath != '/onboarding' ? '/onboarding' : null;
+        }
       }
       
       // If both onboarding complete and logged in, go to home
@@ -124,6 +134,10 @@ class AppRouter {
             print('🔍 ROUTER: Authentication success is now handled directly in ConsentSlide - no action needed');
           },
         ),
+      ),
+      GoRoute(
+        path: '/auth-prompt',
+        builder: (context, state) => const AuthPromptScreen(),
       ),
       GoRoute(
         path: '/home',
