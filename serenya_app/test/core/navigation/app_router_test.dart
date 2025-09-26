@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:serenya_app/core/navigation/app_router.dart';
 import 'package:serenya_app/core/providers/app_state_provider.dart';
 import 'package:serenya_app/core/providers/health_data_provider.dart';
+import 'package:serenya_app/services/auth_service.dart';
 import 'package:mockito/mockito.dart';
 
 class MockAppStateProvider extends Mock implements AppStateProvider {
@@ -147,7 +148,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ChangeNotifierProvider(
-            create: (_) => AppStateProvider(),
+            create: (_) => AppStateProvider(authService: AuthService()),
             child: const LoadingScreen(),
           ),
         ),

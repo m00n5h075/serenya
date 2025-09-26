@@ -8,46 +8,37 @@ class AppStateProvider extends ChangeNotifier {
   bool _isOnboardingComplete = false;
   bool _isLoggedIn = false;
   bool _isLoading = true;
+  bool _isAuthenticating = false; // STRATEGIC FIX: Prevent router redirects during authentication
   String? _error;
   
-  final AuthService _authService = AuthService();
+  // CRITICAL FIX: Accept AuthService as parameter to break circular dependency
+  final AuthService _authService;
   final ConsentService _consentService = ConsentService();
 
-  AppStateProvider() {
-    // Set up the circular reference so AuthService can notify us
+  AppStateProvider({required AuthService authService}) : _authService = authService {
+    if (kDebugMode) {
+      print('🏠 APP_STATE: AppStateProvider created with provided AuthService instance');
+    }
+    // CRITICAL FIX: Set up the reference so AuthService can notify us
     _authService.setAppStateProvider(this);
   }
 
   bool get isInitialized => _isInitialized;
   bool get isOnboardingComplete => _isOnboardingComplete;
+  bool get isAuthenticating => _isAuthenticating; // STRATEGIC FIX: Expose authentication state
   
   /// Expose AuthService for components that need direct access (like ConsentSlide)
   AuthService get authService => _authService;
-  bool get isLoggedIn {
-    // Check actual token existence instead of cached state
-    // This ensures isLoggedIn reflects current authentication status immediately
-    try {
-      final result = _authService.hasValidTokensSync();
-      print('🔍 APP_STATE: isLoggedIn getter called - hasValidTokensSync() returned: $result');
-      // Update cached state if it changed
-      if (result != _isLoggedIn) {
-        print('🔍 APP_STATE: Cached login state changed from $_isLoggedIn to $result');
-        _isLoggedIn = result;
-        // Don't call notifyListeners here to avoid infinite loops
-      }
-      return result;
-    } catch (e) {
-      print('🔍 APP_STATE: ERROR in isLoggedIn getter: $e - returning false');
-      return false;
-    }
-  }
+  bool get isLoggedIn => _isLoggedIn;
 
   /// Force refresh the authentication state and notify listeners
   void refreshAuthState() {
-    final newState = _authService.hasValidTokensSync();
+    final hasTokens = _authService.hasValidTokensSync();
+    // STRATEGIC FIX: User is only logged in when BOTH authenticated AND onboarded
+    final newState = hasTokens && _isOnboardingComplete;
     if (newState != _isLoggedIn) {
       _isLoggedIn = newState;
-      debugPrint('APP_STATE: Authentication state changed to: $newState');
+      debugPrint('APP_STATE: Login state changed to: $newState (hasTokens: $hasTokens, onboarded: $_isOnboardingComplete)');
       notifyListeners();
     }
   }
@@ -127,7 +118,8 @@ class AppStateProvider extends ChangeNotifier {
     }
     
     _isOnboardingComplete = onboardingComplete;
-    _isLoggedIn = loggedIn;
+    // STRATEGIC FIX: User is only logged in when BOTH authenticated AND onboarded
+    _isLoggedIn = loggedIn && onboardingComplete;
     if (kDebugMode) {
       print('APP_STATE: Notifying listeners...');
     }
@@ -139,23 +131,52 @@ class AppStateProvider extends ChangeNotifier {
 
   Future<void> completeOnboarding() async {
     print('🔍 APP_STATE: completeOnboarding() called');
-    print('🔍 APP_STATE: Before - isOnboardingComplete: $_isOnboardingComplete, isLoggedIn: $_isLoggedIn');
-    _setLoading(true);
+    print('🔍 APP_STATE: Before - isOnboardingComplete: $_isOnboardingComplete, isLoggedIn: $_isLoggedIn, isAuthenticating: $_isAuthenticating');
+    
+    // STRATEGIC FIX: Don't trigger loading notifications if we're in authentication flow
+    if (!_isAuthenticating) {
+      _setLoading(true);
+    } else {
+      _isLoading = true; // Set directly without notifying listeners
+      print('🔍 APP_STATE: Setting loading = true (no notifications during authentication)');
+    }
     _clearError();
 
     try {
       await _consentService.markOnboardingCompleted();
       _isOnboardingComplete = true;
-      print('🔍 APP_STATE: After storage write - isOnboardingComplete: $_isOnboardingComplete, isLoggedIn: $_isLoggedIn');
-      print('🔍 APP_STATE: About to notify listeners');
-      notifyListeners();
-      print('🔍 APP_STATE: Listeners notified - onboarding completion should trigger router redirect');
+      
+      // STRATEGIC FIX: Set logged in state only when BOTH authentication AND onboarding are complete
+      final hasTokens = _authService.hasValidTokensSync();
+      if (hasTokens) {
+        _isLoggedIn = true;
+        print('🔍 APP_STATE: User fully authenticated and onboarded - setting isLoggedIn = true');
+      } else {
+        print('🔍 APP_STATE: Onboarding complete but no valid tokens - isLoggedIn remains false');
+      }
+      
+      print('🔍 APP_STATE: After completion - isOnboardingComplete: $_isOnboardingComplete, isLoggedIn: $_isLoggedIn');
+      
+      // STRATEGIC FIX: Only notify listeners if not in authentication flow 
+      // (completeAuthentication() will handle the notification)
+      if (!_isAuthenticating) {
+        print('🔍 APP_STATE: About to notify listeners');
+        notifyListeners();
+        print('🔍 APP_STATE: Listeners notified - should trigger final router redirect to home');
+      } else {
+        print('🔍 APP_STATE: Skipping listener notification - authentication flow will handle it');
+      }
     } catch (e) {
       print('🔍 APP_STATE: ERROR completing onboarding: $e');
       _setError('Failed to complete onboarding: $e');
     } finally {
       print('🔍 APP_STATE: Setting loading to false');
-      _setLoading(false);
+      // STRATEGIC FIX: Don't trigger loading notifications if we're in authentication flow
+      if (!_isAuthenticating) {
+        _setLoading(false);
+      } else {
+        _isLoading = false; // Set directly without notifying listeners
+      }
       print('🔍 APP_STATE: completeOnboarding() method complete');
     }
   }
@@ -246,5 +267,20 @@ class AppStateProvider extends ChangeNotifier {
       print('APP_STATE: Refreshing app state...');
     }
     await _checkAppState();
+  }
+
+  /// STRATEGIC FIX: Mark authentication start to prevent router redirects
+  void startAuthentication() {
+    print('🔐 APP_STATE: Starting authentication - preventing router redirects');
+    _isAuthenticating = true;
+    // CRITICAL: Don't call notifyListeners() - this would trigger router redirects
+    // The router will stay on current page until completeAuthentication() is called
+  }
+
+  /// STRATEGIC FIX: Mark authentication complete and allow router redirects
+  void completeAuthentication() {
+    print('🔐 APP_STATE: Authentication complete - allowing router redirects');
+    _isAuthenticating = false;
+    notifyListeners(); // Now safe to trigger router redirects
   }
 }

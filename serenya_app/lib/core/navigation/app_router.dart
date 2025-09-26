@@ -14,7 +14,9 @@ class AppRouter {
       refreshListenable: appStateProvider,
       redirect: (context, state) {
       try {
+        // CRITICAL FIX: Add error boundary for provider access
         final appState = context.read<AppStateProvider>();
+        
         final currentPath = state.fullPath;
       
       if (kDebugMode) {
@@ -31,6 +33,14 @@ class AppRouter {
           print('ROUTER: Staying on loading screen');
         }
         return currentPath != '/loading' ? '/loading' : null;
+      }
+      
+      // STRATEGIC FIX: If authenticating, prevent redirects to avoid widget disposal
+      if (appState.isAuthenticating) {
+        if (kDebugMode) {
+          print('🔐 ROUTER: Authentication in progress - preventing redirects to avoid widget disposal');
+        }
+        return null; // Stay on current route
       }
       
       // If error occurred, show error but allow fallback to onboarding
@@ -73,11 +83,23 @@ class AppRouter {
       // No redirect needed
       print('🔍 ROUTER: NO REDIRECT NEEDED - staying on current path: $currentPath');
       return null;
-      } catch (e) {
-        // Context may be disposed during navigation - return null to avoid crash
+      } catch (e, stackTrace) {
+        // CRITICAL FIX: Enhanced error handling with more details
         if (kDebugMode) {
-          print('ROUTER: Error accessing AppStateProvider (context disposed): $e');
+          print('🔥 ROUTER: Error accessing AppStateProvider: $e');
+          print('🔥 ROUTER: Stack trace: $stackTrace');
+          print('🔥 ROUTER: Error type: ${e.runtimeType}');
         }
+        
+        // If it's a provider error, redirect to loading to reinitialize
+        if (e.toString().contains('Provider') || e.toString().contains('context')) {
+          if (kDebugMode) {
+            print('🔥 ROUTER: Provider/context error - redirecting to loading screen');
+          }
+          return '/loading';
+        }
+        
+        // For other errors, stay on current route to avoid navigation loops
         return null;
       }
     },
@@ -95,28 +117,11 @@ class AppRouter {
         builder: (context, state) => OnboardingFlow(
           onComplete: () {
             print('🔍 ROUTER: onComplete callback RECEIVED from OnboardingFlow');
-            try {
-              final appStateProvider = context.read<AppStateProvider>();
-              print('🔍 ROUTER: Got AppStateProvider, calling completeOnboarding()');
-              appStateProvider.completeOnboarding();
-              print('🔍 ROUTER: completeOnboarding() call completed');
-            } catch (e) {
-              print('🔍 ROUTER: ERROR in onComplete callback: $e');
-              if (kDebugMode) {
-                print('ROUTER: Error completing onboarding (context disposed): $e');
-              }
-            }
+            print('🔍 ROUTER: Onboarding completion is now handled directly in ConsentSlide - no action needed');
           },
           onAuthenticationSuccess: () {
-            try {
-              final appState = context.read<AppStateProvider>();
-              appState.completeOnboarding();
-              appState.setLoggedIn(true);
-            } catch (e) {
-              if (kDebugMode) {
-                print('ROUTER: Error in auth success (context disposed): $e');
-              }
-            }
+            print('🔍 ROUTER: onAuthenticationSuccess callback RECEIVED from OnboardingFlow');
+            print('🔍 ROUTER: Authentication success is now handled directly in ConsentSlide - no action needed');
           },
         ),
       ),
@@ -134,14 +139,56 @@ class LoadingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Initialize app state when loading screen is shown
+    // CRITICAL FIX: Add error handling for initialization
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AppStateProvider>().initialize();
+      try {
+        if (kDebugMode) {
+          print('🔄 LOADING_SCREEN: Attempting to initialize AppStateProvider...');
+        }
+        
+        final appState = context.read<AppStateProvider>();
+        appState.initialize().catchError((error, stackTrace) {
+          if (kDebugMode) {
+            print('❌ LOADING_SCREEN: AppStateProvider initialization failed: $error');
+            print('❌ LOADING_SCREEN: Stack trace: $stackTrace');
+          }
+        });
+      } catch (e, stackTrace) {
+        if (kDebugMode) {
+          print('🔥 LOADING_SCREEN: Error accessing AppStateProvider: $e');
+          print('🔥 LOADING_SCREEN: Stack trace: $stackTrace');
+        }
+      }
     });
 
-    return const Scaffold(
+    return Scaffold(
+      backgroundColor: Colors.white,
       body: Center(
-        child: SerenyaSpinnerLarge(),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SerenyaSpinnerLarge(),
+            const SizedBox(height: 24),
+            const Text(
+              'Loading Serenya...',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF2196F3),
+              ),
+            ),
+            if (kDebugMode) ...[
+              const SizedBox(height: 16),
+              Text(
+                'Debug: Initializing core services',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

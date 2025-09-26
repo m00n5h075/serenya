@@ -55,6 +55,10 @@ class _ConsentSlideState extends State<ConsentSlide> {
   Future<void> _handleGoogleSignIn() async {
     if (!_canProceed) return;
     
+    // STRATEGIC FIX: Prevent router redirects during authentication
+    final appStateProvider = context.read<AppStateProvider>();
+    appStateProvider.startAuthentication();
+    
     setState(() {
       _isLoading = true;
     });
@@ -90,17 +94,40 @@ class _ConsentSlideState extends State<ConsentSlide> {
       
       print('CONSENT_SLIDE: Authentication result - success: ${result.success}, message: ${result.message}');
       
-      // Authentication state is now automatically updated via token storage
-      
-      // Call the callback for any other processing
-      print('CONSENT_SLIDE: Calling widget.onAgree with authSuccess: ${result.success}');
-      widget.onAgree(_agreedToTerms, _understoodDisclaimer, result.success);
+      // STRATEGIC FIX: If authentication successful, complete onboarding BEFORE enabling router redirects
+      if (result.success && mounted) {
+        print('CONSENT_SLIDE: Authentication successful - completing onboarding before enabling redirects');
+        
+        // Complete onboarding synchronously to prevent race conditions
+        final appStateProvider = context.read<AppStateProvider>();
+        await appStateProvider.completeOnboarding();
+        
+        // Now enable router redirects after onboarding is complete
+        appStateProvider.completeAuthentication();
+        
+        // Call callback to notify parent (OnboardingFlow)
+        print('CONSENT_SLIDE: Calling widget.onAgree with authSuccess: true');
+        widget.onAgree(_agreedToTerms, _understoodDisclaimer, true);
+      } else {
+        // Authentication failed - just re-enable redirects and call callback
+        if (mounted) {
+          final appStateProvider = context.read<AppStateProvider>();
+          appStateProvider.completeAuthentication();
+        }
+        
+        print('CONSENT_SLIDE: Calling widget.onAgree with authSuccess: ${result.success}');
+        widget.onAgree(_agreedToTerms, _understoodDisclaimer, result.success);
+      }
     } catch (e) {
       // Enhanced healthcare-compliant error handling
       if (mounted) {
         setState(() {
           _isLoading = false;
         });
+        
+        // STRATEGIC FIX: Re-enable router redirects on error as well
+        final appStateProvider = context.read<AppStateProvider>();
+        appStateProvider.completeAuthentication();
       }
       
       if (mounted) {
@@ -120,6 +147,10 @@ class _ConsentSlideState extends State<ConsentSlide> {
 
   Future<void> _handleAppleSignIn() async {
     if (!_canProceed) return;
+    
+    // STRATEGIC FIX: Prevent router redirects during authentication
+    final appStateProvider = context.read<AppStateProvider>();
+    appStateProvider.startAuthentication();
     
     setState(() {
       _isAppleLoading = true;
@@ -149,12 +180,43 @@ class _ConsentSlideState extends State<ConsentSlide> {
         _isAppleLoading = false;
       });
       
-      widget.onAgree(_agreedToTerms, _understoodDisclaimer, result.success);
+      print('CONSENT_SLIDE: Apple authentication result - success: ${result.success}, message: ${result.message}');
+      
+      // STRATEGIC FIX: If authentication successful, complete onboarding BEFORE enabling router redirects
+      if (result.success && mounted) {
+        print('CONSENT_SLIDE: Apple authentication successful - completing onboarding before enabling redirects');
+        
+        // Complete onboarding synchronously to prevent race conditions
+        final appStateProvider = context.read<AppStateProvider>();
+        await appStateProvider.completeOnboarding();
+        
+        // Now enable router redirects after onboarding is complete
+        appStateProvider.completeAuthentication();
+        
+        // Call callback to notify parent (OnboardingFlow)
+        print('CONSENT_SLIDE: Calling widget.onAgree with authSuccess: true');
+        widget.onAgree(_agreedToTerms, _understoodDisclaimer, true);
+      } else {
+        // Authentication failed - just re-enable redirects and call callback
+        if (mounted) {
+          final appStateProvider = context.read<AppStateProvider>();
+          appStateProvider.completeAuthentication();
+        }
+        
+        print('CONSENT_SLIDE: Calling widget.onAgree with authSuccess: ${result.success}');
+        widget.onAgree(_agreedToTerms, _understoodDisclaimer, result.success);
+      }
     } catch (e) {
       // Enhanced healthcare-compliant error handling for Apple Sign-In
       setState(() {
         _isAppleLoading = false;
       });
+      
+      // STRATEGIC FIX: Re-enable router redirects on error as well
+      if (mounted) {
+        final appStateProvider = context.read<AppStateProvider>();
+        appStateProvider.completeAuthentication();
+      }
       
       if (mounted) {
         final errorInfo = _categorizeAppleError(e);

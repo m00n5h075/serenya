@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import 'home_screen.dart';
 
@@ -10,7 +11,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final AuthService _authService = AuthService();
+  // CRITICAL FIX: Use the shared AuthService instance from Provider
+  AuthService get _authService => context.read<AuthService>();
   bool _isLoading = false;
 
   Future<void> _handleGoogleSignIn() async {

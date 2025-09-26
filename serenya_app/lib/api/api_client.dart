@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import '../core/constants/app_constants.dart';
 import '../core/security/certificate_pinning.dart';
-import 'interceptors/auth_interceptor.dart';
+// Removed unused import: import 'interceptors/auth_interceptor.dart';
 import 'interceptors/encryption_interceptor.dart';
 import 'interceptors/logging_interceptor.dart';
 import 'interceptors/retry_interceptor.dart';
@@ -74,17 +74,15 @@ class ApiClient {
     CertificatePinningService.configureCertificatePinning(_dio);
 
     // Add interceptors in order of execution
+    // NOTE: Authentication is handled by AuthService's Dio instance
     _dio.interceptors.addAll([
-      // 1. Authentication interceptor (adds tokens)
-      AuthInterceptor(),
-      
-      // 2. Encryption interceptor (encrypts sensitive data)
+      // 1. Encryption interceptor (encrypts sensitive data)
       EncryptionInterceptor(),
       
-      // 3. Logging interceptor (audit trail)
+      // 2. Logging interceptor (audit trail)
       ApiLoggingInterceptor(),
       
-      // 4. Retry interceptor (network resilience)  
+      // 3. Retry interceptor (network resilience)  
       ApiRetryInterceptor(_dio),
     ]);
   }
