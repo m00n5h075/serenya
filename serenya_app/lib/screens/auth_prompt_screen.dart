@@ -73,9 +73,33 @@ class _AuthPromptScreenState extends State<AuthPromptScreen> {
           appState.setLoggedIn(true);
         }
       } else if (mounted) {
-        setState(() {
-          _errorMessage = authResult.failureReason ?? 'Authentication failed';
-        });
+        // FIXED: Handle specific authentication failure cases
+        final failureReason = authResult.failureReason;
+        
+        if (failureReason == 'no_auth_methods_available') {
+          // No biometric or device passcode available
+          setState(() {
+            _errorMessage = 'Please set up biometric authentication or device passcode in device settings to continue';
+          });
+        } else if (failureReason == 'pin_required') {
+          // PIN authentication needed - for now show helpful message
+          // TODO: Implement PIN authentication UI component
+          setState(() {
+            _errorMessage = 'PIN authentication required - please try biometric authentication again';
+          });
+          // Auto-retry after a delay
+          Future.delayed(const Duration(seconds: 2), () {
+            if (mounted) _authenticateUser();
+          });
+        } else if (failureReason == 'biometric_not_enrolled') {
+          setState(() {
+            _errorMessage = 'Please enroll biometric authentication in device settings';
+          });
+        } else {
+          setState(() {
+            _errorMessage = failureReason ?? 'Authentication failed';
+          });
+        }
       }
     } catch (e) {
       if (mounted) {

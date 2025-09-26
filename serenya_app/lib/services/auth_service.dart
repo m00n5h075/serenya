@@ -59,6 +59,7 @@ class AuthService {
 
   // Note: BiometricAuthService uses static methods, no instance needed
   bool _isAuthenticated = false;
+  bool _hasAccountCached = false; // FIXED: Single source of truth for account existence
   AppStateProvider? _appStateProvider;
 
   AuthService() {
@@ -69,14 +70,48 @@ class AuthService {
   }
   
   /// Initialize authentication state on app startup
-  /// This sets the _isAuthenticated flag for router logic without affecting isLoggedIn() behavior
+  /// This sets both _isAuthenticated and _hasAccountCached flags for consistent router logic
   Future<void> _initializeAuthState() async {
     try {
       debugPrint('🔍 AUTH_DEBUG: _initializeAuthState() called');
-      await _checkOfflineAuthentication();
-      debugPrint('🔍 AUTH_DEBUG: Authentication state initialized');
+      
+      // FIXED: Set account cache status first
+      _hasAccountCached = await _checkAccountExistence();
+      debugPrint('🔍 AUTH_DEBUG: Account exists: $_hasAccountCached');
+      
+      // Then check if user has valid session
+      if (_hasAccountCached) {
+        await _checkOfflineAuthentication();
+      }
+      
+      debugPrint('🔍 AUTH_DEBUG: Authentication state initialized - hasAccount: $_hasAccountCached, isAuthenticated: $_isAuthenticated');
     } catch (e) {
       debugPrint('🔍 AUTH_DEBUG: Error initializing auth state: $e');
+      // On error, assume no account to be safe
+      _hasAccountCached = false;
+      _isAuthenticated = false;
+    }
+  }
+
+  /// Check if account exists on device (internal method for caching)
+  Future<bool> _checkAccountExistence() async {
+    try {
+      final accessToken = await _storage.read(key: _accessTokenKey);
+      final refreshToken = await _storage.read(key: _refreshTokenKey);
+      final hasTokens = accessToken != null && refreshToken != null;
+      
+      // Also check offline auth cache and user data as backup indicators
+      final offlineAuth = await _storage.read(key: _offlineAuthKey);
+      final userData = await _storage.read(key: _userDataKey);
+      final hasOfflineCache = offlineAuth != null;
+      final hasUserData = userData != null;
+      
+      final hasAccount = hasTokens || hasOfflineCache || hasUserData;
+      debugPrint('🔍 AUTH_DEBUG: _checkAccountExistence() - tokens: $hasTokens, offline: $hasOfflineCache, userData: $hasUserData, result: $hasAccount');
+      return hasAccount;
+    } catch (e) {
+      debugPrint('AuthService: Failed to check account existence: $e');
+      return false;
     }
   }
 
@@ -593,6 +628,9 @@ class AuthService {
       _storage.write(key: _lastAuthTimeKey, value: DateTime.now().toIso8601String()),
     ]);
     
+    // FIXED: Update account cache when storing auth data
+    _hasAccountCached = true;
+    
     // Don't mark authenticated yet - let the caller do it after callback completes
   }
 
@@ -692,6 +730,10 @@ class AuthService {
       
       // Clear cached encryption keys
       await TableKeyManager.clearCachedKeys();
+      
+      // FIXED: Clear account cache
+      _hasAccountCached = false;
+      _isAuthenticated = false;
       
       debugPrint('🔍 AUTH_DEBUG: Logged out and cleared all authentication data');
     } catch (e) {
@@ -924,29 +966,23 @@ class AuthService {
   /// Synchronously check if user has valid tokens (for UI state checks)
   /// This is used by the router to determine if user has offline authentication available
   bool hasValidTokensSync() {
-    debugPrint('🔍 AUTH_DEBUG: hasValidTokensSync called - _isAuthenticated: $_isAuthenticated');
-    // The _isAuthenticated flag is set during app initialization if offline cache exists
-    // This allows the router to show auth-prompt instead of onboarding for users with cached credentials
-    return _isAuthenticated;
+    debugPrint('🔍 AUTH_DEBUG: hasValidTokensSync called - _hasAccountCached: $_hasAccountCached, _isAuthenticated: $_isAuthenticated');
+    // FIXED: Use cached account status instead of just authentication flag
+    // This prevents losing account context when app is killed during authentication
+    return _hasAccountCached;
   }
 
   /// Check if user has an account on this device (has stored tokens, regardless of expiration)
   /// This distinguishes between "new user" (needs onboarding) and "returning user" (needs auth prompt)
   Future<bool> hasAccount() async {
     try {
-      final accessToken = await _storage.read(key: _accessTokenKey);
-      final refreshToken = await _storage.read(key: _refreshTokenKey);
-      final hasTokens = accessToken != null && refreshToken != null;
-      
-      // Also check offline auth cache as backup indicator
-      final offlineAuth = await _storage.read(key: _offlineAuthKey);
-      final hasOfflineCache = offlineAuth != null;
-      
-      final hasAccount = hasTokens || hasOfflineCache;
-      debugPrint('🔍 AUTH_DEBUG: hasAccount() - tokens: $hasTokens, offline: $hasOfflineCache, result: $hasAccount');
+      // FIXED: Use the internal method and update cache
+      final hasAccount = await _checkAccountExistence();
+      _hasAccountCached = hasAccount; // Keep cache in sync
       return hasAccount;
     } catch (e) {
       debugPrint('AuthService: Failed to check account status: $e');
+      _hasAccountCached = false; // Update cache on error
       return false;
     }
   }
