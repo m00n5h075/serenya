@@ -101,6 +101,9 @@ class AppStateProvider extends ChangeNotifier {
 
   Future<void> _checkAppState() async {
     if (kDebugMode) {
+      print('🔍 APP_STATE: Starting _checkAppState()');
+    }
+    if (kDebugMode) {
       print('APP_STATE: Checking onboarding status...');
     }
     final onboardingComplete = await _consentService.isOnboardingCompleted();
@@ -114,12 +117,23 @@ class AppStateProvider extends ChangeNotifier {
     // FIXED: Use proper authentication check during initialization
     final loggedIn = await _authService.isLoggedIn(isInitialization: true);
     if (kDebugMode) {
-      print('APP_STATE: Logged in: $loggedIn');
+      print('APP_STATE: Authentication check result: $loggedIn');
+    }
+    
+    // CRITICAL: Only mark as logged in if BOTH conditions are met
+    final finalLoggedInState = loggedIn && onboardingComplete;
+    if (kDebugMode) {
+      print('🔍 APP_STATE: Final state calculation:');
+      print('🔍 APP_STATE:   - onboardingComplete: $onboardingComplete');
+      print('🔍 APP_STATE:   - authService.isLoggedIn: $loggedIn');
+      print('🔍 APP_STATE:   - finalLoggedInState: $finalLoggedInState');
     }
     
     _isOnboardingComplete = onboardingComplete;
-    _isLoggedIn = loggedIn && onboardingComplete;
+    _isLoggedIn = finalLoggedInState;
+    
     if (kDebugMode) {
+      print('APP_STATE: Setting state - onboardingComplete: $_isOnboardingComplete, loggedIn: $_isLoggedIn');
       print('APP_STATE: Notifying listeners...');
     }
     notifyListeners();
@@ -145,6 +159,15 @@ class AppStateProvider extends ChangeNotifier {
       await _consentService.markOnboardingCompleted();
       _isOnboardingComplete = true;
       
+      // VERIFICATION: Immediately check if the onboarding completion was persisted
+      final verificationCheck = await _consentService.isOnboardingCompleted();
+      print('🔍 APP_STATE: VERIFICATION - onboarding completion persisted correctly: $verificationCheck');
+      
+      if (!verificationCheck) {
+        print('❌ APP_STATE: CRITICAL ERROR - onboarding completion was not persisted!');
+        throw Exception('Failed to persist onboarding completion');
+      }
+      
       // STRATEGIC FIX: Set logged in state only when BOTH authentication AND onboarding are complete
       final hasTokens = _authService.hasValidTokensSync();
       if (hasTokens) {
@@ -156,14 +179,16 @@ class AppStateProvider extends ChangeNotifier {
       
       print('🔍 APP_STATE: After completion - isOnboardingComplete: $_isOnboardingComplete, isLoggedIn: $_isLoggedIn');
       
-      // STRATEGIC FIX: Only notify listeners if not in authentication flow 
-      // (completeAuthentication() will handle the notification)
-      if (!_isAuthenticating) {
-        print('🔍 APP_STATE: About to notify listeners');
+      // STRATEGIC FIX: If we're in authentication flow, complete it automatically
+      // to avoid widget disposal issues when calling completeAuthentication() from disposed widgets
+      if (_isAuthenticating) {
+        print('🔍 APP_STATE: In authentication flow - calling completeAuthentication() automatically');
+        // Call completeAuthentication() directly to avoid context issues
+        completeAuthentication();
+      } else {
+        print('🔍 APP_STATE: Not in authentication flow - notifying listeners directly');
         notifyListeners();
         print('🔍 APP_STATE: Listeners notified - should trigger final router redirect to home');
-      } else {
-        print('🔍 APP_STATE: Skipping listener notification - authentication flow will handle it');
       }
     } catch (e) {
       print('🔍 APP_STATE: ERROR completing onboarding: $e');

@@ -96,9 +96,17 @@ class AuthService {
   /// Check if account exists on device (internal method for caching)
   Future<bool> _checkAccountExistence() async {
     try {
+      debugPrint('🔍 AUTH_DEBUG: _checkAccountExistence() - Starting account check...');
+      
       final accessToken = await _storage.read(key: _accessTokenKey);
       final refreshToken = await _storage.read(key: _refreshTokenKey);
       final hasTokens = accessToken != null && refreshToken != null;
+      
+      debugPrint('🔍 AUTH_DEBUG: _checkAccountExistence() - Access token exists: ${accessToken != null}');
+      debugPrint('🔍 AUTH_DEBUG: _checkAccountExistence() - Refresh token exists: ${refreshToken != null}');
+      if (accessToken != null) {
+        debugPrint('🔍 AUTH_DEBUG: _checkAccountExistence() - Access token preview: ${accessToken.substring(0, accessToken.length > 50 ? 50 : accessToken.length)}...');
+      }
       
       // Also check offline auth cache and user data as backup indicators
       final offlineAuth = await _storage.read(key: _offlineAuthKey);
@@ -106,11 +114,14 @@ class AuthService {
       final hasOfflineCache = offlineAuth != null;
       final hasUserData = userData != null;
       
+      debugPrint('🔍 AUTH_DEBUG: _checkAccountExistence() - Offline cache exists: $hasOfflineCache');
+      debugPrint('🔍 AUTH_DEBUG: _checkAccountExistence() - User data exists: $hasUserData');
+      
       final hasAccount = hasTokens || hasOfflineCache || hasUserData;
-      debugPrint('🔍 AUTH_DEBUG: _checkAccountExistence() - tokens: $hasTokens, offline: $hasOfflineCache, userData: $hasUserData, result: $hasAccount');
+      debugPrint('🔍 AUTH_DEBUG: _checkAccountExistence() - Final result: $hasAccount (tokens: $hasTokens, offline: $hasOfflineCache, userData: $hasUserData)');
       return hasAccount;
     } catch (e) {
-      debugPrint('AuthService: Failed to check account existence: $e');
+      debugPrint('🔍 AUTH_DEBUG: _checkAccountExistence() - ERROR: $e');
       return false;
     }
   }
@@ -629,6 +640,7 @@ class AuthService {
     ]);
     
     // FIXED: Update account cache when storing auth data
+    debugPrint('🔍 AUTH_DEBUG: _storeAuthenticationData() - Setting account cache to true');
     _hasAccountCached = true;
     
     // Don't mark authenticated yet - let the caller do it after callback completes
@@ -732,6 +744,7 @@ class AuthService {
       await TableKeyManager.clearCachedKeys();
       
       // FIXED: Clear account cache
+      debugPrint('🔍 AUTH_DEBUG: signOut() - Clearing account cache and authentication flags');
       _hasAccountCached = false;
       _isAuthenticated = false;
       

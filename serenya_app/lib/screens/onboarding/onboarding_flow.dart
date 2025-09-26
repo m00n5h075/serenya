@@ -135,28 +135,33 @@ class _OnboardingFlowState extends State<OnboardingFlow>
   /// Check if user has authentication set up, and guide them through setup if needed
   Future<void> _checkAndSetupAuthentication() async {
     try {
+      print('🔍 ONBOARDING_FLOW: _checkAndSetupAuthentication() starting...');
       final biometricAvailable = await BiometricAuthService.isBiometricAvailable();
       final biometricEnabled = await BiometricAuthService.isBiometricEnabled();
       final pinSet = await BiometricAuthService.isPinSet();
       
-      print('ONBOARDING_FLOW: Auth status - biometric available: $biometricAvailable, enabled: $biometricEnabled, PIN set: $pinSet');
+      print('🔍 ONBOARDING_FLOW: Auth status - biometric available: $biometricAvailable, enabled: $biometricEnabled, PIN set: $pinSet');
       
       if (!biometricEnabled && !pinSet) {
         // User has no authentication method set up - show PIN setup dialog first
-        print('ONBOARDING_FLOW: No authentication methods set up, showing PIN setup dialog');
+        print('🔍 ONBOARDING_FLOW: No authentication methods set up, showing PIN setup dialog');
         if (mounted && context.mounted) {
           _showPinSetupDialog();
+        } else {
+          print('❌ ONBOARDING_FLOW: Widget not mounted, cannot show PIN setup dialog');
         }
       } else {
-        // User has authentication set up - complete onboarding
-        print('ONBOARDING_FLOW: Authentication already set up, completing onboarding');
+        // User has authentication set up - complete onboarding immediately
+        print('🔍 ONBOARDING_FLOW: Authentication already set up, calling _completeOnboarding() directly');
         _completeOnboarding();
       }
     } catch (e) {
-      print('ONBOARDING_FLOW: Error checking authentication setup: $e');
+      print('❌ ONBOARDING_FLOW: Error checking authentication setup: $e');
       // If there's an error checking auth status, show PIN setup as fallback
       if (mounted && context.mounted) {
         _showPinSetupDialog();
+      } else {
+        print('❌ ONBOARDING_FLOW: Widget not mounted, cannot show PIN setup dialog');
       }
     }
   }
@@ -173,16 +178,10 @@ class _OnboardingFlowState extends State<OnboardingFlow>
           print('🔐 PIN_DIALOG: PIN setup completed successfully');
           Navigator.of(context).pop();
           
-          // CRITICAL: Complete authentication ONLY after PIN is set up
-          // This prevents the router from disposing widgets before PIN dialog appears
-          if (mounted) {
-            final appStateProvider = context.read<AppStateProvider>();
-            appStateProvider.completeAuthentication(); // Enable router redirects NOW
-            print('ONBOARDING_FLOW: Called completeAuthentication() after PIN setup - router redirects now enabled');
-          }
-          
-          // PIN is now set up - complete onboarding and optionally show biometric setup
-          _completeOnboarding();
+          // CRITICAL FIX: Complete onboarding - AppStateProvider will automatically handle completeAuthentication()
+          print('🔍 ONBOARDING_FLOW: Calling _completeOnboarding() - authentication completion will be handled automatically');
+          await _completeOnboarding();
+          print('🔐 ONBOARDING_FLOW: Onboarding completion finished - router redirect should happen automatically');
         },
       ),
     );
@@ -190,14 +189,15 @@ class _OnboardingFlowState extends State<OnboardingFlow>
 
   /// Complete onboarding and optionally show biometric setup
   Future<void> _completeOnboarding() async {
-    print('ONBOARDING_FLOW: Completing onboarding');
+    print('🔍 ONBOARDING_FLOW: _completeOnboarding() called - mounted: $mounted');
     
     if (mounted) {
       // First complete onboarding in AppStateProvider
       try {
+        print('🔍 ONBOARDING_FLOW: Getting AppStateProvider and calling completeOnboarding()...');
         final appStateProvider = context.read<AppStateProvider>();
         await appStateProvider.completeOnboarding();
-        print('ONBOARDING_FLOW: Called completeOnboarding() on AppStateProvider');
+        print('🔍 ONBOARDING_FLOW: Successfully called completeOnboarding() on AppStateProvider');
         
         // CRITICAL: DO NOT call completeAuthentication() here!
         // This causes router to dispose OnboardingFlow widget before PIN dialog appears

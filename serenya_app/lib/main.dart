@@ -257,6 +257,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
     
     try {
+      // DEBUGGING: Add basic auth state debugging
+      if (kDebugMode) {
+        print('🔍 DEBUG: About to initialize AppStateProvider...');
+      }
+      
       // Start initialization in background - don't await it here
       // This allows the UI to render immediately with loading state
       _appStateProvider.initialize().catchError((error, stackTrace) {

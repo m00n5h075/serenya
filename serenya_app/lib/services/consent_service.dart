@@ -10,10 +10,20 @@ class ConsentService {
   // Check if onboarding is completed
   Future<bool> isOnboardingCompleted() async {
     try {
+      if (kDebugMode) {
+        print('🔍 CONSENT_SERVICE: isOnboardingCompleted() called - reading from storage...');
+      }
       final completed = await _storage.read(key: _onboardingCompletedKey);
+      if (kDebugMode) {
+        print('🔍 CONSENT_SERVICE: Storage read result: "$completed"');
+        print('🔍 CONSENT_SERVICE: Returning: ${completed == 'true'}');
+      }
       return completed == 'true';
     } catch (e) {
       // If secure storage fails, assume onboarding is not completed
+      if (kDebugMode) {
+        print('❌ CONSENT_SERVICE: Failed to read onboarding status: $e');
+      }
       debugPrint('ConsentService: Failed to read onboarding status: $e');
       return false;
     }
