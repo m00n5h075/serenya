@@ -349,8 +349,8 @@ class _PinSetupDialogState extends State<PinSetupDialog>
             
             const SizedBox(height: HealthcareSpacing.lg),
             
-            // Reset PIN Button (only visible in confirmation mode)
-            if (_isConfirmationMode && !_isLoading)
+            // Reset PIN Button (only visible when there's an error in confirmation mode)
+            if (_isConfirmationMode && !_isLoading && _errorMessage != null)
               Center(
                 child: TextButton.icon(
                   onPressed: _resetPinSetup,

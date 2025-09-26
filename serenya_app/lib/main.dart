@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart' as sqlcipher;
+import 'package:go_router/go_router.dart';
 import 'dart:io';
 import 'core/providers/app_state_provider.dart';
 import 'core/providers/health_data_provider.dart';
@@ -100,6 +101,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late final PdfCleanupService _pdfCleanupService;
   late final AppStateProvider _appStateProvider;
   late final HealthDataProvider _healthDataProvider;
+  
+  // STRATEGIC FIX: Cache router to prevent recreation during authentication
+  GoRouter? _cachedRouter;
   
   bool _isInitialized = false;
   String? _initializationError;
@@ -218,6 +222,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       } catch (e) {
         if (kDebugMode) {
           print('⚠️ MyApp: Failed to dispose PDF cleanup service: $e');
+        }
+      }
+      
+      try {
+        _cachedRouter?.dispose();
+        if (kDebugMode) {
+          print('✅ MyApp: Cached router disposed');
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print('⚠️ MyApp: Failed to dispose cached router: $e');
         }
       }
     }
@@ -388,6 +403,25 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             print('✅ MyApp: Creating router with initialized AppStateProvider');
           }
           
+          // STRATEGIC FIX: Prevent router recreation during authentication
+          if (_cachedRouter == null || !appState.isAuthenticating) {
+            if (kDebugMode) {
+              if (appState.isAuthenticating) {
+                print('🔐 MyApp: Authentication in progress - using cached router to prevent widget disposal');
+              } else {
+                print('✅ MyApp: Creating new router (authentication not in progress)');
+                if (_cachedRouter != null) {
+                  print('🔄 MyApp: Authentication completed - invalidating cached router for fresh redirects');
+                }
+              }
+            }
+            
+            // Only create new router when NOT authenticating
+            if (!appState.isAuthenticating) {
+              _cachedRouter = AppRouter.createRouter(_appStateProvider);
+            }
+          }
+          
           return MaterialApp.router(
             title: 'Serenya',
             theme: HealthcareTheme.lightTheme.copyWith(
@@ -396,7 +430,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 HealthcareThemeExtensions.medicalSafetyTheme,
               ],
             ),
-            routerConfig: AppRouter.createRouter(_appStateProvider),
+            routerConfig: _cachedRouter!,
             debugShowCheckedModeBanner: false,
           );
         },
