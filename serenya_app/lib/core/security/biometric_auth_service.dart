@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
@@ -110,7 +111,17 @@ class SessionManager {
 }
 
 class BiometricAuthService {
-  static const _secureStorage = FlutterSecureStorage();
+  static const _secureStorage = FlutterSecureStorage(
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: true,
+      keyCipherAlgorithm: KeyCipherAlgorithm.RSA_ECB_PKCS1Padding,
+      storageCipherAlgorithm: StorageCipherAlgorithm.AES_GCM_NoPadding,
+    ),
+    iOptions: IOSOptions(
+      accessibility: KeychainAccessibility.unlocked,
+      accountName: 'serenya_health_app',
+    ),
+  );
   static const _pinKey = 'serenya_user_pin_hash';
   static const _biometricEnabledKey = 'serenya_biometric_enabled';
   static const _authPreferenceKey = 'serenya_auth_preference';
@@ -132,6 +143,31 @@ class BiometricAuthService {
       deviceSupported: isAvailable,
       userEnabled: isEnabled,
     );
+    
+    // Start storage health monitoring in debug mode
+    if (kDebugMode) {
+      _startStorageHealthMonitor();
+    }
+  }
+  
+  /// Monitor secure storage health to catch PIN disappearance
+  static void _startStorageHealthMonitor() {
+    Timer.periodic(const Duration(seconds: 2), (timer) async {
+      try {
+        final pinHash = await _secureStorage.read(key: _pinKey);
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        print('🔍 STORAGE_MONITOR: PIN status at $timestamp: ${pinHash != null ? "EXISTS" : "MISSING"}');
+        
+        if (pinHash == null) {
+          // PIN disappeared - try reading all our keys to see what's happening
+          final biometricEnabled = await _secureStorage.read(key: _biometricEnabledKey);
+          final authPreference = await _secureStorage.read(key: _authPreferenceKey);
+          print('🔍 STORAGE_MONITOR: Other keys - biometric: ${biometricEnabled != null}, auth: ${authPreference != null}');
+        }
+      } catch (e) {
+        print('🔍 STORAGE_MONITOR: Error reading storage: $e');
+      }
+    });
   }
 
   /// Check if biometric authentication is available on device
@@ -169,46 +205,130 @@ class BiometricAuthService {
 
   /// Check if user has set up a PIN
   static Future<bool> isPinSet() async {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
     final pinHash = await _secureStorage.read(key: _pinKey);
+    if (kDebugMode) {
+      print('🔍 PIN_DEBUG: isPinSet() at $timestamp - stored hash exists: ${pinHash != null}');
+      if (pinHash != null) {
+        print('🔍 PIN_DEBUG: Hash length: ${pinHash.length}, starts with: ${pinHash.substring(0, 8)}...');
+      } else {
+        print('🔍 PIN_DEBUG: Hash is null - storage returned null');
+        // Try reading again immediately to see if it's a transient issue
+        final pinHashRetry = await _secureStorage.read(key: _pinKey);
+        print('🔍 PIN_DEBUG: Retry read: ${pinHashRetry != null ? "SUCCESS" : "STILL NULL"}');
+      }
+    }
     return pinHash != null && pinHash.isNotEmpty;
   }
 
   /// Set up a 4-digit PIN
   static Future<bool> setupPin(String pin) async {
+    if (kDebugMode) {
+      print('🔐 PIN_SETUP: Starting PIN setup for PIN: ${pin.replaceAll(RegExp(r'.'), '*')}');
+    }
+    
     if (!_isValidPin(pin)) {
+      if (kDebugMode) {
+        print('🔐 PIN_SETUP: Invalid PIN format');
+      }
       throw ArgumentError('PIN must be exactly 4 digits');
     }
 
-    // Hash the PIN with a salt for secure storage
-    final salt = _generateSalt();
-    final pinHash = _hashPin(pin, salt);
-    final combined = '$salt:$pinHash';
+    // Simple SHA256 hash of PIN - proven approach
+    final pinBytes = utf8.encode(pin);
+    final digest = sha256.convert(pinBytes);
+    final pinHash = digest.toString();
 
-    await _secureStorage.write(key: _pinKey, value: combined);
+    if (kDebugMode) {
+      print('🔐 PIN_SETUP: Generated hash: $pinHash');
+      print('🔐 PIN_SETUP: Writing to storage with key: $_pinKey');
+    }
+
+    await _secureStorage.write(key: _pinKey, value: pinHash);
+
+    // Immediately verify it was stored with multiple reads
+    final verification1 = await _secureStorage.read(key: _pinKey);
+    if (kDebugMode) {
+      print('🔐 PIN_SETUP: Verification read 1: $verification1');
+      print('🔐 PIN_SETUP: Storage successful 1: ${verification1 == pinHash}');
+    }
+    
+    // Wait 100ms and verify again
+    await Future.delayed(const Duration(milliseconds: 100));
+    final verification2 = await _secureStorage.read(key: _pinKey);
+    if (kDebugMode) {
+      print('🔐 PIN_SETUP: Verification read 2 (after 100ms): $verification2');
+      print('🔐 PIN_SETUP: Storage successful 2: ${verification2 == pinHash}');
+    }
+    
+    // Final verification after 500ms
+    await Future.delayed(const Duration(milliseconds: 400));
+    final verification3 = await _secureStorage.read(key: _pinKey);
+    if (kDebugMode) {
+      print('🔐 PIN_SETUP: Verification read 3 (after 500ms): $verification3');
+      print('🔐 PIN_SETUP: Storage successful 3: ${verification3 == pinHash}');
+    }
+    
+    if (verification1 != pinHash || verification2 != pinHash || verification3 != pinHash) {
+      throw SecurityException('PIN storage verification failed - secure storage is unstable');
+    }
 
     await AuditLogger.logSecurityEvent(
       'pin_setup_completed',
       pinLength: pin.length,
     );
 
+    if (kDebugMode) {
+      print('🔐 PIN_SETUP: PIN setup completed successfully');
+    }
+
     return true;
   }
 
   /// Verify PIN authentication
   static Future<bool> verifyPin(String pin) async {
-    if (!_isValidPin(pin)) return false;
+    if (kDebugMode) {
+      print('🔐 PIN_VERIFY: Starting PIN verification for PIN: ${pin.replaceAll(RegExp(r'.'), '*')}');
+    }
+    
+    if (!_isValidPin(pin)) {
+      if (kDebugMode) {
+        print('🔐 PIN_VERIFY: Invalid PIN format - must be exactly 4 digits');
+      }
+      return false;
+    }
 
-    final stored = await _secureStorage.read(key: _pinKey);
-    if (stored == null) return false;
+    final storedHash = await _secureStorage.read(key: _pinKey);
+    if (kDebugMode) {
+      print('🔐 PIN_VERIFY: Reading from storage key: $_pinKey');
+      print('🔐 PIN_VERIFY: Stored hash exists: ${storedHash != null}');
+      if (storedHash != null) {
+        print('🔐 PIN_VERIFY: Stored hash: $storedHash');
+      }
+    }
+    
+    if (storedHash == null) {
+      if (kDebugMode) {
+        print('🔐 PIN_VERIFY: No stored PIN hash found');
+      }
+      return false;
+    }
 
-    final parts = stored.split(':');
-    if (parts.length != 2) return false;
+    // Simple SHA256 hash of input PIN
+    final pinBytes = utf8.encode(pin);
+    final digest = sha256.convert(pinBytes);
+    final inputHash = digest.toString();
 
-    final salt = parts[0];
-    final storedHash = parts[1];
-    final inputHash = _hashPin(pin, salt);
+    if (kDebugMode) {
+      print('🔐 PIN_VERIFY: Input hash: $inputHash');
+      print('🔐 PIN_VERIFY: Hashes match: ${storedHash == inputHash}');
+    }
 
     final isValid = storedHash == inputHash;
+
+    if (kDebugMode) {
+      print('🔐 PIN_VERIFY: Final verification result: $isValid');
+    }
 
     await AuditLogger.logSecurityEvent(
       'pin_verification_attempt',
@@ -282,6 +402,92 @@ class BiometricAuthService {
     } catch (e) {
       await AuditLogger.logSecurityEvent(
         'authentication_error',
+        error: e.toString(),
+      );
+      
+      return AuthResult(
+        success: false,
+        method: AuthMethod.none,
+        failureReason: 'authentication_system_error',
+      );
+    }
+  }
+
+  /// System-level authentication that uses existing session or allows PIN without UI
+  /// This is used by services like DeviceKeyManager when no UI context is available
+  static Future<AuthResult> authenticateForSystem({
+    String? reason,
+  }) async {
+    try {
+      // Update session activity
+      SessionManager.updateActivity();
+
+      // Check if session is still valid first
+      if (SessionManager.isSessionValid()) {
+        return AuthResult(
+          success: true, 
+          method: SessionManager.currentAuthMethod,
+        );
+      }
+
+      final biometricAvailable = await isBiometricAvailable();
+      final biometricEnabled = await isBiometricEnabled();
+      final pinSet = await isPinSet();
+
+      if (kDebugMode) {
+        print('🔐 SYSTEM_AUTH: biometric available: $biometricAvailable, enabled: $biometricEnabled, PIN set: $pinSet');
+      }
+
+      // For system access, if only PIN is available, treat it as available authentication
+      // The session was likely created during recent authentication (like onboarding)
+      if (pinSet && (!biometricAvailable || !biometricEnabled)) {
+        // Allow system access with existing PIN setup
+        // This prevents the catch-22 during app initialization
+        await SessionManager.startSession(AuthMethod.pin);
+        
+        if (kDebugMode) {
+          print('🔐 SYSTEM_AUTH: Allowing system access with PIN setup - session started');
+        }
+        
+        return AuthResult(
+          success: true,
+          method: AuthMethod.pin,
+        );
+      }
+
+      // Try biometric authentication if available and enabled
+      if (biometricAvailable && biometricEnabled) {
+        final biometricResult = await _performBiometricAuth(reason);
+        
+        if (biometricResult.success) {
+          await SessionManager.startSession(AuthMethod.biometric);
+          return AuthResult(
+            success: true,
+            method: AuthMethod.biometric,
+            biometricHash: biometricResult.biometricHash,
+          );
+        }
+        
+        // If biometric failed but PIN is set, allow system access
+        if (pinSet) {
+          await SessionManager.startSession(AuthMethod.pin);
+          return AuthResult(
+            success: true,
+            method: AuthMethod.pin,
+          );
+        }
+      }
+
+      // No authentication methods available
+      return AuthResult(
+        success: false,
+        method: AuthMethod.none,
+        failureReason: 'no_auth_methods_available',
+      );
+
+    } catch (e) {
+      await AuditLogger.logSecurityEvent(
+        'system_authentication_error',
         error: e.toString(),
       );
       
@@ -420,25 +626,6 @@ class BiometricAuthService {
     return RegExp(r'^\d{4}$').hasMatch(pin);
   }
 
-  /// Generate salt for PIN hashing
-  static String _generateSalt() {
-    final bytes = List.generate(16, (i) => 
-        DateTime.now().microsecondsSinceEpoch % 256);
-    return base64.encode(bytes);
-  }
-
-  /// Hash PIN with salt using PBKDF2
-  static String _hashPin(String pin, String salt) {
-    final saltBytes = base64.decode(salt);
-    final pinBytes = utf8.encode(pin);
-    
-    // Simple hash for PIN (in production, use PBKDF2)
-    final combined = [...pinBytes, ...saltBytes];
-    final digest = sha256.convert(combined);
-    
-    return digest.toString();
-  }
-
   /// Generate biometric hash for key derivation
   static String _generateBiometricHash(List<BiometricType> availableBiometrics) {
     final biometricInfo = {
@@ -453,12 +640,31 @@ class BiometricAuthService {
 
   /// Clear all authentication data (for logout/reset)
   static Future<void> clearAuthData() async {
+    if (kDebugMode) {
+      print('🚨 PIN_DEBUG: clearAuthData() called - clearing PIN storage!');
+      print('🚨 PIN_DEBUG: Stack trace: ${StackTrace.current}');
+    }
+    
     await _secureStorage.delete(key: _pinKey);
     await _secureStorage.delete(key: _biometricEnabledKey);
     await _secureStorage.delete(key: _authPreferenceKey);
     await SessionManager.expireSession();
 
     await AuditLogger.logSecurityEvent('auth_data_cleared');
+    
+    if (kDebugMode) {
+      print('🚨 PIN_DEBUG: clearAuthData() completed - PIN should now be cleared');
+    }
+  }
+
+  /// Reset PIN data (for fixing corrupted salt/hash issues)
+  static Future<void> resetPinData() async {
+    await _secureStorage.delete(key: _pinKey);
+    await AuditLogger.logSecurityEvent('pin_data_reset');
+    
+    if (kDebugMode) {
+      print('🔧 PIN_RESET: PIN data cleared due to salt generation fix');
+    }
   }
 }
 

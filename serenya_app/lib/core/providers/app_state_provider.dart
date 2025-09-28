@@ -9,6 +9,8 @@ class AppStateProvider extends ChangeNotifier {
   bool _isLoggedIn = false;
   bool _isLoading = true;
   bool _isAuthenticating = false; // STRATEGIC FIX: Prevent router redirects during authentication
+  bool _needsReAuthentication = false; // CRITICAL FIX: Track if user needs to re-authenticate
+  bool _hasExpiredTokens = false; // NEW: Track if user has expired API tokens but offline auth
   String? _error;
   
   // CRITICAL FIX: Accept AuthService as parameter to break circular dependency
@@ -26,6 +28,8 @@ class AppStateProvider extends ChangeNotifier {
   bool get isInitialized => _isInitialized;
   bool get isOnboardingComplete => _isOnboardingComplete;
   bool get isAuthenticating => _isAuthenticating; // STRATEGIC FIX: Expose authentication state
+  bool get needsReAuthentication => _needsReAuthentication; // CRITICAL FIX: Expose re-auth state
+  bool get hasExpiredTokens => _hasExpiredTokens; // NEW: Expose expired tokens state
   
   /// Expose AuthService for components that need direct access (like ConsentSlide)
   AuthService get authService => _authService;
@@ -38,6 +42,11 @@ class AppStateProvider extends ChangeNotifier {
     final newState = hasTokens && _isOnboardingComplete;
     if (newState != _isLoggedIn) {
       _isLoggedIn = newState;
+      // If user becomes logged in, clear expired tokens flag
+      if (newState) {
+        _hasExpiredTokens = false;
+        _needsReAuthentication = false;
+      }
       debugPrint('APP_STATE: Login state changed to: $newState (hasTokens: $hasTokens, onboarded: $_isOnboardingComplete)');
       notifyListeners();
     }
@@ -122,15 +131,30 @@ class AppStateProvider extends ChangeNotifier {
     
     // CRITICAL: Only mark as logged in if BOTH conditions are met
     final finalLoggedInState = loggedIn && onboardingComplete;
+    
+    // CRITICAL FIX: Check if user needs re-authentication
+    // User needs re-auth if they have an account but aren't currently authenticated
+    final hasAccount = await _authService.hasAccount();
+    final needsReAuth = hasAccount && onboardingComplete && !loggedIn;
+    
+    // NEW: Check if user has expired tokens but offline authentication
+    // Use testRefresh=false for initialization to avoid expensive refresh calls
+    final hasExpiredTokens = await _authService.hasExpiredTokensButOfflineAuth(testRefresh: false);
+    
     if (kDebugMode) {
       print('🔍 APP_STATE: Final state calculation:');
       print('🔍 APP_STATE:   - onboardingComplete: $onboardingComplete');
       print('🔍 APP_STATE:   - authService.isLoggedIn: $loggedIn');
+      print('🔍 APP_STATE:   - hasAccount: $hasAccount');
+      print('🔍 APP_STATE:   - needsReAuthentication: $needsReAuth');
+      print('🔍 APP_STATE:   - hasExpiredTokens: $hasExpiredTokens');
       print('🔍 APP_STATE:   - finalLoggedInState: $finalLoggedInState');
     }
     
     _isOnboardingComplete = onboardingComplete;
     _isLoggedIn = finalLoggedInState;
+    _needsReAuthentication = needsReAuth;
+    _hasExpiredTokens = hasExpiredTokens;
     
     if (kDebugMode) {
       print('APP_STATE: Setting state - onboardingComplete: $_isOnboardingComplete, loggedIn: $_isLoggedIn');
@@ -282,6 +306,10 @@ class AppStateProvider extends ChangeNotifier {
   // Method to set logged in status directly (for onboarding flow)
   void setLoggedIn(bool loggedIn) {
     _isLoggedIn = loggedIn;
+    if (loggedIn) {
+      _needsReAuthentication = false; // Clear re-auth flag when user logs in
+      _hasExpiredTokens = false; // Clear expired tokens flag when user logs in
+    }
     notifyListeners();
   }
 

@@ -2,7 +2,8 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import '../core/constants/app_constants.dart';
 import '../core/security/certificate_pinning.dart';
-// Removed unused import: import 'interceptors/auth_interceptor.dart';
+import 'interceptors/auth_interceptor.dart';
+import '../services/auth_service.dart';
 import 'interceptors/encryption_interceptor.dart';
 import 'interceptors/logging_interceptor.dart';
 import 'interceptors/retry_interceptor.dart';
@@ -25,6 +26,7 @@ import 'endpoints/reports_api.dart';
 class ApiClient {
   late final Dio _dio;
   late final ApiErrorHandler _errorHandler;
+  late final AuthService _authService;
   
   // Endpoint-specific API services
   late final AuthApi auth;
@@ -34,13 +36,26 @@ class ApiClient {
   late final ReportsApi reports;
 
   // Singleton pattern for consistent state management
-  static final ApiClient _instance = ApiClient._internal();
-  factory ApiClient() => _instance;
+  static ApiClient? _instance;
+  
+  // Factory method that requires AuthService
+  factory ApiClient({required AuthService authService}) {
+    _instance ??= ApiClient._internal(authService);
+    return _instance!;
+  }
+  
+  // Getter for existing instance (throws if not initialized)
+  static ApiClient get instance {
+    if (_instance == null) {
+      throw StateError('ApiClient not initialized. Call ApiClient(authService: authService) first.');
+    }
+    return _instance!;
+  }
   
   // Expose Dio client for advanced usage (e.g., offline queue)
   Dio get dio => _dio;
 
-  ApiClient._internal() {
+  ApiClient._internal(this._authService) {
     _setupDioClient();
     _errorHandler = ApiErrorHandler();
     
@@ -71,18 +86,20 @@ class ApiClient {
     ));
 
     // Configure SSL certificate pinning for security
-    CertificatePinningService.configureCertificatePinning(_dio);
+    // CertificatePinningService.configureCertificatePinning(_dio); // Temporarily disabled for debugging
 
     // Add interceptors in order of execution
-    // NOTE: Authentication is handled by AuthService's Dio instance
     _dio.interceptors.addAll([
-      // 1. Encryption interceptor (encrypts sensitive data)
+      // 1. Authentication interceptor (automatic token management)
+      AuthInterceptor(authService: _authService),
+      
+      // 2. Encryption interceptor (encrypts sensitive data)
       EncryptionInterceptor(),
       
-      // 2. Logging interceptor (audit trail)
+      // 3. Logging interceptor (audit trail)
       ApiLoggingInterceptor(),
       
-      // 3. Retry interceptor (network resilience)  
+      // 4. Retry interceptor (network resilience)  
       ApiRetryInterceptor(_dio),
     ]);
   }

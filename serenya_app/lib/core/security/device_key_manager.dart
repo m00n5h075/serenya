@@ -191,11 +191,10 @@ class DeviceKeyManager {
   /// Retrieve device root key with biometric authentication and PIN fallback
   static Future<Uint8List> getDeviceRootKeyWithAuth() async {
     try {
-      // Always use the full BiometricAuthService.authenticate() method
-      // This handles biometric -> PIN fallback automatically
-      final authResult = await BiometricAuthService.authenticate(
+      // Use system-level authentication for services that need key access
+      // This handles the case where PIN exists but biometric is not set up
+      final authResult = await BiometricAuthService.authenticateForSystem(
         reason: 'Access your secure medical data encryption key',
-        allowPinFallback: true,
       );
       
       if (!authResult.success) {

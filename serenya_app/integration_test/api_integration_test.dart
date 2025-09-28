@@ -29,8 +29,8 @@ void main() {
       await EncryptedDatabaseService.database;
 
       // Initialize API services
-      apiClient = ApiClient();
       authService = auth.AuthService();
+      apiClient = ApiClient(authService: authService);
 
       // Setup test authentication
       await _setupTestAuthentication();

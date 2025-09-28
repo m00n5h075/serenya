@@ -32,8 +32,8 @@ void main() {
       await SessionManager.startSession(AuthMethod.pin);
 
       // Initialize API services
-      apiClient = ApiClient();
       authService = auth.AuthService();
+      apiClient = ApiClient(authService: authService);
     });
 
     tearDownAll(() async {

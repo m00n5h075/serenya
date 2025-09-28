@@ -12,10 +12,8 @@ import '../api/error_handler.dart';
 /// - Automatic cache invalidation
 /// - Background refresh capability
 /// - Error handling with graceful degradation
-/// - Singleton pattern for consistent state
+/// - Dependency injection for ApiClient
 class PremiumUserService {
-  static PremiumUserService? _instance;
-  
   final SubscriptionsApi _subscriptionsApi;
   
   // Cache state
@@ -30,19 +28,13 @@ class PremiumUserService {
   // Background refresh timer
   Timer? _backgroundRefreshTimer;
   
-  /// Private constructor for singleton
-  PremiumUserService._()
+  /// Constructor that accepts ApiClient dependency
+  PremiumUserService({required ApiClient apiClient})
       : _subscriptionsApi = SubscriptionsApi(
-          ApiClient().dio,
+          apiClient.dio,
           ApiErrorHandler(),
         ) {
     _startBackgroundRefresh();
-  }
-  
-  /// Singleton instance getter
-  factory PremiumUserService() {
-    _instance ??= PremiumUserService._();
-    return _instance!;
   }
 
   /// Check if user is premium with caching

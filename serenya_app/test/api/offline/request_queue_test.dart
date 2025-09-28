@@ -1,15 +1,23 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
+import 'package:mockito/mockito.dart';
 import 'package:serenya_app/api/offline/request_queue.dart';
+import 'package:serenya_app/api/api_client.dart';
+import 'package:serenya_app/services/auth_service.dart';
 
 // Generate mocks
 @GenerateMocks([])
+class MockApiClient extends Mock implements ApiClient {}
+class MockAuthService extends Mock implements AuthService {}
+
 void main() {
   group('RequestQueue', () {
     late RequestQueue requestQueue;
+    late MockApiClient mockApiClient;
 
     setUp(() {
-      requestQueue = RequestQueue();
+      mockApiClient = MockApiClient();
+      requestQueue = RequestQueue(apiClient: mockApiClient);
     });
 
     tearDown(() async {
@@ -19,8 +27,8 @@ void main() {
 
     group('Initialization', () {
       test('should be singleton', () {
-        final instance1 = RequestQueue();
-        final instance2 = RequestQueue();
+        final instance1 = RequestQueue(apiClient: mockApiClient);
+        final instance2 = RequestQueue(apiClient: mockApiClient);
         
         expect(instance1, equals(instance2));
         expect(identical(instance1, instance2), isTrue);

@@ -3,7 +3,16 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:convert';
 
 class ConsentService {
-  static const _storage = FlutterSecureStorage();
+  static const _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: true,
+      keyCipherAlgorithm: KeyCipherAlgorithm.RSA_ECB_PKCS1Padding,
+      storageCipherAlgorithm: StorageCipherAlgorithm.AES_GCM_NoPadding,
+    ),
+    iOptions: IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+    ),
+  );
   static const String _onboardingCompletedKey = 'onboarding_completed';
   static const String _consentDataKey = 'consent_data';
 
@@ -12,17 +21,45 @@ class ConsentService {
     try {
       if (kDebugMode) {
         print('🔍 CONSENT_SERVICE: isOnboardingCompleted() called - reading from storage...');
+        print('🔍 CONSENT_SERVICE: Using storage key: "$_onboardingCompletedKey"');
       }
+      
       final completed = await _storage.read(key: _onboardingCompletedKey);
+      
       if (kDebugMode) {
-        print('🔍 CONSENT_SERVICE: Storage read result: "$completed"');
+        print('🔍 CONSENT_SERVICE: Storage read result: "$completed" (type: ${completed.runtimeType})');
         print('🔍 CONSENT_SERVICE: Returning: ${completed == 'true'}');
       }
+      
+      // CRITICAL FIX: Additional verification for null values
+      if (completed == null) {
+        if (kDebugMode) {
+          print('🔍 CONSENT_SERVICE: Storage returned null - checking if key exists');
+        }
+        
+        // Try to list all keys to see if our key exists
+        try {
+          final allKeys = await _storage.readAll();
+          if (kDebugMode) {
+            print('🔍 CONSENT_SERVICE: All storage keys: ${allKeys.keys.toList()}');
+            print('🔍 CONSENT_SERVICE: Key "$_onboardingCompletedKey" exists: ${allKeys.containsKey(_onboardingCompletedKey)}');
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            print('❌ CONSENT_SERVICE: Error reading all keys: $e');
+          }
+        }
+        
+        return false;
+      }
+      
       return completed == 'true';
     } catch (e) {
       // If secure storage fails, assume onboarding is not completed
       if (kDebugMode) {
         print('❌ CONSENT_SERVICE: Failed to read onboarding status: $e');
+        print('❌ CONSENT_SERVICE: Error type: ${e.runtimeType}');
+        print('❌ CONSENT_SERVICE: Error details: $e');
       }
       debugPrint('ConsentService: Failed to read onboarding status: $e');
       return false;
@@ -105,12 +142,36 @@ class ConsentService {
   // Mark onboarding as completed
   Future<void> markOnboardingCompleted() async {
     print('🔍 CONSENT_SERVICE: markOnboardingCompleted() called - writing to storage');
-    await _storage.write(key: _onboardingCompletedKey, value: 'true');
-    print('🔍 CONSENT_SERVICE: Storage write completed');
     
-    // Verify it was written
-    final verification = await _storage.read(key: _onboardingCompletedKey);
-    print('🔍 CONSENT_SERVICE: Verification read: $verification');
+    try {
+      // Try to write the value
+      await _storage.write(key: _onboardingCompletedKey, value: 'true');
+      print('🔍 CONSENT_SERVICE: Storage write completed');
+      
+      // Verify it was written immediately
+      final verification = await _storage.read(key: _onboardingCompletedKey);
+      print('🔍 CONSENT_SERVICE: Immediate verification read: $verification');
+      
+      if (verification != 'true') {
+        throw Exception('Storage verification failed - expected "true", got "$verification"');
+      }
+      
+      print('🔍 CONSENT_SERVICE: Storage verification successful');
+      
+      // CRITICAL FIX: Add a delay and re-verify to ensure persistence
+      await Future.delayed(const Duration(milliseconds: 100));
+      final delayedVerification = await _storage.read(key: _onboardingCompletedKey);
+      print('🔍 CONSENT_SERVICE: Delayed verification read: $delayedVerification');
+      
+      if (delayedVerification != 'true') {
+        throw Exception('Delayed storage verification failed - expected "true", got "$delayedVerification"');
+      }
+      
+      print('🔍 CONSENT_SERVICE: All storage verifications successful');
+    } catch (e) {
+      print('❌ CONSENT_SERVICE: Error in markOnboardingCompleted: $e');
+      rethrow;
+    }
   }
 
   // Clear all consent (for app reset)

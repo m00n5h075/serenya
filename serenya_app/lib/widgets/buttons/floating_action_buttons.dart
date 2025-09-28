@@ -7,6 +7,7 @@ import '../../api/offline/connectivity_service.dart';
 import '../../models/local_database_models.dart';
 import '../../services/premium_user_service.dart';
 import '../../services/doctor_reports_service.dart';
+import '../../api/api_client.dart';
 
 /// Context-sensitive Floating Action Button system for Serenya
 /// 
@@ -48,14 +49,25 @@ class _SerenyaFABState extends State<SerenyaFAB>
   bool _hasCompletedDocuments = false;
   bool _isPremiumUser = false;
   
-  // Services
-  final PremiumUserService _premiumService = PremiumUserService();
-  final DoctorReportsService _doctorReportsService = DoctorReportsService();
+  // Services - initialized in didChangeDependencies
+  late final PremiumUserService _premiumService;
+  late final DoctorReportsService _doctorReportsService;
 
   @override
   void initState() {
     super.initState();
     _setupAnimations();
+  }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    
+    // Initialize services with injected ApiClient
+    final apiClient = Provider.of<ApiClient>(context, listen: false);
+    _premiumService = PremiumUserService(apiClient: apiClient);
+    _doctorReportsService = DoctorReportsService(apiClient: apiClient);
+    
     _checkConnectivity();
     _checkDocumentStatus();
     _checkPremiumStatus();

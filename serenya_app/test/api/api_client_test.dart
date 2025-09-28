@@ -1,16 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serenya_app/api/api_client.dart';
 import 'package:serenya_app/core/constants/app_constants.dart';
+import 'package:serenya_app/services/auth_service.dart';
+import 'package:mockito/mockito.dart';
 
 // Generate mocks
+class MockAuthService extends Mock implements AuthService {}
 
 void main() {
   group('ApiClient', () {
     late ApiClient apiClient;
+    late MockAuthService mockAuthService;
 
     setUp(() {
-      // Reset singleton for testing
-      apiClient = ApiClient();
+      // Create mock AuthService for testing
+      mockAuthService = MockAuthService();
+      apiClient = ApiClient(authService: mockAuthService);
     });
 
     tearDown(() {
@@ -19,8 +24,8 @@ void main() {
 
     group('Initialization', () {
       test('should initialize with correct singleton pattern', () {
-        final instance1 = ApiClient();
-        final instance2 = ApiClient();
+        final instance1 = ApiClient(authService: mockAuthService);
+        final instance2 = ApiClient(authService: mockAuthService);
         
         expect(instance1, equals(instance2));
         expect(identical(instance1, instance2), isTrue);

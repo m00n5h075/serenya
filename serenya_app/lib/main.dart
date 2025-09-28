@@ -13,6 +13,7 @@ import 'core/navigation/app_router.dart';
 import 'services/auth_service.dart';
 import 'services/unified_polling_service.dart';
 import 'services/pdf_cleanup_service.dart';
+import 'api/api_client.dart';
 import 'widgets/serenya_spinner.dart';
 
 void main() async {
@@ -97,6 +98,7 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   // CRITICAL FIX: Create single AuthService instance that will be shared
   late final AuthService _authService;
+  late final ApiClient _apiClient;
   late final UnifiedPollingService _pollingService;
   late final PdfCleanupService _pdfCleanupService;
   late final AppStateProvider _appStateProvider;
@@ -143,6 +145,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       _authService = AuthService();
       if (kDebugMode) {
         print('✅ MyApp: AuthService created');
+      }
+      
+      // CRITICAL FIX: Initialize ApiClient with AuthService
+      _apiClient = ApiClient(authService: _authService);
+      if (kDebugMode) {
+        print('✅ MyApp: ApiClient created with shared AuthService');
       }
       
       // CRITICAL FIX: Pass AuthService instance to AppStateProvider to avoid circular dependency
@@ -379,6 +387,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       providers: [
         // CRITICAL FIX: Provide the single AuthService instance
         Provider<AuthService>.value(value: _authService),
+        // Provide the ApiClient instance with authentication
+        Provider<ApiClient>.value(value: _apiClient),
         ChangeNotifierProvider.value(value: _appStateProvider),
         ChangeNotifierProvider.value(value: _healthDataProvider),
       ],

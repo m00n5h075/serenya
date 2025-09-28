@@ -350,6 +350,7 @@ class AuthService {
       debugPrint('🚀 AUTH_DEBUG: Request headers: ${_dio.options.headers}');
       debugPrint('🚀 AUTH_DEBUG: Request data: ${jsonEncode(authRequest)}');
       
+      
       // Step 4: Backend authentication via unified OAuth endpoint
       debugPrint('🚀 AUTH_DEBUG: Making POST request...');
       try {
@@ -359,12 +360,19 @@ class AuthService {
         debugPrint('🚀 AUTH_DEBUG: Got response with status: ${response.statusCode}');
         debugPrint('🚀 AUTH_DEBUG: Response data: ${response.data}');
         
+        
         if (response.statusCode == 200) {
         final authData = response.data;
         
         // Check if this is an error response
         if (authData['success'] == false) {
           final errorData = authData['error'] ?? {};
+          debugPrint('🚨 AUTH_ERROR: Backend returned success=false');
+          debugPrint('🚨 AUTH_ERROR: Error code: ${errorData['code']}');
+          debugPrint('🚨 AUTH_ERROR: User message: ${errorData['user_message']}');
+          debugPrint('🚨 AUTH_ERROR: Full error data: $errorData');
+          debugPrint('🚨 AUTH_ERROR: Full response: $authData');
+          
           return AuthResult.failed(
             errorData['user_message'] ?? 'Authentication failed',
             errorCode: errorData['code'],
@@ -402,6 +410,8 @@ class AuthService {
       debugPrint('🔥 AUTH_DEBUG: Response status: ${e.response?.statusCode}');
       debugPrint('🔥 AUTH_DEBUG: Response data: ${e.response?.data}');
       debugPrint('🔥 AUTH_DEBUG: Response headers: ${e.response?.headers}');
+      
+      
       await _googleSignIn.signOut();
       
       // Handle specific backend errors
@@ -459,6 +469,12 @@ class AuthService {
         // Check if this is an error response
         if (authData['success'] == false) {
           final errorData = authData['error'] ?? {};
+          debugPrint('🚨 AUTH_ERROR: Backend returned success=false');
+          debugPrint('🚨 AUTH_ERROR: Error code: ${errorData['code']}');
+          debugPrint('🚨 AUTH_ERROR: User message: ${errorData['user_message']}');
+          debugPrint('🚨 AUTH_ERROR: Full error data: $errorData');
+          debugPrint('🚨 AUTH_ERROR: Full response: $authData');
+          
           return AuthResult.failed(
             errorData['user_message'] ?? 'Authentication failed',
             errorCode: errorData['code'],
@@ -644,6 +660,16 @@ class AuthService {
     _hasAccountCached = true;
     
     // Don't mark authenticated yet - let the caller do it after callback completes
+  }
+
+  /// TEMPORARY DEBUG: Get full JWT token for analysis
+  Future<void> debugLogFullJWT() async {
+    final accessToken = await _storage.read(key: _accessTokenKey);
+    if (accessToken != null) {
+      debugPrint('🔍 JWT_DEBUG: Full access token: $accessToken');
+    } else {
+      debugPrint('🔍 JWT_DEBUG: No access token found');
+    }
   }
 
   /// Get valid access token with automatic refresh
@@ -834,6 +860,16 @@ class AuthService {
 
   /// Handle Dio errors with healthcare-appropriate messaging
   AuthResult _handleDioError(DioException e, String operation) {
+    // Enhanced logging for debugging new user issues
+    debugPrint('🚨 DIO_ERROR: $operation failed');
+    debugPrint('🚨 DIO_ERROR: Type: ${e.type}');
+    debugPrint('🚨 DIO_ERROR: Message: ${e.message}');
+    debugPrint('🚨 DIO_ERROR: Status Code: ${e.response?.statusCode}');
+    debugPrint('🚨 DIO_ERROR: Response Data: ${e.response?.data}');
+    debugPrint('🚨 DIO_ERROR: Request Path: ${e.requestOptions.path}');
+    debugPrint('🚨 DIO_ERROR: Request Data: ${e.requestOptions.data}');
+    debugPrint('🚨 DIO_ERROR: Request Headers: ${e.requestOptions.headers}');
+    
     switch (e.type) {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
@@ -922,7 +958,8 @@ class AuthService {
       final refreshed = await _refreshTokenSilently();
       if (refreshed) {
         await _updateOfflineAuthCache();
-        debugPrint('🔍 AUTH_DEBUG: Tokens refreshed successfully after biometric auth');
+        _markAuthenticated(); // Mark user as authenticated with fresh tokens
+        debugPrint('🔍 AUTH_DEBUG: Tokens refreshed successfully after biometric auth - user marked as authenticated');
         return true;
       }
       
@@ -983,6 +1020,62 @@ class AuthService {
     // FIXED: Use cached account status instead of just authentication flag
     // This prevents losing account context when app is killed during authentication
     return _hasAccountCached;
+  }
+
+  /// Check if user has expired API tokens but valid offline authentication
+  /// This is used to detect the scenario where user needs fresh tokens
+  /// [testRefresh] - if false, skips the expensive refresh test (for router checks)
+  Future<bool> hasExpiredTokensButOfflineAuth({bool testRefresh = false}) async {
+    try {
+      debugPrint('🔍 AUTH_DEBUG: hasExpiredTokensButOfflineAuth() called');
+      
+      // First check if user has any account/offline auth at all
+      if (!_hasAccountCached) {
+        debugPrint('🔍 AUTH_DEBUG: No cached account - returning false');
+        return false;
+      }
+      
+      // Check if we have tokens stored
+      final accessToken = await _storage.read(key: _accessTokenKey);
+      final refreshToken = await _storage.read(key: _refreshTokenKey);
+      
+      if (accessToken == null || refreshToken == null) {
+        debugPrint('🔍 AUTH_DEBUG: Missing tokens but have offline auth - returning true');
+        return true; // Has offline auth but no API tokens
+      }
+      
+      // Check if access token is expired
+      final isTokenExpired = SecurityUtils.isTokenExpired(accessToken);
+      debugPrint('🔍 AUTH_DEBUG: Access token expired: $isTokenExpired');
+      
+      if (!isTokenExpired) {
+        debugPrint('🔍 AUTH_DEBUG: Token valid - returning false');
+        return false; // Token is still valid
+      }
+      
+      // If testRefresh is disabled, just return true since token is expired
+      if (!testRefresh) {
+        debugPrint('🔍 AUTH_DEBUG: Token expired, testRefresh disabled - returning true');
+        return true; // Token expired and we're not testing refresh
+      }
+      
+      // Token is expired, try to refresh silently to test if refresh token works
+      debugPrint('🔍 AUTH_DEBUG: Token expired, testing refresh token validity');
+      final refreshResult = await _refreshTokenSilently();
+      
+      if (refreshResult) {
+        debugPrint('🔍 AUTH_DEBUG: Refresh successful - returning false');
+        return false; // Refresh worked, so tokens are now valid
+      } else {
+        debugPrint('🔍 AUTH_DEBUG: Refresh failed - user has offline auth but expired API tokens');
+        return true; // Refresh failed, user needs re-authentication for fresh tokens
+      }
+      
+    } catch (e) {
+      debugPrint('🔍 AUTH_DEBUG: Error in hasExpiredTokensButOfflineAuth: $e');
+      // On error, assume tokens are expired if we have offline auth
+      return _hasAccountCached;
+    }
   }
 
   /// Check if user has an account on this device (has stored tokens, regardless of expiration)

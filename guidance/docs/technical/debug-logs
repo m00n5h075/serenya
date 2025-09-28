@@ -1,0 +1,411 @@
+Launching lib/main.dart on sdk gphone64 arm64 in debug mode...
+Running Gradle task 'assembleDebug'...
+✓ Built build/app/outputs/flutter-apk/app-debug.apk
+Installing build/app/outputs/flutter-apk/app-debug.apk...
+D/FlutterJNI( 9988): Beginning load of flutter...
+D/FlutterJNI( 9988): flutter (null) was loaded normally!
+I/flutter ( 9988): [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
+W/nya.serenya_app( 9988): Verification of void io.flutter.plugin.platform.PlatformPlugin.setSystemChromeChangeListener() took 100.913ms (188.28 bytecodes/s) (0B arena alloc)
+W/nya.serenya_app( 9988): Verification of android.content.SharedPreferences com.it_nomads.fluttersecurestorage.FlutterSecureStorage.initializeEncryptedSharedPreferencesManager(android.content.Context) took 217.958ms (293.63 bytecodes/s) (0B arena alloc)
+Debug service listening on ws://127.0.0.1:49827/pku0gHhhdZw=/ws
+Syncing files to device sdk gphone64 arm64...
+D/nativeloader( 9988): Load /data/app/~~I7A_ikrNJAUvh-_vI3tBGg==/com.serenya.serenya_app-A02dOgMWp6TwxZqlcbIQ5Q==/base.apk!/lib/arm64-v8a/libsqlcipher.so using class loader ns clns-9 (caller=/data/app/~~I7A_ikrNJAUvh-_vI3tBGg==/com.serenya.serenya_app-A02dOgMWp6TwxZqlcbIQ5Q==/base.apk!classes3.dex): ok
+I/nya.serenya_app( 9988): hiddenapi: Accessing hidden method Landroid/view/accessibility/AccessibilityNodeInfo;->getSourceNodeId()J (runtime_flags=0, domain=platform, api=unsupported,test-api) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
+I/nya.serenya_app( 9988): hiddenapi: Accessing hidden method Landroid/view/accessibility/AccessibilityRecord;->getSourceNodeId()J (runtime_flags=0, domain=platform, api=unsupported) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
+I/nya.serenya_app( 9988): hiddenapi: Accessing hidden field Landroid/view/accessibility/AccessibilityNodeInfo;->mChildNodeIds:Landroid/util/LongArray; (runtime_flags=0, domain=platform, api=unsupported) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
+I/nya.serenya_app( 9988): hiddenapi: Accessing hidden method Landroid/util/LongArray;->get(I)J (runtime_flags=0, domain=platform, api=unsupported) from Lio/flutter/view/AccessibilityViewEmbedder$ReflectionAccessors; (domain=app) using reflection: allowed
+D/CompatChangeReporter( 9988): Compat change id reported: 377864165; UID 10230; state: ENABLED
+W/HWUI    ( 9988): Unknown dataspace 0
+D/WindowOnBackDispatcher( 9988): setTopOnBackInvokedCallback (unwrapped): android.app.Activity$$ExternalSyntheticLambda0@f4bb31c
+I/WindowExtensionsImpl( 9988): Initializing Window Extensions, vendor API level=9, activity embedding enabled=true
+W/nya.serenya_app( 9988): Verification of void androidx.profileinstaller.ProfileInstaller.writeProfile(android.content.Context) took 100.234ms (109.74 bytecodes/s) (0B arena alloc)
+D/ProfileInstaller( 9988): Installing profile for com.serenya.serenya_app
+D/VRI[MainActivity]( 9988): WindowInsets changed: 1080x2400 statusBars:[0,63,0,0] navigationBars:[0,0,0,63] mandatorySystemGestures:[0,63,0,84] 
+I/nya.serenya_app( 9988): Compiler allocated 5274KB to compile void android.view.ViewRootImpl.performTraversals()
+I/flutter ( 9988): 🚀 MAIN: Starting Serenya app initialization...
+I/flutter ( 9988): ✅ MAIN: Flutter binding initialized
+I/flutter ( 9988): 📱 MAIN: Initializing Android SQLCipher database...
+I/flutter ( 9988): ✅ MAIN: Database factory initialized successfully
+I/flutter ( 9988): 🚀 MAIN: Starting MyApp widget...
+I/flutter ( 9988): ✅ MAIN: MyApp widget started successfully
+I/flutter ( 9988): 🏠 MyApp: initState() called
+I/flutter ( 9988): ✅ MyApp: Added lifecycle observer
+I/flutter ( 9988): 🔧 MyApp: Initializing core services...
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _initializeAuthState() called
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _checkAccountExistence() - Starting account check...
+I/flutter ( 9988): ✅ MyApp: AuthService created
+I/flutter ( 9988): ✅ MyApp: ApiClient created with shared AuthService
+I/flutter ( 9988): 🏠 APP_STATE: AppStateProvider created with provided AuthService instance
+I/flutter ( 9988): ✅ MyApp: AppStateProvider created with shared AuthService
+I/flutter ( 9988): ✅ MyApp: HealthDataProvider created
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _initializeAuthState() called
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _checkAccountExistence() - Starting account check...
+I/flutter ( 9988): ✅ MyApp: UnifiedPollingService created
+I/flutter ( 9988): ✅ MyApp: PdfCleanupService created
+I/flutter ( 9988): ✅ MyApp: All core services initialized successfully
+I/flutter ( 9988): 🚀 MyApp: Starting app initialization...
+I/flutter ( 9988): 🔍 DEBUG: About to initialize AppStateProvider...
+I/flutter ( 9988): APP_STATE: Starting initialization...
+I/flutter ( 9988): APP_STATE: Checking app state...
+I/flutter ( 9988): 🔍 APP_STATE: Starting _checkAppState()
+I/flutter ( 9988): APP_STATE: Checking onboarding status...
+I/flutter ( 9988): 🔍 CONSENT_SERVICE: isOnboardingCompleted() called - reading from storage...
+I/flutter ( 9988): 🔍 CONSENT_SERVICE: Using storage key: "onboarding_completed"
+I/flutter ( 9988): ✅ MyApp: AppStateProvider initialization started
+I/flutter ( 9988): 🎨 MyApp: build() called - isInitialized: true, error: null
+I/flutter ( 9988): 🎨 MyApp: Consumer builder - isInitialized: false, isLoading: true, error: null
+I/Choreographer( 9988): Skipped 182 frames!  The application may be doing too much work on its main thread.
+D/WindowLayoutComponentImpl( 9988): Register WindowLayoutInfoListener on Context=com.serenya.serenya_app.MainActivity@d95c54e, of which baseContext=android.app.ContextImpl@7e18768
+V/Configuration( 9988): Updating configuration, locales updated from [en_US] to [en]
+D/InsetsController( 9988): hide(ime())
+I/ImeTracker( 9988): com.serenya.serenya_app:be1ebbbe: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+W/nya.serenya_app( 9988): Suspending all threads took: 21.823ms
+W/nya.serenya_app( 9988): userfaultfd: MOVE ioctl seems unsupported: Connection timed out
+I/nya.serenya_app( 9988): Background concurrent mark compact GC freed 3536KB AllocSpace bytes, 4(120KB) LOS objects, 49% free, 2524KB/5048KB, paused 23.972ms,46.090ms total 3.706s
+V/Configuration( 9988): Updating configuration, locales updated from [en] to [en_US]
+I/nya.serenya_app( 9988): IncrementDisableThreadFlip blocked for 27.252ms
+I/nya.serenya_app( 9988): Background young concurrent mark compact GC freed 1216KB AllocSpace bytes, 24(960KB) LOS objects, 29% free, 3569KB/5048KB, paused 611us,8.870ms total 389.128ms
+I/flutter ( 9988): 🔍 CONSENT_SERVICE: Storage read result: "null" (type: Null)
+I/flutter ( 9988): 🔍 CONSENT_SERVICE: Returning: false
+I/flutter ( 9988): 🔍 CONSENT_SERVICE: Storage returned null - checking if key exists
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _checkAccountExistence() - Access token exists: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _checkAccountExistence() - Refresh token exists: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _checkAccountExistence() - Access token exists: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _checkAccountExistence() - Refresh token exists: false
+I/nya.serenya_app( 9988): Background concurrent mark compact GC freed 904KB AllocSpace bytes, 34(1224KB) LOS objects, 49% free, 3885KB/7771KB, paused 564us,2.850ms total 1.217s
+I/flutter ( 9988): 🔍 CONSENT_SERVICE: All storage keys: []
+I/flutter ( 9988): 🔍 CONSENT_SERVICE: Key "onboarding_completed" exists: false
+I/flutter ( 9988): APP_STATE: Onboarding complete: false
+I/flutter ( 9988): APP_STATE: Checking login status...
+I/flutter ( 9988): 🔍 AUTH_DEBUG: isLoggedIn() called with isInitialization: true
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _checkAccountExistence() - Offline cache exists: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _checkAccountExistence() - User data exists: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _checkAccountExistence() - Final result: false (tokens: false, offline: false, userData: false)
+I/flutter ( 9988): 🔍 AUTH_DEBUG: Account exists: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: Authentication state initialized - hasAccount: false, isAuthenticated: false
+I/nya.serenya_app( 9988): Background young concurrent mark compact GC freed 1640KB AllocSpace bytes, 60(2160KB) LOS objects, 56% free, 3409KB/7771KB, paused 479us,9.722ms total 592.197ms
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _checkAccountExistence() - Offline cache exists: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _checkAccountExistence() - User data exists: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _checkAccountExistence() - Final result: false (tokens: false, offline: false, userData: false)
+I/flutter ( 9988): 🔍 AUTH_DEBUG: Account exists: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: Authentication state initialized - hasAccount: false, isAuthenticated: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: accessToken exists: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: refreshToken exists: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: Missing tokens - accessToken: false, refreshToken: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: No tokens - returning false (requires fresh authentication)
+I/flutter ( 9988): APP_STATE: Authentication check result: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _checkAccountExistence() - Starting account check...
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _checkAccountExistence() - Access token exists: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _checkAccountExistence() - Refresh token exists: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _checkAccountExistence() - Offline cache exists: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _checkAccountExistence() - User data exists: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _checkAccountExistence() - Final result: false (tokens: false, offline: false, userData: false)
+I/flutter ( 9988): 🔍 AUTH_DEBUG: hasExpiredTokensButOfflineAuth() called
+I/flutter ( 9988): 🔍 AUTH_DEBUG: No cached account - returning false
+I/flutter ( 9988): 🔍 APP_STATE: Final state calculation:
+I/flutter ( 9988): 🔍 APP_STATE:   - onboardingComplete: false
+I/flutter ( 9988): 🔍 APP_STATE:   - authService.isLoggedIn: false
+I/flutter ( 9988): 🔍 APP_STATE:   - hasAccount: false
+I/flutter ( 9988): 🔍 APP_STATE:   - needsReAuthentication: false
+I/flutter ( 9988): 🔍 APP_STATE:   - hasExpiredTokens: false
+I/flutter ( 9988): 🔍 APP_STATE:   - finalLoggedInState: false
+I/flutter ( 9988): APP_STATE: Setting state - onboardingComplete: false, loggedIn: false
+I/flutter ( 9988): APP_STATE: Notifying listeners...
+I/flutter ( 9988): APP_STATE: Listeners notified
+I/flutter ( 9988): APP_STATE: App state checked successfully
+I/flutter ( 9988): APP_STATE: Initialization complete
+I/flutter ( 9988): APP_STATE: Setting loading to false
+W/nya.serenya_app( 9988): Suspending all threads took: 48.315ms
+I/flutter ( 9988): 🎨 MyApp: Consumer builder - isInitialized: true, isLoading: false, error: null
+I/flutter ( 9988): ✅ MyApp: Creating router with initialized AppStateProvider
+I/flutter ( 9988): ✅ MyApp: Creating new router (authentication not in progress)
+I/flutter ( 9988): ROUTER: Current path: /loading
+I/flutter ( 9988): ROUTER: isLoading: false
+I/flutter ( 9988): ROUTER: error: null
+I/flutter ( 9988): ROUTER: isOnboardingComplete: false
+I/flutter ( 9988): ROUTER: isLoggedIn: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: hasValidTokensSync called - _hasAccountCached: false, _isAuthenticated: false
+I/flutter ( 9988): 🔍 ROUTER: Evaluating redirect logic:
+I/flutter ( 9988): 🔍 ROUTER:   - isOnboardingComplete: false
+I/flutter ( 9988): 🔍 ROUTER:   - isLoggedIn: false
+I/flutter ( 9988): 🔍 ROUTER:   - needsReAuthentication: false
+I/flutter ( 9988): 🔍 ROUTER:   - hasExpiredTokens: false
+I/flutter ( 9988): 🔍 ROUTER:   - hasValidTokensSync: false
+I/flutter ( 9988): 🔍 ROUTER:   - currentPath: /loading
+I/flutter ( 9988): 🔍 ROUTER: CONDITION 1 - Onboarding not complete, redirecting to onboarding
+I/flutter ( 9988): ROUTER: Current path: /onboarding
+I/flutter ( 9988): ROUTER: isLoading: false
+I/flutter ( 9988): ROUTER: error: null
+I/flutter ( 9988): ROUTER: isOnboardingComplete: false
+I/flutter ( 9988): ROUTER: isLoggedIn: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: hasValidTokensSync called - _hasAccountCached: false, _isAuthenticated: false
+I/flutter ( 9988): 🔍 ROUTER: Evaluating redirect logic:
+I/flutter ( 9988): 🔍 ROUTER:   - isOnboardingComplete: false
+I/flutter ( 9988): 🔍 ROUTER:   - isLoggedIn: false
+I/flutter ( 9988): 🔍 ROUTER:   - needsReAuthentication: false
+I/flutter ( 9988): 🔍 ROUTER:   - hasExpiredTokens: false
+I/flutter ( 9988): 🔍 ROUTER:   - hasValidTokensSync: false
+I/flutter ( 9988): 🔍 ROUTER:   - currentPath: /onboarding
+I/flutter ( 9988): 🔍 ROUTER: CONDITION 1 - Onboarding not complete, redirecting to onboarding
+I/nya.serenya_app( 9988): Background concurrent mark compact GC freed 1952KB AllocSpace bytes, 84(3024KB) LOS objects, 49% free, 2857KB/5714KB, paused 53.533ms,35.097ms total 797.307ms
+I/flutter ( 9988): ONBOARDING_FLOW: initState called
+I/Choreographer( 9988): Skipped 34 frames!  The application may be doing too much work on its main thread.
+I/nya.serenya_app( 9988): Background young concurrent mark compact GC freed 1019KB AllocSpace bytes, 28(1040KB) LOS objects, 21% free, 4478KB/5714KB, paused 649us,9.572ms total 946.024ms
+I/nya.serenya_app( 9988): Waiting for a blocking GC ProfileSaver
+I/nya.serenya_app( 9988): Background concurrent mark compact GC freed 1281KB AllocSpace bytes, 47(1692KB) LOS objects, 49% free, 3761KB/7523KB, paused 1.657ms,2.630ms total 662.581ms
+I/nya.serenya_app( 9988): WaitForGcToComplete blocked ProfileSaver on Background for 63.992ms
+W/nya.serenya_app( 9988): Suspending all threads took: 157.761ms
+I/nya.serenya_app( 9988): Background young concurrent mark compact GC freed 1341KB AllocSpace bytes, 54(1976KB) LOS objects, 56% free, 3286KB/7523KB, paused 159.017ms,1.999ms total 778.457ms
+I/flutter ( 9988): 🔐 APP_STATE: Starting authentication - preventing router redirects
+I/flutter ( 9988): 🔑 AUTH_DEBUG: Starting Google authentication...
+I/flutter ( 9988): ✅ AUTH_DEBUG: Google Sign-In initialized, starting authentication...
+I/CredManProvService( 9988): GetCredentialResponse returned from framework
+I/flutter ( 9988): 🔍 AUTH_DEBUG: isLoggedIn() called with isInitialization: false
+I/flutter ( 9988): ✅ AUTH_DEBUG: Google authentication completed for user: serenyatester@gmail.com
+D/InsetsController( 9988): hide(ime())
+I/ImeTracker( 9988): com.serenya.serenya_app:a40310d5: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+W/nya.serenya_app( 9988): Verification of com.google.android.gms.common.api.internal.zact com.google.android.gms.common.api.GoogleApi.zac(android.content.Context, android.os.Handler) took 183.531ms (76.28 bytecodes/s) (0B arena alloc)
+W/nya.serenya_app( 9988): Verification of void com.google.android.gms.common.internal.BaseGmsClient.zzp(int, android.os.IInterface) took 397.377ms (1102.23 bytecodes/s) (0B arena alloc)
+W/nya.serenya_app( 9988): Verification of void com.google.android.gms.common.internal.BaseGmsClient.getRemoteService(com.google.android.gms.common.internal.IAccountAccessor, java.util.Set) took 415.476ms (584.87 bytecodes/s) (0B arena alloc)
+I/flutter ( 9988): 🔍 AUTH_DEBUG: accessToken exists: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: refreshToken exists: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: Missing tokens - accessToken: false, refreshToken: false
+I/flutter ( 9988): 🔍 AUTH_DEBUG: No tokens - returning false (requires fresh authentication)
+W/nya.serenya_app( 9988): Verification of void com.google.android.gms.common.internal.zzs.zzi(java.util.concurrent.Executor) took 100.358ms (99.64 bytecodes/s) (0B arena alloc)
+W/nya.serenya_app( 9988): Verification of void com.google.android.gms.common.internal.safeparcel.SafeParcelWriter.writeParcelArray(android.os.Parcel, int, android.os.Parcel[], boolean) took 429.709ms (118.68 bytecodes/s) (0B arena alloc)
+W/libbinder.Binder( 9988): Binder transaction to android.view.accessibility.IAccessibilityManagerClient code 4 took 1216ms. Data bytes: 136 Reply bytes: 0 Flags: 17
+I/flutter ( 9988): 🚀 AUTH_DEBUG: Building authentication request...
+I/nya.serenya_app( 9988): Background concurrent mark compact GC freed 1701KB AllocSpace bytes, 58(2184KB) LOS objects, 49% free, 3779KB/7558KB, paused 1.065ms,1.605ms total 216.051ms
+I/flutter ( 9988): DEVICE_KEY_SECURITY: device_root_key_generated - Error: null, Reason: null
+I/nya.serenya_app( 9988): Background young concurrent mark compact GC freed 1600KB AllocSpace bytes, 58(2152KB) LOS objects, 57% free, 3243KB/7558KB, paused 99us,1.148ms total 115.332ms
+I/flutter ( 9988): DEVICE_KEY_SECURITY: key_integrity_verified - Error: null, Reason: null
+I/flutter ( 9988): DEVICE_KEY_SECURITY: device_key_manager_initialized - Error: null, Reason: null
+I/flutter ( 9988): 🚀 AUTH_DEBUG: Authentication request built successfully
+I/flutter ( 9988): 🚀 AUTH_DEBUG: About to make network request to https://qsyo1tsjrb.execute-api.eu-west-1.amazonaws.com/dev/auth/oauth-onboarding
+I/flutter ( 9988): 🚀 AUTH_DEBUG: Request headers: {Content-Type: application/json, Accept: application/json}
+I/flutter ( 9988): 🚀 AUTH_DEBUG: Request data: {"provider":"google","google_token":"eyJhbGciOiJSUzI1NiIsImtpZCI6IjkyN2I4ZmI2N2JiYWQ3NzQ0NWU1ZmVhNGM3MWFhOTg0NmQ3ZGRkMDEiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20iLCJhenAiOiI2MjM1MjI5MjQ2MDUtYTljbnRidjFkOHBubDRodjR1amY3bnFlZ2g3ZGM1Z2wuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJhdWQiOiI2MjM1MjI5MjQ2MDUtOGo3MnYxOXU5YW4ycTRzcmhuNjlvaHNmYWFya2o4MzUuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJzdWIiOiIxMTM0MjYxODUxNDQyODYyMjc2MTciLCJlbWFpbCI6InNlcmVueWF0ZXN0ZXJAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsIm5hbWUiOiJzZXJlbnlhIHRlc3RlciIsInBpY3R1cmUiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NLQ094NlJ2R2lzRlZlRGJETF83VlotNUhQRU8xSDg0VmRzdUJPc0I1QlJXbW1nakE9czk2LWMiLCJnaXZlbl9uYW1lIjoic2VyZW55YSIsImZhbWlseV9uYW1lIjoidGVzdGVyIiwiaWF0IjoxNzU5MDA4MjE2LCJleHAiOjE3NTkwMTE4MTZ9.fau9qRyafQJq7rrW5sq2drxOpOLgYbtLAagf_NATj3eGY4F7LqtkJ1XHrIXeYQmJnn4Ry_zgZRldBePvU69psnZ16EG5aTi61JuJ9GPAjQF9NE7m5fp-BYquWTTWDG8l9oLeDRlwsadHMjEwNaj5avIU9g7AXRIzxbIokPZbgiwh9kBy_HpA1R5TmF_
+I/flutter ( 9988): 🚀 AUTH_DEBUG: Making POST request...
+I/flutter ( 9988): 🚀 AUTH_DEBUG: Dio configuration - connectTimeout: 0:00:30.000000
+I/flutter ( 9988): 🚀 AUTH_DEBUG: Dio configuration - receiveTimeout: 0:03:00.000000
+I/flutter ( 9988): 🔧 INTERCEPTOR: Processing request to /auth/oauth-onboarding
+I/flutter ( 9988): 🔧 INTERCEPTOR: Auth endpoint, skipping token validation
+I/flutter ( 9988): 🔧 INTERCEPTOR: Final headers: {Content-Type: application/json, Accept: application/json, X-Device-Platform: android, X-App-Version: 1.0.0, X-Device-ID: b95923e1ea7718d6}
+I/flutter ( 9988): 🔧 INTERCEPTOR: Passing request to next handler
+I/flutter ( 9988): 🚀 AUTH_DEBUG: Got response with status: 200
+I/flutter ( 9988): 🚀 AUTH_DEBUG: Response data: {access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyNjQzNDY2Ni05ODY1LTRkMTQtOTIyZS0zZjIzYWZlMGRlOTIiLCJlbWFpbCI6InNlcmVueWF0ZXN0ZXJAZ21haWwuY29tIiwibmFtZSI6InNlcmVueWEgdGVzdGVyIiwic2Vzc2lvbl9pZCI6IjA1MTE1NzM3LTY4MzYtNDY5NS1hMTg1LTAwNjQwODUwZjYzNyIsImlzcyI6InNlcmVueWEuaGVhbHRoIiwiYXVkIjoic2VyZW55YS1tb2JpbGUtYXBwIiwiaWF0IjoxNzU5MDA4OTU1LCJleHAiOjE3NTkwMDk4NTV9.bgodWg6PH_nriiBxfbmCA8ZDFEbMyZukp3rURlC_SHU, refresh_token: e0eb7293-ffcd-4347-8166-81fd023d4078, user: {user_id: 26434666-9865-4d14-922e-3f23afe0de92, email: serenyatester@gmail.com, display_name: serenya tester, profile_picture: null, timezone: UTC, created_at: 2025-09-27T21:35:55.144Z, last_login_at: null, preferences: null, auth_provider: google, is_private_email: false}, expires_in: 3600}
+I/nya.serenya_app( 9988): Background concurrent mark compact GC freed 2204KB AllocSpace bytes, 91(3340KB) LOS objects, 49% free, 3971KB/7942KB, paused 16.212ms,4.146ms total 585.967ms
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _storeAuthenticationData() - Setting account cache to true
+I/flutter ( 9988): 🔍 AUTH_DEBUG: _markAuthenticated() called - setting _isAuthenticated = true
+I/flutter ( 9988): 🔍 AUTH_DEBUG: Authentication state set - AppStateProvider will be notified later by onboarding flow
+I/flutter ( 9988): CONSENT_SLIDE: Authentication result - success: true, message: Authentication successful
+I/flutter ( 9988): CONSENT_SLIDE: Authentication successful - NOT completing onboarding yet, waiting for PIN setup
+I/flutter ( 9988): CONSENT_SLIDE: Calling widget.onAgree with authSuccess: true
+I/flutter ( 9988): ONBOARDING_FLOW: _handleConsentComplete called with authSuccess: true, mounted: true
+I/nya.serenya_app( 9988): Background young concurrent mark compact GC freed 1016KB AllocSpace bytes, 36(1392KB) LOS objects, 58% free, 3323KB/7942KB, paused 219us,7.119ms total 46.262ms
+I/flutter ( 9988): ONBOARDING_FLOW: Consent recorded, mounted: true
+I/flutter ( 9988): ONBOARDING_FLOW: Authentication successful, checking authentication setup
+I/flutter ( 9988): 🔍 ONBOARDING_FLOW: _checkAndSetupAuthentication() starting...
+I/flutter ( 9988): 🔍 PIN_DEBUG: isPinSet() at 1759008865848 - stored hash exists: false
+I/flutter ( 9988): 🔍 PIN_DEBUG: Hash is null - storage returned null
+I/flutter ( 9988): 🔍 PIN_DEBUG: Retry read: STILL NULL
+I/flutter ( 9988): 🔍 ONBOARDING_FLOW: Auth status - biometric available: false, enabled: false, PIN set: false
+I/flutter ( 9988): 🔍 ONBOARDING_FLOW: No authentication methods set up, showing PIN setup dialog
+I/flutter ( 9988): ONBOARDING_FLOW: Showing PIN setup dialog
+D/WindowOnBackDispatcher( 9988): setTopOnBackInvokedCallback (unwrapped): io.flutter.embedding.android.FlutterActivity$1@e4762f6
+I/ImeTracker( 9988): com.serenya.serenya_app:be9975f4: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+I/HWUI    ( 9988): Using FreeType backend (prop=Auto)
+D/InsetsController( 9988): show(ime())
+D/InsetsController( 9988): Setting requestedVisibleTypes to 511 (was 503)
+I/ImeTracker( 9988): com.serenya.serenya_app:83e873b3: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 9988): show(ime())
+I/ImeTracker( 9988): com.serenya.serenya_app:83e873b3: onCancelled at PHASE_CLIENT_REPORT_REQUESTED_VISIBLE_TYPES
+I/Choreographer( 9988): Skipped 40 frames!  The application may be doing too much work on its main thread.
+I/HWUI    ( 9988): Davey! duration=740ms; Flags=0, FrameTimelineVsyncId=10057261, IntendedVsync=173066844468035, Vsync=173067511134675, InputEventId=0, HandleInputStart=173067519686541, AnimationStart=173067519687999, PerformTraversalsStart=173067519688583, DrawStart=173067519906458, FrameDeadline=173066861134701, FrameStartTime=173067517355208, FrameInterval=16666666, WorkloadTarget=16666666, SyncQueued=173067530774999, SyncStart=173067530907124, IssueDrawCommandsStart=173067531144124, SwapBuffers=173067534186458, FrameCompleted=173067584704708, DequeueBufferDuration=15362834, QueueBufferDuration=10188167, GpuCompleted=173067569282041, SwapBuffersCompleted=173067584704708, DisplayPresentTime=0, CommandSubmissionCompleted=173067534186458, 
+D/InputConnectionAdaptor( 9988): The input method toggled cursor monitoring on
+I/AssistStructure( 9988): Flattened final assist data: 428 bytes, containing 1 windows, 3 views
+D/WindowOnBackDispatcher( 9988): setTopOnBackInvokedCallback (unwrapped): android.view.ImeBackAnimationController@597f7d0
+W/InteractionJankMonitor( 9988): Initializing without READ_DEVICE_CONFIG permission. enabled=false, interval=1, missedFrameThreshold=3, frameTimeThreshold=64, package=com.serenya.serenya_app
+I/ImeTracker( 9988): com.serenya.serenya_app:be9975f4: onShown
+I/ImeTracker( 9988): com.serenya.serenya_app:3013a5eb: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 9988): show(ime())
+I/ImeTracker( 9988): com.serenya.serenya_app:3013a5eb: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 9988): com.serenya.serenya_app:4241ffdb: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 9988): show(ime())
+I/ImeTracker( 9988): com.serenya.serenya_app:4241ffdb: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/AssistStructure( 9988): Flattened final assist data: 428 bytes, containing 1 windows, 3 views
+D/InputConnectionAdaptor( 9988): The input method toggled cursor monitoring on
+I/ImeTracker( 9988): com.serenya.serenya_app:db5f7fd3: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 9988): show(ime())
+I/ImeTracker( 9988): com.serenya.serenya_app:db5f7fd3: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 9988): com.serenya.serenya_app:79294c8: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 9988): show(ime())
+I/ImeTracker( 9988): com.serenya.serenya_app:79294c8: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+D/InputConnectionAdaptor( 9988): The input method toggled cursor monitoring on
+I/ImeTracker( 9988): com.serenya.serenya_app:732b3eca: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 9988): show(ime())
+I/ImeTracker( 9988): com.serenya.serenya_app:732b3eca: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+I/ImeTracker( 9988): com.serenya.serenya_app:b59de168: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 9988): show(ime())
+I/ImeTracker( 9988): com.serenya.serenya_app:b59de168: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+D/InputConnectionAdaptor( 9988): The input method toggled cursor monitoring on
+I/ImeTracker( 9988): com.serenya.serenya_app:7318eb13: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 9988): show(ime())
+I/ImeTracker( 9988): com.serenya.serenya_app:7318eb13: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+W/RemoteInputConnectionImpl( 9988): getSurroundingText on inactive InputConnection
+D/InputConnectionAdaptor( 9988): The input method toggled cursor monitoring on
+I/ImeTracker( 9988): com.serenya.serenya_app:a31cfba6: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 9988): show(ime())
+I/ImeTracker( 9988): com.serenya.serenya_app:a31cfba6: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+D/InputConnectionAdaptor( 9988): The input method toggled cursor monitoring on
+I/ImeTracker( 9988): com.serenya.serenya_app:7462c70: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 9988): show(ime())
+I/ImeTracker( 9988): com.serenya.serenya_app:7462c70: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+D/InputConnectionAdaptor( 9988): The input method toggled cursor monitoring on
+I/ImeTracker( 9988): com.serenya.serenya_app:32726fdf: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+D/InsetsController( 9988): show(ime())
+I/ImeTracker( 9988): com.serenya.serenya_app:32726fdf: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+D/InputConnectionAdaptor( 9988): The input method toggled cursor monitoring on
+I/nya.serenya_app( 9988): Background concurrent mark compact GC freed 2398KB AllocSpace bytes, 62(2264KB) LOS objects, 49% free, 3055KB/6110KB, paused 98us,2.074ms total 165.900ms
+I/flutter ( 9988): 🔐 PIN_SETUP: About to call BiometricAuthService.setupPin with PIN: ****
+I/flutter ( 9988): 🔐 PIN_SETUP: Starting PIN setup for PIN: ****
+I/flutter ( 9988): 🔐 PIN_SETUP: Generated hash: 0ffe1abd1a08215353c233d6e009613e95eec4253832a761af28ff37ac5a150c
+I/flutter ( 9988): 🔐 PIN_SETUP: Writing to storage with key: serenya_user_pin_hash
+I/flutter ( 9988): 🔐 PIN_SETUP: Verification read 1: 0ffe1abd1a08215353c233d6e009613e95eec4253832a761af28ff37ac5a150c
+I/flutter ( 9988): 🔐 PIN_SETUP: Storage successful 1: true
+I/flutter ( 9988): 🔐 PIN_SETUP: Verification read 2 (after 100ms): 0ffe1abd1a08215353c233d6e009613e95eec4253832a761af28ff37ac5a150c
+I/flutter ( 9988): 🔐 PIN_SETUP: Storage successful 2: true
+I/flutter ( 9988): 🔐 PIN_SETUP: Verification read 3 (after 500ms): 0ffe1abd1a08215353c233d6e009613e95eec4253832a761af28ff37ac5a150c
+I/flutter ( 9988): 🔐 PIN_SETUP: Storage successful 3: true
+I/flutter ( 9988): SECURITY_AUDIT: pin_setup_completed - Success: null, Error: null
+I/flutter ( 9988): 🔐 PIN_SETUP: PIN setup completed successfully
+I/flutter ( 9988): 🔐 PIN_SETUP: setupPin returned: true
+W/nya.serenya_app( 9988): Suspending all threads took: 31.580ms
+I/flutter ( 9988): 🔍 PIN_DEBUG: isPinSet() at 1759008876644 - stored hash exists: true
+I/flutter ( 9988): 🔍 PIN_DEBUG: Hash length: 64, starts with: 0ffe1abd...
+I/flutter ( 9988): 🔐 PIN_SETUP: After setupPin, isPinSet() returns: true
+I/flutter ( 9988): 🔐 PIN_SETUP: PIN setup completed successfully
+I/flutter ( 9988): 🔐 PIN_DIALOG: PIN setup completed successfully
+I/flutter ( 9988): 🔍 ONBOARDING_FLOW: Calling _completeOnboarding() - authentication completion will be handled automatically
+I/flutter ( 9988): 🔍 ONBOARDING_FLOW: _completeOnboarding() called - mounted: true
+I/flutter ( 9988): 🔍 ONBOARDING_FLOW: Getting AppStateProvider and calling completeOnboarding()...
+I/flutter ( 9988): 🔍 APP_STATE: completeOnboarding() called
+I/flutter ( 9988): 🔍 APP_STATE: Before - isOnboardingComplete: false, isLoggedIn: false, isAuthenticating: true
+I/flutter ( 9988): 🔍 APP_STATE: Setting loading = true (no notifications during authentication)
+I/flutter ( 9988): 🔍 CONSENT_SERVICE: markOnboardingCompleted() called - writing to storage
+I/ImeTracker( 9988): com.serenya.serenya_app:c6476a66: onRequestHide at ORIGIN_CLIENT reason HIDE_SOFT_INPUT fromUser false
+D/InsetsController( 9988): hide(ime())
+D/WindowOnBackDispatcher( 9988): setTopOnBackInvokedCallback (unwrapped): io.flutter.embedding.android.FlutterActivity$1@e4762f6
+D/InsetsController( 9988): Setting requestedVisibleTypes to 503 (was 511)
+D/CompatChangeReporter( 9988): Compat change id reported: 395521150; UID 10230; state: ENABLED
+D/WindowOnBackDispatcher( 9988): setTopOnBackInvokedCallback (unwrapped): android.app.Activity$$ExternalSyntheticLambda0@f4bb31c
+I/nya.serenya_app( 9988): Background concurrent mark compact GC freed 1532KB AllocSpace bytes, 54(1944KB) LOS objects, 49% free, 4251KB/8503KB, paused 32.066ms,2.019ms total 377.537ms
+I/flutter ( 9988): 🔍 CONSENT_SERVICE: Storage write completed
+I/flutter ( 9988): 🔍 CONSENT_SERVICE: Immediate verification read: true
+I/flutter ( 9988): 🔍 CONSENT_SERVICE: Storage verification successful
+I/ImeTracker( 9988): system_server:ed36f630: onCancelled at PHASE_CLIENT_ON_CONTROLS_CHANGED
+I/flutter ( 9988): 🔍 CONSENT_SERVICE: Delayed verification read: true
+I/flutter ( 9988): 🔍 CONSENT_SERVICE: All storage verifications successful
+I/flutter ( 9988): 🔍 CONSENT_SERVICE: isOnboardingCompleted() called - reading from storage...
+I/flutter ( 9988): 🔍 CONSENT_SERVICE: Using storage key: "onboarding_completed"
+I/nya.serenya_app( 9988): Background young concurrent mark compact GC freed 2008KB AllocSpace bytes, 58(2120KB) LOS objects, 55% free, 3747KB/8503KB, paused 14.628ms,33.538ms total 364.386ms
+I/flutter ( 9988): 🔍 CONSENT_SERVICE: Storage read result: "true" (type: String)
+I/flutter ( 9988): 🔍 CONSENT_SERVICE: Returning: true
+I/flutter ( 9988): 🔍 APP_STATE: VERIFICATION - onboarding completion persisted correctly: true
+I/flutter ( 9988): 🔍 AUTH_DEBUG: hasValidTokensSync called - _hasAccountCached: true, _isAuthenticated: true
+I/flutter ( 9988): 🔍 APP_STATE: User fully authenticated and onboarded - setting isLoggedIn = true
+I/flutter ( 9988): 🔍 APP_STATE: After completion - isOnboardingComplete: true, isLoggedIn: true
+I/flutter ( 9988): 🔍 APP_STATE: In authentication flow - calling completeAuthentication() automatically
+I/flutter ( 9988): 🔐 APP_STATE: Authentication complete - allowing router redirects
+I/flutter ( 9988): ROUTER: Current path: /onboarding
+I/flutter ( 9988): ROUTER: isLoading: true
+I/flutter ( 9988): ROUTER: error: null
+I/flutter ( 9988): ROUTER: isOnboardingComplete: true
+I/flutter ( 9988): ROUTER: isLoggedIn: true
+I/flutter ( 9988): ROUTER: Staying on loading screen
+I/flutter ( 9988): ROUTER: Current path: /loading
+I/flutter ( 9988): ROUTER: isLoading: true
+I/flutter ( 9988): ROUTER: error: null
+I/flutter ( 9988): ROUTER: isOnboardingComplete: true
+I/flutter ( 9988): ROUTER: isLoggedIn: true
+I/flutter ( 9988): ROUTER: Staying on loading screen
+I/flutter ( 9988): 🔍 APP_STATE: Setting loading to false
+I/flutter ( 9988): ROUTER: Current path: /onboarding
+I/flutter ( 9988): ROUTER: isLoading: false
+I/flutter ( 9988): ROUTER: error: null
+I/flutter ( 9988): ROUTER: isOnboardingComplete: true
+I/flutter ( 9988): ROUTER: isLoggedIn: true
+I/flutter ( 9988): 🔍 AUTH_DEBUG: hasValidTokensSync called - _hasAccountCached: true, _isAuthenticated: true
+I/flutter ( 9988): 🔍 ROUTER: Evaluating redirect logic:
+I/flutter ( 9988): 🔍 ROUTER:   - isOnboardingComplete: true
+I/flutter ( 9988): 🔍 ROUTER:   - isLoggedIn: true
+I/flutter ( 9988): 🔍 ROUTER:   - needsReAuthentication: false
+I/flutter ( 9988): 🔍 ROUTER:   - hasExpiredTokens: false
+I/flutter ( 9988): 🔍 ROUTER:   - hasValidTokensSync: true
+I/flutter ( 9988): 🔍 ROUTER:   - currentPath: /onboarding
+I/flutter ( 9988): 🔍 ROUTER: CONDITION 3 - Both onboarding complete and logged in, redirecting to home
+I/flutter ( 9988): ROUTER: Current path: /home
+I/flutter ( 9988): ROUTER: isLoading: false
+I/flutter ( 9988): ROUTER: error: null
+I/flutter ( 9988): ROUTER: isOnboardingComplete: true
+I/flutter ( 9988): ROUTER: isLoggedIn: true
+I/flutter ( 9988): 🔍 AUTH_DEBUG: hasValidTokensSync called - _hasAccountCached: true, _isAuthenticated: true
+I/flutter ( 9988): 🔍 ROUTER: Evaluating redirect logic:
+I/flutter ( 9988): 🔍 ROUTER:   - isOnboardingComplete: true
+I/flutter ( 9988): 🔍 ROUTER:   - isLoggedIn: true
+I/flutter ( 9988): 🔍 ROUTER:   - needsReAuthentication: false
+I/flutter ( 9988): 🔍 ROUTER:   - hasExpiredTokens: false
+I/flutter ( 9988): 🔍 ROUTER:   - hasValidTokensSync: true
+I/flutter ( 9988): 🔍 ROUTER:   - currentPath: /home
+I/flutter ( 9988): 🔍 ROUTER: NO REDIRECT NEEDED - staying on current path: /home
+I/flutter ( 9988): 🔍 APP_STATE: completeOnboarding() method complete
+I/flutter ( 9988): 🔍 ONBOARDING_FLOW: Successfully called completeOnboarding() on AppStateProvider
+I/flutter ( 9988): ONBOARDING_FLOW: Calling widget.onComplete to finish onboarding
+I/flutter ( 9988): 🔍 ROUTER: onComplete callback RECEIVED from OnboardingFlow
+I/flutter ( 9988): 🔍 ROUTER: Onboarding completion is now handled directly in ConsentSlide - no action needed
+I/flutter ( 9988): 🔐 ONBOARDING_FLOW: Onboarding completion finished - router redirect should happen automatically
+I/flutter ( 9988): 🎨 MyApp: Consumer builder - isInitialized: true, isLoading: false, error: null
+I/flutter ( 9988): ✅ MyApp: Creating router with initialized AppStateProvider
+I/flutter ( 9988): ✅ MyApp: Creating new router (authentication not in progress)
+I/flutter ( 9988): 🔄 MyApp: Authentication completed - invalidating cached router for fresh redirects
+I/flutter ( 9988): ROUTER: Current path: /loading
+I/flutter ( 9988): ROUTER: isLoading: false
+I/flutter ( 9988): ROUTER: error: null
+I/flutter ( 9988): ROUTER: isOnboardingComplete: true
+I/flutter ( 9988): ROUTER: isLoggedIn: true
+I/flutter ( 9988): 🔍 AUTH_DEBUG: hasValidTokensSync called - _hasAccountCached: true, _isAuthenticated: true
+I/flutter ( 9988): 🔍 ROUTER: Evaluating redirect logic:
+I/flutter ( 9988): 🔍 ROUTER:   - isOnboardingComplete: true
+I/flutter ( 9988): 🔍 ROUTER:   - isLoggedIn: true
+I/flutter ( 9988): 🔍 ROUTER:   - needsReAuthentication: false
+I/flutter ( 9988): 🔍 ROUTER:   - hasExpiredTokens: false
+I/flutter ( 9988): 🔍 ROUTER:   - hasValidTokensSync: true
+I/flutter ( 9988): 🔍 ROUTER:   - currentPath: /loading
+I/flutter ( 9988): 🔍 ROUTER: CONDITION 3 - Both onboarding complete and logged in, redirecting to home
+I/flutter ( 9988): ROUTER: Current path: /home
+I/flutter ( 9988): ROUTER: isLoading: false
+I/flutter ( 9988): ROUTER: error: null
+I/flutter ( 9988): ROUTER: isOnboardingComplete: true
+I/flutter ( 9988): ROUTER: isLoggedIn: true
+I/flutter ( 9988): 🔍 AUTH_DEBUG: hasValidTokensSync called - _hasAccountCached: true, _isAuthenticated: true
+I/flutter ( 9988): 🔍 ROUTER: Evaluating redirect logic:
+I/flutter ( 9988): 🔍 ROUTER:   - isOnboardingComplete: true
+I/flutter ( 9988): 🔍 ROUTER:   - isLoggedIn: true
+I/flutter ( 9988): 🔍 ROUTER:   - needsReAuthentication: false
+I/flutter ( 9988): 🔍 ROUTER:   - hasExpiredTokens: false
+I/flutter ( 9988): 🔍 ROUTER:   - hasValidTokensSync: true
+I/flutter ( 9988): 🔍 ROUTER:   - currentPath: /home
+I/flutter ( 9988): 🔍 ROUTER: NO REDIRECT NEEDED - staying on current path: /home
+I/flutter ( 9988): Timeline performance monitoring started
+I/flutter ( 9988): ONBOARDING_FLOW: dispose called
+I/flutter ( 9988): 🔍 JWT_DEBUG: Full access token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyNjQzNDY2Ni05ODY1LTRkMTQtOTIyZS0zZjIzYWZlMGRlOTIiLCJlbWFpbCI6InNlcmVueWF0ZXN0ZXJAZ21haWwuY29tIiwibmFtZSI6InNlcmVueWEgdGVzdGVyIiwic2Vzc2lvbl9pZCI6IjA1MTE1NzM3LTY4MzYtNDY5NS1hMTg1LTAwNjQwODUwZjYzNyIsImlzcyI6InNlcmVueWEuaGVhbHRoIiwiYXVkIjoic2VyZW55YS1tb2JpbGUtYXBwIiwiaWF0IjoxNzU5MDA4OTU1LCJleHAiOjE3NTkwMDk4NTV9.bgodWg6PH_nriiBxfbmCA8ZDFEbMyZukp3rURlC_SHU
+I/flutter ( 9988): 🔍 PIN_DEBUG: isPinSet() at 1759008878574 - stored hash exists: true
+I/flutter ( 9988): 🔍 PIN_DEBUG: Hash length: 64, starts with: 0ffe1abd...
+I/flutter ( 9988): 🔐 SYSTEM_AUTH: biometric available: false, enabled: false, PIN set: true
+I/flutter ( 9988): AUTH_AUDIT: session_started - Session: 8e9046c98efc30cbae50e2a1e1eb60e1, Method: AuthMethod.pin
+I/flutter ( 9988): 🔐 SYSTEM_AUTH: Allowing system access with PIN setup - session started
+I/nya.serenya_app( 9988): Background concurrent mark compact GC freed 2213KB AllocSpace bytes, 81(2916KB) LOS objects, 49% free, 4323KB/8647KB, paused 170us,1.320ms total 150.427ms
+I/flutter ( 9988): DEVICE_KEY_SECURITY: device_root_key_accessed - Error: null, Reason: null
+I/flutter ( 9988): DATABASE_SECURITY: database_tables_created - Error: null
+I/flutter ( 9988): DATABASE_SECURITY: sqlcipher_configuration_failed - Error: DatabaseException(unknown error (code 0): Queries can be performed using SQLiteDatabase query or rawQuery methods only.) sql 'PRAGMA key = 'x"7b7ee000f6e29b272afed081b8aba57cfb3942329328a7ce2a20b8d2df47cf46"';' args []
+I/flutter ( 9988): error DatabaseException(unknown error (code 0): Queries can be performed using SQLiteDatabase query or rawQuery methods only.) sql 'PRAGMA key = 'x"7b7ee000f6e29b272afed081b8aba57cfb3942329328a7ce2a20b8d2df47cf46"';' args [] during open, closing...
+I/flutter ( 9988): DATABASE_SECURITY: database_initialization_failed - Error: DatabaseException(unknown error (code 0): Queries can be performed using SQLiteDatabase query or rawQuery methods only.) sql 'PRAGMA key = 'x"7b7ee000f6e29b272afed081b8aba57cfb3942329328a7ce2a20b8d2df47cf46"';' args []

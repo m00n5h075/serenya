@@ -133,13 +133,25 @@ class _PinSetupDialogState extends State<PinSetupDialog>
     });
 
     try {
-      await BiometricAuthService.setupPin(pin);
+      print('🔐 PIN_SETUP: About to call BiometricAuthService.setupPin with PIN: ${pin.replaceAll(RegExp(r'.'), '*')}');
+      final result = await BiometricAuthService.setupPin(pin);
+      print('🔐 PIN_SETUP: setupPin returned: $result');
+      
+      // Verify the PIN was actually stored
+      final pinSetCheck = await BiometricAuthService.isPinSet();
+      print('🔐 PIN_SETUP: After setupPin, isPinSet() returns: $pinSetCheck');
+      
+      if (!pinSetCheck) {
+        throw Exception('PIN was not properly stored in secure storage');
+      }
       
       // Success!
+      print('🔐 PIN_SETUP: PIN setup completed successfully');
       HapticFeedback.lightImpact();
       widget.onSetupComplete();
       
     } catch (e) {
+      print('🔐 PIN_SETUP: Error setting up PIN: $e');
       _showError('Failed to set up PIN: ${e.toString()}');
       _resetPinSetup();
     } finally {

@@ -66,6 +66,8 @@ class AppRouter {
       print('🔍 ROUTER: Evaluating redirect logic:');
       print('🔍 ROUTER:   - isOnboardingComplete: ${appState.isOnboardingComplete}');
       print('🔍 ROUTER:   - isLoggedIn: ${appState.isLoggedIn}');
+      print('🔍 ROUTER:   - needsReAuthentication: ${appState.needsReAuthentication}');
+      print('🔍 ROUTER:   - hasExpiredTokens: ${appState.hasExpiredTokens}');
       print('🔍 ROUTER:   - hasValidTokensSync: $hasValidTokens');
       print('🔍 ROUTER:   - currentPath: $currentPath');
       
@@ -75,17 +77,30 @@ class AppRouter {
         return currentPath != '/onboarding' ? '/onboarding' : null;
       }
       
+      // CRITICAL FIX: Check if user needs re-authentication first
+      if (appState.needsReAuthentication) {
+        print('🔍 ROUTER: CONDITION 2A - User needs re-authentication, redirecting to auth prompt');
+        return currentPath != '/auth-prompt' ? '/auth-prompt' : null;
+      }
+      
+      // NEW: Check if user has expired API tokens but offline authentication
+      // This is the main fix for the issue: user has offline auth but expired API tokens
+      if (appState.isOnboardingComplete && appState.hasExpiredTokens) {
+        print('🔍 ROUTER: CONDITION 2A-EXPIRED - User has offline auth but expired API tokens, redirecting to auth prompt');
+        return currentPath != '/auth-prompt' ? '/auth-prompt' : null;
+      }
+      
       // If onboarding complete but not logged in, check if user has valid session tokens
       if (appState.isOnboardingComplete && !appState.isLoggedIn) {
         // Check if user has valid session tokens (authenticated user who needs to re-authenticate)
         if (hasValidTokens) {
           // Authenticated user with completed onboarding - show auth prompt instead of onboarding
-          print('🔍 ROUTER: CONDITION 2A - Onboarding complete, has valid session tokens but not logged in, redirecting to auth prompt');
+          print('🔍 ROUTER: CONDITION 2B - Onboarding complete, has valid session tokens but not logged in, redirecting to auth prompt');
           print('🔍 ROUTER: This should be the case for app kill/restart scenario');
           return currentPath != '/auth-prompt' ? '/auth-prompt' : null;
         } else {
           // No valid session tokens - user needs to authenticate again, show auth prompt if they have an account
-          print('🔍 ROUTER: CONDITION 2B - Onboarding complete but no valid session tokens');
+          print('🔍 ROUTER: CONDITION 2C - Onboarding complete but no valid session tokens');
           // For now, assume they have an account and send to auth prompt - 
           // the auth prompt will handle checking if account exists and redirect to onboarding if needed
           print('🔍 ROUTER: Sending to auth prompt to check for stored account');

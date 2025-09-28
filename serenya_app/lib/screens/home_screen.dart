@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/providers/health_data_provider.dart';
+import '../core/providers/app_state_provider.dart';
 import '../widgets/upload_button.dart';
 import '../services/notification_service.dart';
 import '../widgets/timeline/timeline_container.dart';
@@ -24,6 +25,10 @@ class _HomeScreenState extends State<HomeScreen> {
       // Set up notification service with scaffold key
       final notificationService = NotificationService();
       notificationService.setScaffoldMessengerKey(_scaffoldKey);
+      
+      // TEMPORARY DEBUG: Log full JWT token for analysis
+      final appState = context.read<AppStateProvider>();
+      appState.authService.debugLogFullJWT();
       
       // Load existing documents
       context.read<HealthDataProvider>().loadDocuments();

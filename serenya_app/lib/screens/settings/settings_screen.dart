@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/app_state_provider.dart';
 import '../../services/premium_user_service.dart';
 import '../../services/api_service.dart';
+import '../../api/api_client.dart';
 import '../../core/security/biometric_auth_service.dart';
 import '../../core/error_handling/unified_error.dart';
 import '../../core/error_handling/error_widgets.dart';
@@ -49,7 +50,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _premiumService = PremiumUserService();
+  }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    
+    // Initialize services with injected ApiClient
+    final apiClient = Provider.of<ApiClient>(context, listen: false);
+    _premiumService = PremiumUserService(apiClient: apiClient);
+    
     _loadAllSettings();
   }
 

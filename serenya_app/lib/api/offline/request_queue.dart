@@ -17,9 +17,15 @@ import '../api_client.dart';
 /// - Progress tracking and status updates
 /// - Request cancellation and cleanup
 class RequestQueue {
-  static final RequestQueue _instance = RequestQueue._internal();
-  factory RequestQueue() => _instance;
-  RequestQueue._internal();
+  static RequestQueue? _instance;
+  final ApiClient _apiClient;
+  
+  factory RequestQueue({required ApiClient apiClient}) {
+    _instance ??= RequestQueue._internal(apiClient);
+    return _instance!;
+  }
+  
+  RequestQueue._internal(this._apiClient);
 
   static const _secureStorage = FlutterSecureStorage();
   static const String _queueStorageKey = 'serenya_request_queue_v1';
@@ -223,8 +229,6 @@ class RequestQueue {
 
   /// Execute a queued request
   Future<ApiResult<dynamic>> _executeRequest(QueuedRequest request) async {
-    final apiClient = ApiClient();
-    
     try {
       final requestOptions = RequestOptions(
         method: request.method,
@@ -234,8 +238,8 @@ class RequestQueue {
         headers: request.headers,
       );
 
-      // Use the main Dio client to make the request
-      final response = await apiClient.dio.fetch(requestOptions);
+      // Use the injected ApiClient with authentication
+      final response = await _apiClient.dio.fetch(requestOptions);
       
       await _logQueueEvent('request_executed_successfully', {
         'request_id': request.id,

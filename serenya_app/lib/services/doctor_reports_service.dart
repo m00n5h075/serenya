@@ -18,8 +18,12 @@ import 'unified_polling_service.dart';
 /// - Job monitoring through existing polling system
 /// - Error handling for premium and health data validation
 class DoctorReportsService {
+  final ApiClient _apiClient;
   final NotificationService _notificationService = NotificationService();
   final UnifiedPollingService _pollingService = UnifiedPollingService();
+  
+  /// Constructor that accepts ApiClient dependency
+  DoctorReportsService({required ApiClient apiClient}) : _apiClient = apiClient;
 
   /// Generate doctor report from health data
   /// 
@@ -113,7 +117,7 @@ class DoctorReportsService {
   /// Validate premium subscription access
   Future<ValidationResult> _validatePremiumAccess() async {
     try {
-      final subscriptionResult = await ApiClient().subscriptions.getCurrentSubscription();
+      final subscriptionResult = await _apiClient.subscriptions.getCurrentSubscription();
       
       if (!subscriptionResult.success) {
         return ValidationResult(
@@ -257,7 +261,6 @@ class DoctorReportsService {
     Map<String, dynamic>? additionalContext,
   ) async {
     try {
-      final apiClient = ApiClient();
       
       final requestData = {
         'content_type': 'report',
@@ -271,7 +274,7 @@ class DoctorReportsService {
         requestData['additional_context'] = additionalContext;
       }
 
-      final response = await apiClient.dio.post(
+      final response = await _apiClient.dio.post(
         '/api/v1/process/doctor-report',
         data: requestData,
         options: Options(
