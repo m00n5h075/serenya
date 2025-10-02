@@ -1,0 +1,9 @@
+{
+  "name": "dynamodb-connectivity-test",
+  "version": "1.0.0",
+  "description": "Lambda function to test DynamoDB connectivity",
+  "main": "test-dynamodb-connectivity.js",
+  "dependencies": {
+    "aws-sdk": "^2.1481.0"
+  }
+}
