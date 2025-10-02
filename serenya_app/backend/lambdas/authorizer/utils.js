@@ -158,98 +158,8 @@ function getUserIdFromEvent(event) {
   }
 }
 
-/**
- * Store job record in DynamoDB
- */
-async function storeJobRecord(jobData) {
-  const ttl = Math.floor(Date.now() / 1000) + (24 * 60 * 60); // 24 hours TTL
-  
-  const item = {
-    ...jobData,
-    ttl,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
-
-  return await dynamodb.put({
-    TableName: process.env.JOBS_TABLE_NAME,
-    Item: item,
-  }).promise();
-}
-
-/**
- * Update job status in DynamoDB
- */
-async function updateJobStatus(jobId, status, additionalData = {}) {
-  const updateExpression = 'SET #status = :status, updatedAt = :updatedAt';
-  const expressionAttributeNames = { '#status': 'status' };
-  const expressionAttributeValues = {
-    ':status': status,
-    ':updatedAt': Date.now(),
-  };
-
-  // Add additional fields if provided
-  Object.keys(additionalData).forEach((key, index) => {
-    const placeholder = `:val${index}`;
-    updateExpression += `, ${key} = ${placeholder}`;
-    expressionAttributeValues[placeholder] = additionalData[key];
-  });
-
-  return await dynamodb.update({
-    TableName: process.env.JOBS_TABLE_NAME,
-    Key: { jobId },
-    UpdateExpression: updateExpression,
-    ExpressionAttributeNames: expressionAttributeNames,
-    ExpressionAttributeValues: expressionAttributeValues,
-  }).promise();
-}
-
-/**
- * Get job record from DynamoDB
- */
-async function getJobRecord(jobId) {
-  const result = await dynamodb.get({
-    TableName: process.env.JOBS_TABLE_NAME,
-    Key: { jobId },
-  }).promise();
-
-  return result.Item || null;
-}
-
-/**
- * Store/update user profile
- */
-async function storeUserProfile(userData) {
-  const ttl = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60); // 30 days TTL
-  
-  const item = {
-    userId: userData.userId,
-    email: userData.email,
-    name: userData.name,
-    profilePicture: userData.profilePicture,
-    lastLoginAt: Date.now(),
-    ttl,
-    createdAt: userData.createdAt || Date.now(),
-    updatedAt: Date.now(),
-  };
-
-  return await dynamodb.put({
-    TableName: process.env.USERS_TABLE_NAME,
-    Item: item,
-  }).promise();
-}
-
-/**
- * Get user profile from DynamoDB
- */
-async function getUserProfile(userId) {
-  const result = await dynamodb.get({
-    TableName: process.env.USERS_TABLE_NAME,
-    Key: { userId },
-  }).promise();
-
-  return result.Item || null;
-}
+// Note: Job and user management functions have been moved to the unified DynamoDB service
+// This utils file now focuses on JWT, validation, and common utilities
 
 /**
  * Sanitize filename for S3 storage
@@ -303,11 +213,6 @@ module.exports = {
   validateFile,
   generateJobId,
   getUserIdFromEvent,
-  storeJobRecord,
-  updateJobStatus,
-  getJobRecord,
-  storeUserProfile,
-  getUserProfile,
   sanitizeFileName,
   auditLog,
   sanitizeError,

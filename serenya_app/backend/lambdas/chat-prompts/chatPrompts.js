@@ -4,14 +4,18 @@ const {
   getUserIdFromEvent,
   sanitizeError,
 } = require('../shared/utils');
-const { DocumentJobService } = require('../shared/document-database');
+const { getChatPrompts } = require('../shared/chat-prompts-constants');
 const { auditService } = require('../shared/audit-service');
+const { ObservabilityService } = require('../shared/observability-service');
 
 /**
  * Chat Prompts API - Retrieve predefined conversation starters
  * GET /api/chat/prompts?content_type=result|report
  */
 exports.handler = async (event) => {
+  const startTime = Date.now();
+  const observability = ObservabilityService.createForFunction('chat-prompts', event);
+
   try {
     const userId = getUserIdFromEvent(event);
 
@@ -41,8 +45,8 @@ exports.handler = async (event) => {
       dataClassification: 'system_interaction'
     });
 
-    // Get chat prompts from database
-    const prompts = await getChatPrompts(contentType);
+    // Get chat prompts from static constants
+    const prompts = getChatPrompts(contentType);
     
     if (!prompts || prompts.length === 0) {
       await auditService.logAuditEvent({
@@ -68,6 +72,12 @@ exports.handler = async (event) => {
       dataClassification: 'system_interaction'
     });
 
+    // Track user journey for chat prompts fetch
+    await observability.trackUserJourney(userId, 'chat_prompts_fetched', {
+      contentType: contentType,
+      promptCount: prompts.length
+    });
+
     return createResponse(200, {
       success: true,
       content_type: contentType,
@@ -78,9 +88,11 @@ exports.handler = async (event) => {
 
   } catch (error) {
     console.error('Chat prompts error:', sanitizeError(error));
-    
+
     const userId = getUserIdFromEvent(event) || 'unknown';
-    
+
+    await observability.trackError(error, 'chat_prompts', userId);
+
     await auditService.logAuditEvent({
       eventType: 'chat_interaction',
       eventSubtype: 'prompts_error',
@@ -92,49 +104,9 @@ exports.handler = async (event) => {
     }).catch(auditError => {
       console.error('Audit logging failed:', auditError);
     });
-    
+
     return createErrorResponse(500, 'PROMPTS_RETRIEVAL_FAILED', 'Failed to retrieve chat prompts', 'Unable to load conversation starters. Please try again.');
   }
 };
 
-/**
- * Get chat prompts from database by content type
- */
-async function getChatPrompts(contentType) {
-  try {
-    const query = `
-      SELECT 
-        id,
-        content_type,
-        category,
-        option_text,
-        display_order,
-        has_sub_options,
-        created_at
-      FROM chat_options 
-      WHERE content_type = $1 
-        AND is_active = true
-      ORDER BY display_order ASC, created_at ASC
-    `;
-    
-    const result = await DocumentJobService.executeQuery(query, [contentType]);
-    
-    if (!result.rows || result.rows.length === 0) {
-      return [];
-    }
-
-    // Format prompts for API response
-    return result.rows.map(row => ({
-      id: row.id,
-      content_type: row.content_type,
-      category: row.category,
-      prompt_text: row.option_text,
-      display_order: row.display_order,
-      has_sub_options: row.has_sub_options
-    }));
-
-  } catch (error) {
-    console.error('Database error getting chat prompts:', error);
-    throw new Error(`Failed to retrieve chat prompts: ${error.message}`);
-  }
-}
+// Note: getChatPrompts function now imported from shared/chat-prompts-constants.js

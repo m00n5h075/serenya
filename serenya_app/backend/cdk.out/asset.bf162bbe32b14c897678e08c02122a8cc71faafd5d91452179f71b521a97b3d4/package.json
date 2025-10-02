@@ -1,9 +1,0 @@
-{
-  "name": "serenya-result-lambda",
-  "version": "1.0.0",
-  "description": "Results retrieval with safety warnings",
-  "main": "result.js",
-  "dependencies": {
-    "aws-sdk": "^2.1481.0"
-  }
-}

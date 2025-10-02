@@ -1,1492 +1,849 @@
 # System Architecture - Serenya AI Health Agent
 
-**Date:** September 1, 2025  
-**Domain:** Cloud Infrastructure & System Design  
-**AI Agent:** System Architecture Agent  
+**Date:** January 2025 (Updated for DynamoDB Serverless Architecture)
+**Domain:** Cloud Infrastructure & System Design
 **Dependencies:**
-- **← database-architecture.md**: PostgreSQL deployment and connection management
-- **← api-contracts.md**: AWS Lambda function requirements and endpoints
-- **← encryption-strategy.md**: AWS KMS integration and key management
-- **← audit-logging.md**: CloudTrail and logging infrastructure requirements
+- **← database-architecture.md**: DynamoDB single-table design and access patterns
+- **← api-contracts.md**: Lambda function specifications and API endpoints
+- **← llm-integration-architecture.md**: AWS Bedrock integration and AI processing
+- **← observability.md**: CloudWatch dashboards, alarms, and DynamoDB Streams
 **Cross-References:**
-- **→ mobile-architecture.md**: Client-server communication patterns and offline sync
-- **→ implementation-roadmap.md**: Infrastructure setup timeline (Week 1-2, Phase 1)
+- **→ deployment-procedures.md**: Infrastructure deployment and configuration
+- **→ our-dev-rules.md**: Development and architecture standards
 
 ---
 
-## 🏗️ **System Architecture Overview**
+## 🏗️ System Architecture Overview
 
-### **Architecture Philosophy**
-- **Cloud-Native**: Serverless-first with AWS managed services
-- **Security-First**: Multi-layered security with encryption at rest and in transit
-- **Compliance-Ready**: HIPAA/GDPR compliant infrastructure from day one
-- **Scalable**: Auto-scaling components that handle growth seamlessly
-- **Resilient**: Multi-AZ deployment with automated failover and backup
-- **Observable**: Comprehensive monitoring, logging, and alerting
+### Architecture Philosophy
+- **Serverless-First**: AWS Lambda + API Gateway + DynamoDB (No VPC, No RDS, No EC2)
+- **DynamoDB-Native**: Single-table design for all server-side data
+- **Privacy-First**: Minimal server storage, medical data on device only
+- **Security-First**: KMS encryption, HIPAA-compliant data handling
+- **Cost-Optimized**: Pay-per-use pricing, automatic scaling
+- **Observable**: CloudWatch metrics, DynamoDB Streams, comprehensive monitoring
 
-### **High-Level Architecture Diagram**
+### High-Level Architecture Diagram
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Mobile Apps   │    │   Web Console    │    │  Admin Dashboard│
-│  (iOS/Android)  │    │   (Optional)     │    │   (Internal)    │
-└─────────┬───────┘    └────────┬─────────┘    └─────────┬───────┘
-          │                     │                        │
-          └─────────────────────┼────────────────────────┘
-                                │
-                    ┌───────────▼───────────┐
-                    │   Amazon CloudFront   │
-                    │  (Global CDN + WAF)   │
-                    └───────────┬───────────┘
-                                │
-                    ┌───────────▼───────────┐
-                    │   API Gateway (v2)    │
-                    │  Rate Limiting + Auth │
-                    └───────────┬───────────┘
-                                │
-          ┌─────────────────────┼─────────────────────┐
-          │                     │                     │
-  ┌───────▼────────┐   ┌────────▼────────┐   ┌───────▼────────┐
-  │  Auth Lambda   │   │Document Lambda  │   │  Chat Lambda   │
-  │  (Node.js)     │   │  (Node.js)      │   │  (Node.js)     │
-  └───────┬────────┘   └────────┬────────┘   └───────┬────────┘
-          │                     │                     │
-          └─────────────────────┼─────────────────────┘
-                                │
-                    ┌───────────▼───────────┐
-                    │   Amazon RDS         │
-                    │  (PostgreSQL)        │
-                    │  Multi-AZ + Backups  │
-                    └───────────┬───────────┘
-                                │
-        ┌───────────────────────┼───────────────────────┐
-        │                       │                       │
-┌───────▼────────┐     ┌────────▼────────┐     ┌───────▼────────┐
-│   AWS KMS      │     │  Amazon S3      │     │  CloudWatch    │
-│ (Encryption)   │     │ (Documents)     │     │ (Monitoring)   │
-└────────────────┘     └─────────────────┘     └────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    Mobile Apps                               │
+│                  (iOS/Android)                               │
+└──────────────────────┬──────────────────────────────────────┘
+                       │ HTTPS/TLS 1.3
+           ┌───────────▼───────────┐
+           │  Amazon CloudFront    │
+           │  (CDN + WAF)          │
+           └───────────┬───────────┘
+                       │
+           ┌───────────▼───────────┐
+           │   API Gateway REST    │
+           │  JWT Authorizer       │
+           └───────────┬───────────┘
+                       │
+       ┌───────────────┼───────────────┐
+       │               │               │
+┌──────▼──────┐ ┌─────▼─────┐ ┌──────▼──────┐
+│Auth Lambda  │ │Process    │ │ Chat Lambda │
+│(Node.js 18) │ │Lambda     │ │(Node.js 18) │
+└──────┬──────┘ │(Node.js18)│ └──────┬──────┘
+       │        └─────┬─────┘        │
+       │              │              │
+       │              │ AWS Bedrock  │
+       │              │ (Claude 3)   │
+       │              │              │
+       └──────────────┼──────────────┘
+                      │
+          ┌───────────▼───────────┐
+          │   DynamoDB Table      │
+          │  (Single-Table)       │
+          │  + DynamoDB Streams   │
+          └───────────┬───────────┘
+                      │
+        ┌─────────────┼─────────────┐
+        │             │             │
+┌───────▼─────┐ ┌────▼────┐ ┌──────▼──────┐
+│  AWS KMS    │ │   S3    │ │ CloudWatch  │
+│(Encryption) │ │(Temp)   │ │(Observ.)    │
+└─────────────┘ └─────────┘ └─────────────┘
 ```
 
 ---
 
-## ☁️ **AWS Infrastructure Components**
+## ☁️ AWS Infrastructure Components
 
-### **Compute Layer - AWS Lambda Functions**
+### Compute Layer - AWS Lambda Functions
 
-#### **Authentication Service**
-```typescript
-// auth-function/handler.ts
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  const { httpMethod, path, body } = event;
-  
-  // Route handling
-  if (path === '/auth/google' && httpMethod === 'POST') {
-    return await handleGoogleAuth(JSON.parse(body));
-  }
-  
-  if (path === '/auth/refresh' && httpMethod === 'POST') {
-    return await handleTokenRefresh(JSON.parse(body));
-  }
-  
-  return { statusCode: 404, body: JSON.stringify({ error: 'Not Found' }) };
-};
+**Total Functions:** 14 Lambda functions
 
-// Configuration
+#### 1. Authentication Service (`auth/auth.js`)
+```javascript
+// OAuth-based authentication, JWT token generation
 const config = {
   runtime: 'nodejs18.x',
-  timeout: 30, // seconds
-  memorySize: 512, // MB
+  timeout: 30,
+  memorySize: 512,
+  handler: 'auth.handler',
   environment: {
-    DATABASE_URL: process.env.DATABASE_URL,
-    JWT_SECRET: process.env.JWT_SECRET,
-    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
-    KMS_KEY_ID: process.env.KMS_KEY_ID
+    DYNAMO_TABLE_NAME: 'serenya-{env}',
+    KMS_KEY_ID: 'alias/serenya-{env}',
+    SECRETS_ARN: 'arn:aws:secretsmanager:...',
+    AWS_REGION: 'eu-west-1'
   }
 };
 ```
 
-#### **Document Processing Service**
-```typescript
-// document-function/handler.ts
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  const { httpMethod, path, body } = event;
-  
-  if (path === '/documents/upload' && httpMethod === 'POST') {
-    return await handleDocumentUpload(JSON.parse(body));
-  }
-  
-  if (path.match(/\/jobs\/(.+)\/status/) && httpMethod === 'GET') {
-    const jobId = path.split('/')[2];
-    return await handleJobStatus(jobId);
-  }
-  
-  return { statusCode: 404, body: JSON.stringify({ error: 'Not Found' }) };
-};
+**Routes:**
+- `POST /api/v1/auth/oauth-onboarding` - Google/Apple OAuth onboarding
+- `POST /api/v1/auth/oauth-signin` - OAuth sign-in
 
-// Configuration - Higher resources for Bedrock AI processing
+**Database Operations:**
+- DynamoDB PutItem (create user profile with embedded consents, subscription, device)
+- DynamoDB Query via GSI2 (OAuth provider lookup)
+
+---
+
+#### 2. Document Upload Service (`upload/upload.js`)
+```javascript
+// S3 presigned URL generation
 const config = {
   runtime: 'nodejs18.x',
-  timeout: 180, // 3 minutes for Bedrock AI processing
+  timeout: 30,
+  memorySize: 512,
+  handler: 'upload.handler',
+  environment: {
+    TEMP_BUCKET_NAME: 'serenya-temp-files-{env}-{account}',
+    KMS_KEY_ID: 'alias/serenya-{env}',
+    AWS_REGION: 'eu-west-1'
+  }
+};
+```
+
+**Routes:**
+- `POST /api/v1/process/upload` - Get presigned S3 URL
+
+**S3 Operations:**
+- Generate presigned URL for `incoming/{jobId}` upload
+- Client uploads directly to S3 (bypassing Lambda 6MB limit)
+
+---
+
+#### 3. Document Processing Service (`process/process.js`)
+```javascript
+// AI document analysis with AWS Bedrock
+const config = {
+  runtime: 'nodejs18.x',
+  timeout: 180, // 3 minutes for Bedrock processing
   memorySize: 2048, // 2GB for document processing
+  handler: 'process.handler',
   environment: {
-    BEDROCK_REGION: process.env.BEDROCK_REGION || 'eu-west-1',
-    BEDROCK_MODEL_ID: process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-    S3_BUCKET_NAME: process.env.S3_BUCKET_NAME,
-    DATABASE_URL: process.env.DATABASE_URL,
-    KMS_KEY_ID: process.env.KMS_KEY_ID,
-    COST_TRACKING_TABLE: process.env.COST_TRACKING_TABLE
+    TEMP_BUCKET_NAME: 'serenya-temp-files-{env}-{account}',
+    KMS_KEY_ID: 'alias/serenya-{env}',
+    AWS_REGION: 'eu-west-1',
+    BEDROCK_MODEL_ID: 'anthropic.claude-3-haiku-20240307-v1:0'
   }
 };
 ```
 
-#### **Chat & Conversation Service**
-```typescript
-// chat-function/handler.ts
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  const { httpMethod, path, body } = event;
-  
-  if (path === '/chat/messages' && httpMethod === 'POST') {
-    return await handleChatMessage(JSON.parse(body));
-  }
-  
-  if (path.match(/\/chat\/conversations\/(.+)/) && httpMethod === 'GET') {
-    const contentId = path.split('/')[3];
-    return await handleGetConversation(contentId);
-  }
-  
-  return { statusCode: 404, body: JSON.stringify({ error: 'Not Found' }) };
-};
+**Trigger:** S3 Event (ObjectCreated in `incoming/` folder)
 
-// Configuration
+**Processing Flow:**
+1. S3 event triggers Lambda with job ID
+2. Retrieve binary document from S3 `incoming/{jobId}`
+3. Call AWS Bedrock with multimodal prompt (PDF/image + text)
+4. Parse AI response into structured medical data
+5. Store results in S3 `outgoing/{jobId}`
+6. Delete `incoming/{jobId}` file
+7. Track observability metrics
+
+**No Database Storage:** Results stored temporarily in S3 only
+
+---
+
+#### 4. Job Status Service (`status/status.js`)
+```javascript
+// Client polling for job completion
 const config = {
   runtime: 'nodejs18.x',
-  timeout: 60, // 1 minute for Bedrock AI chat responses
-  memorySize: 1024, // 1GB for Bedrock AI processing
+  timeout: 30,
+  memorySize: 512,
+  handler: 'status.handler',
   environment: {
-    BEDROCK_REGION: process.env.BEDROCK_REGION || 'eu-west-1',
-    BEDROCK_MODEL_ID: process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-    DATABASE_URL: process.env.DATABASE_URL,
-    KMS_KEY_ID: process.env.KMS_KEY_ID,
-    COST_TRACKING_TABLE: process.env.COST_TRACKING_TABLE
+    TEMP_BUCKET_NAME: 'serenya-temp-files-{env}-{account}',
+    AWS_REGION: 'eu-west-1'
   }
 };
 ```
 
-### **Database Layer - Amazon RDS PostgreSQL**
+**Routes:**
+- `GET /api/v1/process/status/{jobId}` - Check job status
 
-#### **Production Configuration**
-```yaml
-# RDS Configuration
-DatabaseInstance:
-  Engine: postgres
-  EngineVersion: "15.4"
-  InstanceClass: db.r6g.large # 2 vCPU, 16GB RAM
-  AllocatedStorage: 100 # GB, SSD
-  StorageType: gp3
-  StorageEncrypted: true
-  MultiAZ: true # High availability
-  BackupRetentionPeriod: 30 # days
-  PreferredBackupWindow: "03:00-04:00" # UTC
-  PreferredMaintenanceWindow: "sun:04:00-sun:05:00" # UTC
-  VpcSecurityGroupIds: 
-    - !Ref DatabaseSecurityGroup
-  DBSubnetGroupName: !Ref DatabaseSubnetGroup
+**S3 Operations:**
+- Check for existence of `outgoing/{jobId}`
+- Return `processing`, `completed`, or `failed`
 
-# Performance and Monitoring
-PerformanceInsightsEnabled: true
-MonitoringInterval: 60 # seconds
-EnableCloudwatchLogsExports:
-  - postgresql
-```
+---
 
-#### **Connection Management**
-```typescript
-// database/connection.ts
-import { Pool } from 'pg';
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 20, // Maximum connections
-  idleTimeoutMillis: 30000, // Close idle connections after 30s
-  connectionTimeoutMillis: 2000, // Timeout connection attempts after 2s
-  ssl: {
-    rejectUnauthorized: false // Required for RDS
+#### 5. Result Retrieval Service (`result/result.js`)
+```javascript
+// Fetch AI analysis results
+const config = {
+  runtime: 'nodejs18.x',
+  timeout: 30,
+  memorySize: 512,
+  handler: 'result.handler',
+  environment: {
+    TEMP_BUCKET_NAME: 'serenya-temp-files-{env}-{account}',
+    KMS_KEY_ID: 'alias/serenya-{env}',
+    AWS_REGION: 'eu-west-1'
   }
-});
+};
+```
 
-// Connection with retry logic
-export async function getConnection() {
-  const maxRetries = 3;
-  let retries = 0;
-  
-  while (retries < maxRetries) {
-    try {
-      const client = await pool.connect();
-      return client;
-    } catch (error) {
-      retries++;
-      if (retries === maxRetries) throw error;
-      await new Promise(resolve => setTimeout(resolve, 1000 * retries));
-    }
+**Routes:**
+- `GET /api/v1/process/result/{jobId}` - Retrieve results
+
+**S3 Operations:**
+- Get object from `outgoing/{jobId}`
+- Return encrypted medical data to client
+- Client stores in local SQLite database
+
+---
+
+#### 6. Chat Prompts Service (`chat-prompts/chatPrompts.js`)
+```javascript
+// Health question prompts retrieval
+const config = {
+  runtime: 'nodejs18.x',
+  timeout: 30,
+  memorySize: 512,
+  handler: 'chatPrompts.handler'
+};
+```
+
+**Routes:**
+- `GET /api/v1/chat/prompts` - Get chat prompts
+
+**Static Prompts:** Returns predefined health question categories
+
+---
+
+#### 7. Chat Messages Service (`chat-messages/chatMessages.js`)
+```javascript
+// AI chat responses with Bedrock
+const config = {
+  runtime: 'nodejs18.x',
+  timeout: 60, // 1 minute for Bedrock chat
+  memorySize: 1024,
+  handler: 'chatMessages.handler',
+  environment: {
+    TEMP_BUCKET_NAME: 'serenya-temp-files-{env}-{account}',
+    AWS_REGION: 'eu-west-1',
+    BEDROCK_MODEL_ID: 'anthropic.claude-3-haiku-20240307-v1:0'
   }
-}
+};
 ```
 
-### **Storage Layer - Amazon S3**
+**Routes:**
+- `POST /api/v1/chat/messages` - Submit chat message
 
-#### **Document Storage Configuration**
-```yaml
-# S3 Bucket for documents
-DocumentBucket:
-  BucketName: serenya-documents-prod
-  VersioningConfiguration:
-    Status: Enabled
-  BucketEncryption:
-    ServerSideEncryptionConfiguration:
-      - ServerSideEncryptionByDefault:
-          SSEAlgorithm: aws:kms
-          KMSMasterKeyID: !Ref DocumentsKMSKey
-  PublicAccessBlockConfiguration:
-    BlockPublicAcls: true
-    BlockPublicPolicy: true
-    IgnorePublicAcls: true
-    RestrictPublicBuckets: true
-  LifecycleConfiguration:
-    Rules:
-      - Id: DeleteProcessedDocuments
-        Status: Enabled
-        ExpirationInDays: 1 # Delete after processing
+**Processing:**
+- Upload message to S3 `incoming/chat_{jobId}`
+- S3 event triggers `process` Lambda
+- Bedrock generates AI response
+- Results stored in S3 `outgoing/chat_{jobId}`
+- Client polls via status endpoint
+
+---
+
+#### 8. Chat Status Service (`chat-status/chatStatus.js`)
+```javascript
+// Chat job status polling
+const config = {
+  runtime: 'nodejs18.x',
+  timeout: 30,
+  memorySize: 512,
+  handler: 'chatStatus.handler',
+  environment: {
+    TEMP_BUCKET_NAME: 'serenya-temp-files-{env}-{account}',
+    AWS_REGION: 'eu-west-1'
+  }
+};
 ```
 
-#### **Document Processing Workflow**
+**Routes:**
+- `GET /api/v1/chat/status/{jobId}` - Check chat job status
+
+---
+
+#### 9. Doctor Report Service (`doctor-report/doctorReport.js`)
+```javascript
+// Premium feature - historical health reports
+const config = {
+  runtime: 'nodejs18.x',
+  timeout: 300, // 5 minutes for complex reports
+  memorySize: 2048,
+  handler: 'doctorReport.handler',
+  environment: {
+    DYNAMO_TABLE_NAME: 'serenya-{env}',
+    TEMP_BUCKET_NAME: 'serenya-temp-files-{env}-{account}',
+    AWS_REGION: 'eu-west-1',
+    BEDROCK_MODEL_ID: 'anthropic.claude-3-haiku-20240307-v1:0'
+  }
+};
+```
+
+**Routes:**
+- `POST /api/v1/process/doctor-report` - Generate premium report
+
+**Premium Validation:**
+- Check user subscription status in DynamoDB
+- Require `current_subscription.type === 'premium'`
+
+---
+
+#### 10. S3 Cleanup Service (`cleanup/cleanup.js`)
+```javascript
+// Manual S3 object deletion
+const config = {
+  runtime: 'nodejs18.x',
+  timeout: 30,
+  memorySize: 512,
+  handler: 'cleanup.handler',
+  environment: {
+    TEMP_BUCKET_NAME: 'serenya-temp-files-{env}-{account}',
+    AWS_REGION: 'eu-west-1'
+  }
+};
+```
+
+**Routes:**
+- `DELETE /api/v1/process/cleanup/{jobId}` - Delete job files
+
+---
+
+#### 11. Subscriptions Service (`subscriptions/subscriptions.js`)
+```javascript
+// Subscription management
+const config = {
+  runtime: 'nodejs18.x',
+  timeout: 30,
+  memorySize: 512,
+  handler: 'subscriptions.handler',
+  environment: {
+    DYNAMO_TABLE_NAME: 'serenya-{env}',
+    KMS_KEY_ID: 'alias/serenya-{env}',
+    AWS_REGION: 'eu-west-1'
+  }
+};
+```
+
+**Routes:**
+- `GET /api/v1/subscriptions` - Get subscription status
+- `POST /api/v1/subscriptions/webhook` - Apple/Google webhook
+
+**Database Operations:**
+- DynamoDB UpdateItem (update embedded `current_subscription` object)
+
+---
+
+#### 12. User Profile Service (`user/userProfile.js`)
+```javascript
+// User profile CRUD operations
+const config = {
+  runtime: 'nodejs18.x',
+  timeout: 30,
+  memorySize: 512,
+  handler: 'userProfile.handler',
+  environment: {
+    DYNAMO_TABLE_NAME: 'serenya-{env}',
+    KMS_KEY_ID: 'alias/serenya-{env}',
+    AWS_REGION: 'eu-west-1'
+  }
+};
+```
+
+**Routes:**
+- `GET /api/v1/user/profile` - Get user profile
+- `PUT /api/v1/user/profile` - Update user profile
+- `DELETE /api/v1/user/profile` - Delete account
+
+**Database Operations:**
+- DynamoDB GetItem, UpdateItem, DeleteItem
+- KMS encryption/decryption for PII fields
+
+---
+
+#### 13. API Gateway Authorizer (`authorizer/authorizer.js`)
+```javascript
+// JWT token validation
+const config = {
+  runtime: 'nodejs18.x',
+  timeout: 10,
+  memorySize: 256,
+  handler: 'authorizer.handler',
+  environment: {
+    SECRETS_ARN: 'arn:aws:secretsmanager:...',
+    AWS_REGION: 'eu-west-1'
+  }
+};
+```
+
+**Purpose:** Validate JWT tokens for all protected API routes
+
+---
+
+#### 14. DynamoDB Stream Processor (`stream-processor/streamProcessor.js`)
+```javascript
+// Observability event processing
+const config = {
+  runtime: 'nodejs18.x',
+  timeout: 60,
+  memorySize: 512,
+  handler: 'streamProcessor.handler',
+  environment: {
+    EVENTS_BUCKET_NAME: 'serenya-events-{env}-{account}',
+    AWS_REGION: 'eu-west-1'
+  }
+};
+```
+
+**Trigger:** DynamoDB Streams (NEW_AND_OLD_IMAGES)
+
+**Processing:**
+- Capture user registration events
+- Track subscription changes (free → premium)
+- Monitor session activity
+- Store audit events in S3 events bucket
+
+---
+
+### Database Layer - Amazon DynamoDB
+
+#### Production Configuration
 ```typescript
-// storage/document-handler.ts
-import { S3, KMS } from 'aws-sdk';
+TableName: 'serenya-{environment}'
+BillingMode: PAY_PER_REQUEST
+PartitionKey: PK (String)
+SortKey: SK (String)
+Encryption: AWS_MANAGED
+PointInTimeRecovery: true (production)
+DynamoDBStreams: NEW_AND_OLD_IMAGES
+TTL: Disabled (all records permanent)
 
-const s3 = new S3();
-const kms = new KMS();
+// Global Secondary Indexes
+GSI1-EmailLookup:
+  PartitionKey: GSI1PK (EMAIL#{sha256(email)})
+  SortKey: GSI1SK (USER#{userId})
 
-export async function uploadDocument(
-  fileData: Buffer, 
-  fileName: string, 
-  userId: string,
-  jobId: string
-): Promise<string> {
-  // Updated S3 key structure to match API contracts workflow
-  const key = `jobs/${jobId}_original`;
-  
-  const uploadParams = {
-    Bucket: 'serenya-temp-processing', // Updated bucket name
-    Key: key,
-    Body: fileData,
-    ServerSideEncryption: 'aws:kms',
-    SSEKMSKeyId: process.env.KMS_KEY_ID,
-    ContentType: 'application/octet-stream',
-    Metadata: {
-      'user-id': userId,
-      'upload-timestamp': new Date().toISOString()
-    }
-  };
-  
-  await s3.upload(uploadParams).promise();
-  return key;
+GSI2-ExternalAuth:
+  PartitionKey: GSI2PK (EXTERNAL#{provider}#{external_id})
+  SortKey: GSI2SK (USER#{userId})
+```
+
+#### Data Model
+**Single Entity Type:** User Profile
+
+```javascript
+{
+  // Primary Keys
+  PK: "USER#{userId}",
+  SK: "PROFILE",
+
+  // Identity
+  id: "uuid",
+  external_id: "google_sub",
+  auth_provider: "google|apple",
+
+  // PII (KMS Encrypted)
+  email: "encrypted_base64",
+  name: "encrypted_base64",
+  given_name: "encrypted_base64",
+  family_name: "encrypted_base64",
+
+  // Embedded Objects
+  consents: { privacy_policy: {...}, terms_of_service: {...} },
+  current_subscription: { type: "free|premium", status: "active" },
+  current_device: { platform: "ios|android", device_id: "..." },
+  current_session: { session_id: "jwt", expires_at: 123456 },
+  current_biometric: { biometric_type: "face", ... } || null,
+
+  // GSI Keys
+  GSI1PK: "EMAIL#{sha256(email)}",
+  GSI1SK: "USER#{userId}",
+  GSI2PK: "EXTERNAL#google#{external_id}",
+  GSI2SK: "USER#{userId}",
+
+  // Metadata
+  created_at: 1704672000000,
+  updated_at: 1704672000000
 }
+```
 
-export async function scheduleDocumentDeletion(key: string): Promise<void> {
-  // Deletion handled by S3 lifecycle policies (2 days retention)
-  // No manual deletion needed - lifecycle rules handle cleanup automatically
-  console.log(`Document ${key} scheduled for automatic deletion via lifecycle policy`);
-}
+**No Medical Data:** All lab results, vitals, and chat messages stored locally on device
+
+---
+
+### Storage Layer - Amazon S3
+
+#### Temporary Files Bucket
+```typescript
+BucketName: 'serenya-temp-files-{env}-{account}'
+Encryption: KMS
+LifecyclePolicy: Delete after 2 days
+CORS: Enabled for presigned uploads
+
+// Folder Structure
+incoming/
+  result_{userId}_{timestamp}_{random}     # Document uploads
+  chat_{userId}_{timestamp}_{random}       # Chat messages
+  report_{userId}_{timestamp}_{random}     # Premium reports
+
+outgoing/
+  {jobId}  # AI processing results (JSON)
+```
+
+#### Observability Events Bucket
+```typescript
+BucketName: 'serenya-events-{env}-{account}'
+Encryption: KMS
+LifecyclePolicy:
+  - Infrequent Access: 90 days
+  - Glacier: 365 days
+  - Retention: 7 years (HIPAA)
+
+// Event Storage
+observability/
+  year=2025/
+    month=01/
+      day=15/
+        user-registration-{timestamp}.json
+        subscription-change-{timestamp}.json
 ```
 
 ---
 
-## 🔐 **Security Infrastructure**
+## 🔐 Security Infrastructure
 
-### **AWS KMS Key Management**
-```yaml
-# KMS Keys for different data types
-DatabaseEncryptionKey:
-  Type: AWS::KMS::Key
-  Properties:
-    Description: "Serenya database field encryption"
-    KeyPolicy:
-      Statement:
-        - Sid: Enable Lambda access
-          Effect: Allow
-          Principal:
-            AWS: !Sub "${LambdaRole.Arn}"
-          Action:
-            - kms:Encrypt
-            - kms:Decrypt
-            - kms:ReEncrypt*
-            - kms:GenerateDataKey*
-            - kms:DescribeKey
-
-DocumentsKMSKey:
-  Type: AWS::KMS::Key
-  Properties:
-    Description: "Serenya document storage encryption"
-    KeyPolicy:
-      Statement:
-        - Sid: Enable S3 service access
-          Effect: Allow
-          Principal:
-            Service: s3.amazonaws.com
-          Action:
-            - kms:Encrypt
-            - kms:Decrypt
-            - kms:ReEncrypt*
-            - kms:GenerateDataKey*
+### AWS KMS Key Management
+```typescript
+// Single encryption key for all data
+SerenyaEncryptionKey:
+  Description: "PHI data encryption"
+  EnableKeyRotation: true
+  UsedBy:
+    - DynamoDB (field-level encryption)
+    - S3 (server-side encryption)
+    - Secrets Manager
 ```
 
-### **Network Security - VPC Configuration**
-```yaml
-# VPC for all resources
-VPC:
-  Type: AWS::EC2::VPC
-  Properties:
-    CidrBlock: 10.0.0.0/16
-    EnableDnsHostnames: true
-    EnableDnsSupport: true
+**Field-Level Encryption:**
+- User PII: email, name, given_name, family_name
+- Biometric templates
+- Temporary S3 objects
 
-# Private subnets for RDS
-PrivateSubnet1:
-  Type: AWS::EC2::Subnet
-  Properties:
-    VpcId: !Ref VPC
-    CidrBlock: 10.0.1.0/24
-    AvailabilityZone: !Select [0, !GetAZs '']
+### IAM Roles and Policies
 
-PrivateSubnet2:
-  Type: AWS::EC2::Subnet  
-  Properties:
-    VpcId: !Ref VPC
-    CidrBlock: 10.0.2.0/24
-    AvailabilityZone: !Select [1, !GetAZs '']
-
-# Security group for database
-DatabaseSecurityGroup:
-  Type: AWS::EC2::SecurityGroup
-  Properties:
-    VpcId: !Ref VPC
-    GroupDescription: Security group for PostgreSQL database
-    SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 5432
-        ToPort: 5432
-        SourceSecurityGroupId: !Ref LambdaSecurityGroup
-```
-
-### **VPC PrivateLink for AWS Bedrock Integration**
-
-**Purpose**: Secure, private connectivity to AWS Bedrock for AI processing without internet exposure
-
-```yaml
-# VPC Endpoint for Bedrock (PrivateLink)
-BedrockVPCEndpoint:
-  Type: AWS::EC2::VPCEndpoint
-  Properties:
-    VpcId: !Ref VPC
-    ServiceName: !Sub 'com.amazonaws.${AWS::Region}.bedrock-runtime'
-    VpcEndpointType: Interface
-    SubnetIds:
-      - !Ref PrivateSubnet1
-      - !Ref PrivateSubnet2
-    SecurityGroupIds:
-      - !Ref BedrockSecurityGroup
-    PrivateDnsEnabled: true
-    PolicyDocument:
-      Version: '2012-10-17'
-      Statement:
-        - Effect: Allow
-          Principal: '*'
-          Action:
-            - bedrock:InvokeModel
-            - bedrock:InvokeModelWithResponseStream
-          Resource: !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-5-sonnet-*'
-
-# Security group for Bedrock VPC Endpoint
-BedrockSecurityGroup:
-  Type: AWS::EC2::SecurityGroup
-  Properties:
-    VpcId: !Ref VPC
-    GroupDescription: Security group for Bedrock VPC Endpoint
-    SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 443
-        ToPort: 443
-        SourceSecurityGroupId: !Ref LambdaSecurityGroup
-        Description: HTTPS access from Lambda functions
-```
-
-**Medical Document Processing Security Architecture**:
-1. **Encrypted Upload**: Documents uploaded encrypted to S3 temporary storage
-2. **Lambda Processing**: ProcessFunction temporarily decrypts documents in memory only
-3. **VPC PrivateLink**: Bedrock communication stays within AWS private network
-4. **Secure Memory Management**: Plaintext content securely deleted from Lambda memory
-5. **Response Encryption**: AI results encrypted before storage/transmission
-6. **Automatic Cleanup**: S3 temporary files automatically deleted
-
-### **IAM Roles and Policies**
-```yaml
-# Lambda execution role
+#### Lambda Execution Role
+```typescript
 LambdaExecutionRole:
-  Type: AWS::IAM::Role
-  Properties:
-    AssumeRolePolicyDocument:
-      Statement:
-        - Effect: Allow
-          Principal:
-            Service: lambda.amazonaws.com
-          Action: sts:AssumeRole
-    ManagedPolicyArns:
-      - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
-    Policies:
-      - PolicyName: DatabaseAccess
-        PolicyDocument:
-          Statement:
-            - Effect: Allow
-              Action:
-                - rds-db:connect
-              Resource: !Sub "${DatabaseInstance}/*"
-      - PolicyName: KMSAccess
-        PolicyDocument:
-          Statement:
-            - Effect: Allow
-              Action:
-                - kms:Encrypt
-                - kms:Decrypt
-                - kms:ReEncrypt*
-                - kms:GenerateDataKey*
-                - kms:DescribeKey
-              Resource:
-                - !GetAtt DatabaseEncryptionKey.Arn
-                - !GetAtt DocumentsKMSKey.Arn
-      - PolicyName: S3Access
-        PolicyDocument:
-          Statement:
-            - Effect: Allow
-              Action:
-                - s3:GetObject
-                - s3:PutObject
-                - s3:DeleteObject
-              Resource: 
-                - !Sub "${TempProcessingBucket}/*"
-                - !Sub "${TempProcessingBucket}"
-      - PolicyName: BedrockAccess
-        PolicyDocument:
-          Statement:
-            - Effect: Allow
-              Action:
-                - bedrock:InvokeModel
-                - bedrock:InvokeModelWithResponseStream
-              Resource: 
-                - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-5-sonnet-*'
-                - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-haiku-*'
-            - Effect: Allow
-              Action:
-                - bedrock:GetFoundationModel
-                - bedrock:ListFoundationModels
-              Resource: '*'
-      - PolicyName: CostTrackingAccess
-        PolicyDocument:
-          Statement:
-            - Effect: Allow
-              Action:
-                - dynamodb:PutItem
-                - dynamodb:Query
-                - dynamodb:UpdateItem
-              Resource: !Sub "${CostTrackingTable.Arn}"
-            - Effect: Allow
-              Action:
-                - cloudwatch:PutMetricData
-              Resource: '*'
-              Condition:
-                StringEquals:
-                  'cloudwatch:namespace': 'Serenya/LLM'
+  ManagedPolicies:
+    - AWSLambdaBasicExecutionRole
+
+  InlinePolicies:
+    // DynamoDB Access
+    - PutItem, GetItem, UpdateItem, DeleteItem
+    - Query, Scan, BatchGetItem, BatchWriteItem
+    - Access to table and GSI indexes
+
+    // S3 Access
+    - GetObject, PutObject, DeleteObject
+    - Temp files bucket and events bucket
+
+    // KMS Access
+    - Decrypt, GenerateDataKey
+    - Encryption key access
+
+    // Secrets Manager
+    - GetSecretValue (API secrets)
+
+    // Bedrock Access
+    - InvokeModel (Claude 3 Haiku)
+    - InvokeModelWithResponseStream
 ```
 
-### **Cost Tracking Infrastructure**
+### Network Security
 
-#### **DynamoDB Table for LLM Usage**
-```yaml
-# Cost tracking table
-CostTrackingTable:
-  Type: AWS::DynamoDB::Table
-  Properties:
-    TableName: serenya-llm-cost-tracking
-    BillingMode: PAY_PER_REQUEST
-    AttributeDefinitions:
-      - AttributeName: userId
-        AttributeType: S
-      - AttributeName: timestamp
-        AttributeType: N
-    KeySchema:
-      - AttributeName: userId
-        KeyType: HASH
-      - AttributeName: timestamp
-        KeyType: RANGE
-    TimeToLiveSpecification:
-      AttributeName: ttl
-      Enabled: true
-    GlobalSecondaryIndexes:
-      - IndexName: monthly-usage-index
-        KeySchema:
-          - AttributeName: userId
-            KeyType: HASH
-          - AttributeName: month
-            KeyType: RANGE
-        Projection:
-          ProjectionType: INCLUDE
-          NonKeyAttributes: [inputTokens, outputTokens, totalCost]
-    PointInTimeRecoverySpecification:
-      PointInTimeRecoveryEnabled: true
-```
+**No VPC Required:**
+- DynamoDB: AWS-managed service (no VPC)
+- Lambda: Outside VPC for optimal performance
+- S3: AWS-managed service (no VPC)
+- Bedrock: AWS-managed service (no VPC)
 
-#### **CloudWatch Metrics for LLM Usage**
-```typescript
-// monitoring/llm-metrics.ts
-import { CloudWatch } from 'aws-sdk';
+**Encryption in Transit:**
+- Client → API Gateway: TLS 1.3
+- API Gateway → Lambda: AWS internal encryption
+- Lambda → DynamoDB: AWS internal encryption
+- Lambda → S3: AWS internal encryption
+- Lambda → Bedrock: AWS internal encryption
 
-const cloudwatch = new CloudWatch();
+---
 
-export interface LLMUsageMetrics {
-  inputTokens: number;
-  outputTokens: number;
-  totalCost: number;
-  provider: 'bedrock' | 'mock';
-  modelId: string;
-  processingTimeMs: number;
-  userId: string;
-  documentType: 'lab_results' | 'vitals' | 'chat' | 'report';
-}
+## 📊 Monitoring & Observability
 
-export async function trackLLMUsage(metrics: LLMUsageMetrics): Promise<void> {
-  const metricData = [
-    {
-      MetricName: 'InputTokens',
-      Dimensions: [
-        { Name: 'Provider', Value: metrics.provider },
-        { Name: 'ModelId', Value: metrics.modelId },
-        { Name: 'DocumentType', Value: metrics.documentType }
-      ],
-      Value: metrics.inputTokens,
-      Unit: 'Count',
-      Timestamp: new Date()
-    },
-    {
-      MetricName: 'OutputTokens', 
-      Dimensions: [
-        { Name: 'Provider', Value: metrics.provider },
-        { Name: 'ModelId', Value: metrics.modelId },
-        { Name: 'DocumentType', Value: metrics.documentType }
-      ],
-      Value: metrics.outputTokens,
-      Unit: 'Count',
-      Timestamp: new Date()
-    },
-    {
-      MetricName: 'TotalCost',
-      Dimensions: [
-        { Name: 'Provider', Value: metrics.provider },
-        { Name: 'ModelId', Value: metrics.modelId }
-      ],
-      Value: metrics.totalCost,
-      Unit: 'Count', // Cost in cents
-      Timestamp: new Date()
-    },
-    {
-      MetricName: 'ProcessingTime',
-      Dimensions: [
-        { Name: 'DocumentType', Value: metrics.documentType }
-      ],
-      Value: metrics.processingTimeMs,
-      Unit: 'Milliseconds',
-      Timestamp: new Date()
-    }
-  ];
+### ObservabilityConstruct
 
-  await cloudwatch.putMetricData({
-    Namespace: 'Serenya/LLM',
-    MetricData: metricData
-  }).promise();
+**Location:** `infrastructure/observability-construct.ts`
 
-  // Store detailed usage in DynamoDB for billing integration
-  await storeLLMUsageRecord(metrics);
-}
+#### CloudWatch Dashboards (3)
 
-async function storeLLMUsageRecord(metrics: LLMUsageMetrics): Promise<void> {
-  const dynamodb = new AWS.DynamoDB.DocumentClient();
-  
-  const record = {
-    userId: metrics.userId,
-    timestamp: Date.now(),
-    month: new Date().toISOString().substring(0, 7), // YYYY-MM for GSI
-    inputTokens: metrics.inputTokens,
-    outputTokens: metrics.outputTokens,
-    totalCost: metrics.totalCost,
-    provider: metrics.provider,
-    modelId: metrics.modelId,
-    documentType: metrics.documentType,
-    processingTimeMs: metrics.processingTimeMs,
-    ttl: Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60) // 1 year retention
-  };
+**1. Executive Dashboard**
+- User registrations (daily, weekly, monthly)
+- Active users
+- Document processing volume
+- Premium subscriptions
+- Revenue metrics
 
-  await dynamodb.put({
-    TableName: process.env.COST_TRACKING_TABLE,
-    Item: record
-  }).promise();
-}
-```
+**2. Operations Dashboard**
+- Lambda duration/invocations/errors (all 14 functions)
+- DynamoDB read/write capacity
+- DynamoDB throttling events
+- API Gateway 4xx/5xx errors
+- S3 object count/size
 
-### **HIPAA Compliance Infrastructure**
+**3. Security Dashboard**
+- Failed authentication attempts
+- Suspicious activity patterns
+- KMS encryption/decryption calls
+- DynamoDB Streams processing
 
-#### **VPC Flow Logs for Audit Trail**
-```yaml
-# VPC Flow Logs Role
-VPCFlowLogsRole:
-  Type: AWS::IAM::Role
-  Properties:
-    AssumeRolePolicyDocument:
-      Statement:
-        - Effect: Allow
-          Principal:
-            Service: vpc-flow-logs.amazonaws.com
-          Action: sts:AssumeRole
-    Policies:
-      - PolicyName: CloudWatchLogsPolicy
-        PolicyDocument:
-          Statement:
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-                - logs:DescribeLogGroups
-                - logs:DescribeLogStreams
-              Resource: '*'
+#### CloudWatch Alarms
 
-# VPC Flow Logs
-VPCFlowLogs:
-  Type: AWS::EC2::FlowLog
-  Properties:
-    ResourceType: VPC
-    ResourceId: !Ref VPC
-    TrafficType: ALL
-    LogDestination: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:serenya-vpc-flow-logs"
-    LogDestinationType: cloud-watch-logs
-    DeliverLogsPermissionArn: !GetAtt VPCFlowLogsRole.Arn
-    LogFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action} ${flowlogstatus}'
-```
+**Critical Alarms (SNS):**
+- Lambda errors > 10 in 5 minutes
+- DynamoDB throttling detected
+- API Gateway 5xx > 10 in 5 minutes
+- Bedrock service unavailable
 
-#### **Network ACLs for Subnet-Level Security**
-```yaml
-# Network ACL for Isolated Subnets (Document/Chat Lambdas)
-IsolatedNetworkAcl:
-  Type: AWS::EC2::NetworkAcl
-  Properties:
-    VpcId: !Ref VPC
-    Tags:
-      - Key: Name
-        Value: IsolatedSubnetACL
+**Warning Alarms (Email):**
+- Lambda duration approaching timeout
+- DynamoDB capacity warnings
+- S3 bucket size growing
 
-# Inbound rules for isolated subnets
-IsolatedNetworkAclInboundRule:
-  Type: AWS::EC2::NetworkAclEntry
-  Properties:
-    NetworkAclId: !Ref IsolatedNetworkAcl
-    RuleNumber: 100
-    Protocol: 6
-    RuleAction: allow
-    CidrBlock: 10.0.0.0/16
-    PortRange:
-      From: 443
-      To: 443
+### DynamoDB Streams Processing
 
-# Outbound rules for isolated subnets
-IsolatedNetworkAclOutboundRule:
-  Type: AWS::EC2::NetworkAclEntry
-  Properties:
-    NetworkAclId: !Ref IsolatedNetworkAcl
-    RuleNumber: 100
-    Protocol: 6
-    RuleAction: allow
-    CidrBlock: 10.0.0.0/16
-    PortRange:
-      From: 443
-      To: 443
-    Egress: true
+**Stream Processor Lambda:**
+- Triggered by all DynamoDB changes
+- Captures user lifecycle events
+- Tracks subscription changes
+- Monitors authentication activity
+- Stores events in S3 events bucket
 
-# Associate ACL with isolated subnets
-IsolatedSubnet1AclAssociation:
-  Type: AWS::EC2::SubnetNetworkAclAssociation
-  Properties:
-    SubnetId: !Ref IsolatedSubnet1
-    NetworkAclId: !Ref IsolatedNetworkAcl
+**Business Intelligence Metrics:**
+```javascript
+// User Journey Tracking
+- user_registered
+- user_first_login
+- document_processed
+- subscription_upgraded
+- premium_feature_used
 
-IsolatedSubnet2AclAssociation:
-  Type: AWS::EC2::SubnetNetworkAclAssociation
-  Properties:
-    SubnetId: !Ref IsolatedSubnet2
-    NetworkAclId: !Ref IsolatedNetworkAcl
-```
-
-#### **Enhanced CloudTrail for HIPAA Compliance**
-```yaml
-# CloudTrail with data events
-HIPAACompliantCloudTrail:
-  Type: AWS::CloudTrail::Trail
-  Properties:
-    TrailName: serenya-hipaa-audit-trail
-    S3BucketName: !Ref CloudTrailLogsBucket
-    S3KeyPrefix: cloudtrail-logs/
-    IncludeGlobalServiceEvents: true
-    IsMultiRegionTrail: true
-    EnableLogFileValidation: true
-    EventSelectors:
-      - ReadWriteType: All
-        IncludeManagementEvents: true
-        DataResources:
-          - Type: "AWS::S3::Object"
-            Values: 
-              - !Sub "${TempProcessingBucket}/*"
-          - Type: "AWS::KMS::Key"
-            Values: 
-              - !GetAtt DatabaseEncryptionKey.Arn
-              - !GetAtt DocumentsKMSKey.Arn
-    InsightSelectors:
-      - InsightType: ApiCallRateInsight
-
-# CloudTrail logs bucket
-CloudTrailLogsBucket:
-  Type: AWS::S3::Bucket
-  Properties:
-    BucketName: !Sub "serenya-cloudtrail-logs-${AWS::AccountId}"
-    BucketEncryption:
-      ServerSideEncryptionConfiguration:
-        - ServerSideEncryptionByDefault:
-            SSEAlgorithm: AES256
-    PublicAccessBlockConfiguration:
-      BlockPublicAcls: true
-      BlockPublicPolicy: true
-      IgnorePublicAcls: true
-      RestrictPublicBuckets: true
+// Observability Metrics
+- CloudWatch custom metrics
+- S3 event logs (7-year retention)
+- Audit trail for HIPAA compliance
 ```
 
 ---
 
-## 📊 **Monitoring & Observability**
+## 💰 Cost Optimization
 
-### **Unified Error Handling Infrastructure**
-**Infrastructure support for three-layer error handling strategy (Issue #16 resolution):**
+### Estimated Monthly Costs (10,000 users)
 
-#### **Circuit Breaker Implementation**
-```yaml
-# infrastructure/circuit-breakers.yml
-CircuitBreakers:
-  GoogleOAuthService:
-    failure_threshold: 5
-    success_threshold: 3
-    timeout: 30
-    monitor_window: 60
-    fallback_enabled: false
-    
-  OpenAIService:
-    failure_threshold: 3
-    success_threshold: 2
-    timeout: 45
-    monitor_window: 120
-    fallback_enabled: true  # Enable cached responses
-    
-  DatabaseService:
-    failure_threshold: 10
-    success_threshold: 5
-    timeout: 15
-    monitor_window: 30
-    fallback_enabled: false  # Critical service
+| Service | Usage | Monthly Cost |
+|---------|-------|--------------|
+| **Lambda** | 14 functions, 1M invocations | $50 |
+| **DynamoDB** | Pay-per-request | $25-50 |
+| **DynamoDB Streams** | Event processing | $5 |
+| **S3 (temp files)** | 2-day lifecycle | $5 |
+| **S3 (events)** | 7-year retention | $10 |
+| **API Gateway** | 1M requests | $35 |
+| **CloudWatch** | Dashboards + alarms | $34 |
+| **Bedrock (Claude Haiku)** | 3000 analyses | $8 |
+| **KMS** | Encryption operations | $10 |
+| **Total** | | **~$182/month** |
 
-# Lambda environment variables
-Environment:
-  CIRCUIT_BREAKER_CONFIG_ARN: !Ref CircuitBreakerConfig
-  ERROR_CORRELATION_TABLE: !Ref ErrorCorrelationTable
-```
+### Cost Optimization Strategies
 
-#### **Error Monitoring & Alerting**
-```typescript
-// monitoring/error-metrics.ts
-const errorMetrics = {
-  "ErrorCategorization": {
-    "MetricName": "ErrorsByCategory",
-    "Dimensions": [
-      {"Name": "Category", "Value": "technical|validation|business|external"},
-      {"Name": "RecoveryStrategy", "Value": "retry|fallback|escalate|ignore"}
-    ],
-    "Unit": "Count"
-  },
-  "CircuitBreakerStatus": {
-    "MetricName": "CircuitBreakerState", 
-    "Dimensions": [
-      {"Name": "Service", "Value": "google_oauth|openai_api|database"},
-      {"Name": "Status", "Value": "open|closed|half_open"}
-    ],
-    "Unit": "Count"
-  },
-  "ErrorRecovery": {
-    "MetricName": "RecoverySuccess",
-    "Dimensions": [
-      {"Name": "Strategy", "Value": "retry|fallback|escalate|ignore"},
-      {"Name": "Success", "Value": "true|false"}
-    ],
-    "Unit": "Count"
-  }
-}
-```
+**Serverless Auto-Scaling:**
+- No reserved capacity costs
+- Pay only for actual usage
+- Automatic scaling to zero
 
-#### **Lambda Error Handling Configuration**  
-```typescript
-// All Lambda functions must implement:
-const errorHandler = {
-  timeout: 180000,  // 3 minutes max
-  retryPolicy: {
-    maximumRetryAttempts: 2,
-    maximumEventAge: 3600
-  },
-  deadLetterQueue: {
-    targetArn: errorProcessingQueue
-  },
-  environment: {
-    ERROR_CORRELATION_ENABLED: 'true',
-    CIRCUIT_BREAKER_ENABLED: 'true', 
-    FALLBACK_MODE_ENABLED: 'true'
-  }
-}
-```
+**S3 Lifecycle Policies:**
+- Temp files deleted after 2 days
+- Events moved to Infrequent Access (90 days)
+- Events moved to Glacier (365 days)
 
-### **CloudWatch Dashboards**
-```typescript
-// monitoring/dashboard.ts - Aligned with API requirements
-const dashboardConfig = {
-  "widgets": [
-    {
-      "type": "metric",
-      "properties": {
-        "metrics": [
-          ["AWS/Lambda", "Duration", "FunctionName", "serenya-auth-function"],
-          ["AWS/Lambda", "Duration", "FunctionName", "serenya-document-function"],
-          ["AWS/Lambda", "Duration", "FunctionName", "serenya-chat-function"]
-        ],
-        "period": 300,
-        "stat": "Average",
-        "region": "eu-west-1", // Updated to match BEDROCK_REGION
-        "title": "Lambda Function Duration",
-        "yAxis": {
-          "left": {
-            "min": 0,
-            "max": 180000 // 3 minutes timeout visualization
-          }
-        }
-      }
-    },
-    {
-      "type": "metric", 
-      "properties": {
-        "metrics": [
-          ["AWS/ApiGatewayV2", "Count", "ApiId", "serenya-api"],
-          ["AWS/ApiGatewayV2", "4XXError", "ApiId", "serenya-api"],
-          ["AWS/ApiGatewayV2", "5XXError", "ApiId", "serenya-api"],
-          ["AWS/ApiGatewayV2", "IntegrationLatency", "ApiId", "serenya-api"]
-        ],
-        "period": 300,
-        "stat": "Sum",
-        "region": "eu-west-1", 
-        "title": "API Gateway Performance & Errors"
-      }
-    },
-    {
-      "type": "metric",
-      "properties": {
-        "metrics": [
-          ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "serenya-db"],
-          ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "serenya-db"],
-          ["AWS/RDS", "FreeableMemory", "DBInstanceIdentifier", "serenya-db"],
-          ["AWS/RDS", "ReadLatency", "DBInstanceIdentifier", "serenya-db"],
-          ["AWS/RDS", "WriteLatency", "DBInstanceIdentifier", "serenya-db"]
-        ],
-        "period": 300,
-        "stat": "Average",
-        "region": "eu-west-1",
-        "title": "Database Performance"
-      }
-    },
-    {
-      // NEW: LLM Cost Tracking Metrics (aligned with API contracts)
-      "type": "metric",
-      "properties": {
-        "metrics": [
-          ["Serenya/LLM", "InputTokens", "Provider", "bedrock"],
-          ["Serenya/LLM", "OutputTokens", "Provider", "bedrock"],
-          ["Serenya/LLM", "TotalCost", "Provider", "bedrock"],
-          ["Serenya/LLM", "ProcessingTime", "DocumentType", "lab_results"],
-          ["Serenya/LLM", "ProcessingTime", "DocumentType", "vitals"],
-          ["Serenya/LLM", "ProcessingTime", "DocumentType", "chat"]
-        ],
-        "period": 300,
-        "stat": "Sum",
-        "region": "eu-west-1",
-        "title": "LLM Usage & Cost Tracking"
-      }
-    },
-    {
-      // NEW: S3 Bucket Performance (for document processing workflow)
-      "type": "metric",
-      "properties": {
-        "metrics": [
-          ["AWS/S3", "NumberOfObjects", "BucketName", "serenya-temp-processing"],
-          ["AWS/S3", "BucketSizeBytes", "BucketName", "serenya-temp-processing"],
-          ["AWS/S3", "AllRequests", "BucketName", "serenya-temp-processing"]
-        ],
-        "period": 3600,
-        "stat": "Average",
-        "region": "eu-west-1",
-        "title": "Document Processing S3 Metrics"
-      }
-    },
-    {
-      // NEW: Unified Error Handling Metrics
-      "type": "metric",
-      "properties": {
-        "metrics": [
-          ["Serenya/Errors", "ErrorsByCategory", "Category", "technical"],
-          ["Serenya/Errors", "ErrorsByCategory", "Category", "validation"],
-          ["Serenya/Errors", "ErrorsByCategory", "Category", "business"],
-          ["Serenya/Errors", "ErrorsByCategory", "Category", "external"],
-          ["Serenya/Errors", "CircuitBreakerState", "Service", "google_oauth"],
-          ["Serenya/Errors", "CircuitBreakerState", "Service", "openai_api"],
-          ["Serenya/Errors", "RecoverySuccess", "Strategy", "retry"],
-          ["Serenya/Errors", "RecoverySuccess", "Strategy", "fallback"]
-        ],
-        "period": 300,
-        "stat": "Sum", 
-        "region": "eu-west-1",
-        "title": "Error Handling & Recovery Metrics"
-      }
-    },
-    {
-      // NEW: VPC and Network Security Monitoring
-      "type": "metric",
-      "properties": {
-        "metrics": [
-          ["AWS/VPC", "PacketDropCount", "VPC", "serenya-vpc"],
-          ["AWS/Lambda", "ConcurrentExecutions", "FunctionName", "serenya-document-function"],
-          ["AWS/Lambda", "ConcurrentExecutions", "FunctionName", "serenya-chat-function"]
-        ],
-        "period": 300,
-        "stat": "Sum",
-        "region": "eu-west-1",
-        "title": "Network Security & Concurrency"
-      }
-    }
-  ]
-};
-```
-
-### **Alarms and Notifications**
-```yaml
-# Critical alarms aligned with API requirements + unified error handling
-
-# Circuit Breaker Alarms
-CircuitBreakerOpenAlarm:
-  Type: AWS::CloudWatch::Alarm
-  Properties:
-    AlarmDescription: "Circuit breaker opened for critical service"
-    MetricName: CircuitBreakerState
-    Namespace: Serenya/Errors
-    Statistic: Sum
-    Period: 60
-    EvaluationPeriods: 1
-    Threshold: 1
-    ComparisonOperator: GreaterThanOrEqualToThreshold
-    Dimensions:
-      - Name: "Status"
-        Value: "open"
-    AlarmActions:
-      - !Ref CriticalAlertsTopic
-
-# High Error Rate by Category
-HighTechnicalErrorAlarm:
-  Type: AWS::CloudWatch::Alarm
-  Properties:
-    AlarmDescription: "High rate of technical errors indicating infrastructure issues"
-    MetricName: ErrorsByCategory
-    Namespace: Serenya/Errors
-    Statistic: Sum
-    Period: 300
-    EvaluationPeriods: 2
-    Threshold: 20
-    ComparisonOperator: GreaterThanThreshold
-    Dimensions:
-      - Name: "Category"
-        Value: "technical"
-    AlarmActions:
-      - !Ref CriticalAlertsTopic
-
-# Recovery Strategy Failure
-RecoveryStrategyFailureAlarm:
-  Type: AWS::CloudWatch::Alarm
-  Properties:
-    AlarmDescription: "Error recovery strategies failing at high rate"
-    MetricName: RecoverySuccess
-    Namespace: Serenya/Errors
-    Statistic: Sum
-    Period: 300
-    EvaluationPeriods: 3
-    Threshold: 10
-    ComparisonOperator: LessThanThreshold
-    Dimensions:
-      - Name: "Success"
-        Value: "true"
-    AlarmActions:
-      - !Ref CriticalAlertsTopic
-
-HighErrorRateAlarm:
-  Type: AWS::CloudWatch::Alarm
-  Properties:
-    AlarmDescription: "High API error rate"
-    MetricName: 5XXError
-    Namespace: AWS/ApiGatewayV2
-    Statistic: Sum
-    Period: 300
-    EvaluationPeriods: 2
-    Threshold: 10
-    ComparisonOperator: GreaterThanThreshold
-    AlarmActions:
-      - !Ref CriticalAlertsTopic
-
-DatabaseConnectionAlarm:
-  Type: AWS::CloudWatch::Alarm
-  Properties:
-    AlarmDescription: "Database connection count high"
-    MetricName: DatabaseConnections
-    Namespace: AWS/RDS
-    Statistic: Average
-    Period: 300
-    EvaluationPeriods: 3
-    Threshold: 80
-    ComparisonOperator: GreaterThanThreshold
-    AlarmActions:
-      - !Ref WarningAlertsTopic
-
-# Updated Lambda timeout alarms to match API contracts
-DocumentProcessingTimeoutAlarm:
-  Type: AWS::CloudWatch::Alarm
-  Properties:
-    AlarmDescription: "Document processing Lambda approaching timeout"
-    MetricName: Duration
-    Namespace: AWS/Lambda
-    Dimensions:
-      - Name: FunctionName
-        Value: serenya-document-function
-    Statistic: Average
-    Period: 300
-    EvaluationPeriods: 2
-    Threshold: 150000 # 150 seconds (30s before 180s timeout)
-    ComparisonOperator: GreaterThanThreshold
-    AlarmActions:
-      - !Ref PerformanceAlertsTopic
-
-ChatResponseTimeoutAlarm:
-  Type: AWS::CloudWatch::Alarm
-  Properties:
-    AlarmDescription: "Chat Lambda approaching timeout"
-    MetricName: Duration
-    Namespace: AWS/Lambda
-    Dimensions:
-      - Name: FunctionName
-        Value: serenya-chat-function
-    Statistic: Average
-    Period: 300
-    EvaluationPeriods: 2
-    Threshold: 50000 # 50 seconds (10s before 60s timeout)
-    ComparisonOperator: GreaterThanThreshold
-    AlarmActions:
-      - !Ref PerformanceAlertsTopic
-
-AuthTimeoutAlarm:
-  Type: AWS::CloudWatch::Alarm
-  Properties:
-    AlarmDescription: "Auth Lambda approaching timeout"
-    MetricName: Duration
-    Namespace: AWS/Lambda
-    Dimensions:
-      - Name: FunctionName
-        Value: serenya-auth-function
-    Statistic: Average
-    Period: 300
-    EvaluationPeriods: 2
-    Threshold: 50000 # 50 seconds (10s before 60s timeout)
-    ComparisonOperator: GreaterThanThreshold
-    AlarmActions:
-      - !Ref PerformanceAlertsTopic
-
-# NEW: LLM Cost Tracking Alarms
-LLMCostThresholdAlarm:
-  Type: AWS::CloudWatch::Alarm
-  Properties:
-    AlarmDescription: "LLM costs exceeding budget threshold"
-    MetricName: TotalCost
-    Namespace: Serenya/LLM
-    Statistic: Sum
-    Period: 3600
-    EvaluationPeriods: 1
-    Threshold: 100 # $1.00 per hour threshold
-    ComparisonOperator: GreaterThanThreshold
-    AlarmActions:
-      - !Ref CostAlertsTopic
-
-# NEW: HIPAA Security Alerts  
-VPCFlowLogsFailureAlarm:
-  Type: AWS::CloudWatch::Alarm
-  Properties:
-    AlarmDescription: "VPC Flow Logs delivery failures"
-    MetricName: DeliveryErrors
-    Namespace: AWS/VPCFlowLogs
-    Statistic: Sum
-    Period: 300
-    EvaluationPeriods: 1
-    Threshold: 1
-    ComparisonOperator: GreaterThanOrEqualToThreshold
-    AlarmActions:
-      - !Ref SecurityAlertsTopic
-
-UnauthorizedAPIAccessAlarm:
-  Type: AWS::CloudWatch::Alarm
-  Properties:
-    AlarmDescription: "High rate of 4XX authentication errors"
-    MetricName: 4XXError
-    Namespace: AWS/ApiGatewayV2
-    Statistic: Sum
-    Period: 300
-    EvaluationPeriods: 2
-    Threshold: 50
-    ComparisonOperator: GreaterThanThreshold
-    AlarmActions:
-      - !Ref SecurityAlertsTopic
-```
-
-### **Structured Logging**
-```typescript
-// utils/logger.ts
-import { createLogger, format, transports } from 'winston';
-
-const logger = createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  format: format.combine(
-    format.timestamp(),
-    format.errors({ stack: true }),
-    format.json()
-  ),
-  defaultMeta: {
-    service: 'serenya-api',
-    version: process.env.APP_VERSION || '1.0.0'
-  },
-  transports: [
-    new transports.Console()
-  ]
-});
-
-// Usage in Lambda functions
-export function logApiRequest(event: APIGatewayProxyEvent, context: Context) {
-  logger.info('API Request', {
-    requestId: context.awsRequestId,
-    method: event.httpMethod,
-    path: event.path,
-    userAgent: event.headers['user-agent'],
-    sourceIp: event.requestContext.identity.sourceIp,
-    timestamp: new Date().toISOString()
-  });
-}
-
-export function logError(error: Error, context: any = {}) {
-  logger.error('Application Error', {
-    error: error.message,
-    stack: error.stack,
-    context,
-    timestamp: new Date().toISOString()
-  });
-}
-```
+**DynamoDB Single-Table:**
+- Fewer tables = lower costs
+- Pay-per-request billing
+- No idle capacity charges
 
 ---
 
-## 🚀 **Deployment & CI/CD**
+## 🚀 Deployment & CI/CD
 
-### **AWS CDK Infrastructure as Code**
+### AWS CDK Infrastructure as Code
+
+**Stack:** `SerenyaBackendStack`
+
 ```typescript
-// infrastructure/app.ts
-import * as cdk from 'aws-cdk-lib';
-import { SerenyaStack } from './serenya-stack';
-
+// app.ts
 const app = new cdk.App();
 
-// Production environment
-new SerenyaStack(app, 'SerenyaProductionStack', {
-  env: {
-    account: process.env.AWS_ACCOUNT_ID,
-    region: 'us-west-2'
-  },
-  stage: 'production',
-  domainName: 'api.serenya.health'
+new SerenyaBackendStack(app, 'SerenyaBackend-dev', {
+  environment: 'dev',
+  config: {
+    region: 'eu-west-1',
+    allowOrigins: ['http://localhost:3000'],
+    retentionDays: 7,
+    enableDetailedLogging: true
+  }
 });
 
-// Development environment
-new SerenyaStack(app, 'SerenyaDevelopmentStack', {
-  env: {
-    account: process.env.AWS_ACCOUNT_ID,
-    region: 'us-west-2'
-  },
-  stage: 'development',
-  domainName: 'api-dev.serenya.health'
+new SerenyaBackendStack(app, 'SerenyaBackend-prod', {
+  environment: 'prod',
+  config: {
+    region: 'eu-west-1',
+    allowOrigins: ['https://app.serenya.health'],
+    retentionDays: 365,
+    enableDetailedLogging: false,
+    alertEmail: 'alerts@serenya.health'
+  }
 });
 ```
 
-### **GitHub Actions CI/CD Pipeline**
-```yaml
-# .github/workflows/deploy.yml
-name: Deploy Serenya API
+### Deployment Commands
 
-on:
-  push:
-    branches: [main, develop]
+```bash
+# Install dependencies
+cd serenya_app/backend
+npm install
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-      - run: npm ci
-      - run: npm run test
-      - run: npm run lint
-      - run: npm run type-check
+# Compile TypeScript
+npm run build
 
-  deploy-dev:
-    if: github.ref == 'refs/heads/develop'
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-      - run: npm ci
-      - run: npm run build
-      - uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-      - run: npx cdk deploy SerenyaDevelopmentStack --require-approval never
+# Deploy to development
+npm run deploy:dev
 
-  deploy-prod:
-    if: github.ref == 'refs/heads/main'
-    needs: test
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-      - run: npm ci
-      - run: npm run build
-      - uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-      - run: npx cdk deploy SerenyaProductionStack --require-approval never
+# Deploy to production
+npm run deploy:prod
 ```
 
 ---
 
-## 📈 **Performance & Scaling**
+## 🔄 Disaster Recovery
 
-### **Auto-Scaling Configuration**
-```typescript
-// Lambda auto-scaling is automatic, but we configure:
-const lambdaConfig = {
-  concurrency: {
-    reserved: 50, // Reserve capacity
-    provisioned: 10 // Keep warm instances
-  },
-  
-  // Cold start optimization
-  bundling: {
-    minify: true,
-    externalModules: ['aws-sdk'], // Exclude AWS SDK
-    nodeModules: ['pg', 'jsonwebtoken'] // Include essential modules
-  }
-};
+### Backup Strategy
 
-// RDS connection pooling
-const databaseConfig = {
-  maxConnections: 100, // RDS instance limit
-  connectionPool: {
-    min: 5, // Always keep minimum connections
-    max: 20, // Per Lambda function
-    acquireTimeoutMillis: 2000,
-    createTimeoutMillis: 2000,
-    destroyTimeoutMillis: 5000,
-    idleTimeoutMillis: 30000,
-    reapIntervalMillis: 1000
-  }
-};
+**DynamoDB:**
+- Point-in-time recovery enabled (production)
+- Continuous backups (last 35 days)
+- On-demand backups before major changes
+
+**S3:**
+- Versioning disabled (temp files)
+- Events bucket retention (7 years)
+- Cross-region replication (future)
+
+### Recovery Procedures
+
+**DynamoDB Table Restore:**
+```bash
+# Restore to specific point in time
+aws dynamodb restore-table-to-point-in-time \
+  --source-table-name serenya-prod \
+  --target-table-name serenya-prod-restored \
+  --restore-date-time "2025-01-15T12:00:00Z"
 ```
 
-### **Caching Strategy**
-```typescript
-// API Gateway caching
-const apiGatewayCache = {
-  '/content/timeline': {
-    ttl: 300, // 5 minutes
-    keyParameters: ['userId', 'limit', 'offset']
-  },
-  '/subscriptions/status': {
-    ttl: 900, // 15 minutes
-    keyParameters: ['userId']
-  }
-};
-
-// In-memory caching for Lambda
-import NodeCache from 'node-cache';
-
-const cache = new NodeCache({
-  stdTTL: 300, // 5 minutes default
-  checkperiod: 60, // Check for expired keys every minute
-  useClones: false // For performance
-});
-
-export function getCachedOrFetch<T>(
-  key: string, 
-  fetchFn: () => Promise<T>,
-  ttl: number = 300
-): Promise<T> {
-  const cached = cache.get<T>(key);
-  if (cached !== undefined) {
-    return Promise.resolve(cached);
-  }
-  
-  return fetchFn().then(result => {
-    cache.set(key, result, ttl);
-    return result;
-  });
-}
+**Lambda Function Rollback:**
+```bash
+# Rollback to previous version
+aws lambda update-alias \
+  --function-name SerenyaBackend-prod-AuthFunction \
+  --name live \
+  --function-version <previous-version>
 ```
 
 ---
 
-## 🔄 **Disaster Recovery & Backup**
+## 📈 Performance & Scaling
 
-### **Backup Strategy**
-```yaml
-# RDS automated backups
-BackupConfiguration:
-  BackupRetentionPeriod: 30 # days
-  PreferredBackupWindow: "03:00-04:00" # UTC
-  DeleteAutomatedBackups: false
-  DeletionProtection: true
+### Auto-Scaling Configuration
 
-# Cross-region backup for critical data
-CrossRegionBackup:
-  DestinationRegion: us-east-1
-  BackupPlan:
-    BackupPlanName: SerenyaCrossRegionBackup
-    BackupPlanRule:
-      - RuleName: DailyBackups
-        TargetBackupVault: SerenyaBackupVault
-        ScheduleExpression: "cron(0 2 ? * * *)" # Daily at 2 AM UTC
-        Lifecycle:
-          DeleteAfterDays: 365 # 1 year retention
-```
+**Lambda Concurrency:**
+- Reserved: 50 concurrent executions
+- Provisioned: 10 warm instances (production)
+- Auto-scaling: Unlimited (burst to 1000)
 
-### **Disaster Recovery Procedures**
-```typescript
-// DR automation scripts
-const disasterRecoveryPlan = {
-  rto: 4, // hours - Recovery Time Objective  
-  rpo: 1, // hour - Recovery Point Objective
-  
-  procedures: {
-    databaseFailure: async () => {
-      // 1. Promote read replica to master
-      await rds.promoteReadReplica({
-        DBInstanceIdentifier: 'serenya-db-replica'
-      });
-      
-      // 2. Update Lambda environment variables
-      await updateLambdaConfig({
-        DATABASE_URL: process.env.REPLICA_DATABASE_URL
-      });
-      
-      // 3. Update Route 53 health checks
-      await updateHealthChecks();
-    },
-    
-    regionFailure: async () => {
-      // 1. Activate cross-region resources
-      await activateStandbyRegion('us-east-1');
-      
-      // 2. Restore from latest backup
-      await restoreFromBackup('latest');
-      
-      // 3. Update DNS to point to DR region
-      await updateDNSFailover();
-    }
-  }
-};
-```
+**DynamoDB Capacity:**
+- Billing Mode: PAY_PER_REQUEST
+- Auto-scaling: Automatic
+- No capacity planning required
+
+### Performance Benchmarks
+
+**API Response Times:**
+- Authentication: <200ms (p99)
+- Document upload: <500ms (presigned URL)
+- Job status: <100ms (S3 head request)
+- Result retrieval: <300ms (S3 get)
+
+**Processing Times:**
+- Document analysis: 8-25 seconds (Bedrock)
+- Chat response: 3-8 seconds (Bedrock)
+- Premium report: 12-25 seconds (Bedrock)
 
 ---
 
-## 🔄 **Agent Handoff Requirements**
+## 🛡️ HIPAA Compliance
 
-### **For Mobile Architecture Agent (→ mobile-architecture.md)**
-**Infrastructure Integration Points**:
-- API Gateway endpoints and authentication flow
-- WebSocket connections for real-time updates (future enhancement)
-- CDN configuration for static assets and app updates
-- Error handling patterns for AWS service failures
-- Network optimization and timeout configuration
+### Compliance Measures
 
-### **For Database Architecture Agent (→ database-architecture.md)**
-**Database Infrastructure Requirements**:
-- RDS connection string format and SSL requirements
-- Connection pool configuration and limits
-- Backup and recovery procedures
-- Performance monitoring and optimization
-- Migration deployment automation
+**Data Protection:**
+- No PHI stored in DynamoDB (only authentication data)
+- Temporary S3 storage (2 days max)
+- KMS encryption at rest
+- TLS 1.3 encryption in transit
 
-### **For API Design Agent (→ api-contracts.md)**
-**Deployment and Runtime Environment**:
-- Lambda function configuration and limits
-- Environment variable management
-- External service integration (Anthropic AI)
-- Error handling and retry logic
-- Performance optimization and cold start reduction
+**Audit Logging:**
+- DynamoDB Streams capture all database changes
+- S3 events bucket (7-year retention)
+- CloudWatch Logs (Lambda execution logs)
+- API Gateway access logs
 
-### **For Security Implementation Agent (→ encryption-strategy.md)**
-**Security Infrastructure Integration**:
-- AWS KMS key policies and access patterns
-- VPC and network security configuration
-- IAM roles and permission boundaries
-- CloudTrail integration for security audit
-- Certificate management and TLS termination
+**Access Controls:**
+- JWT authentication required
+- IAM least-privilege policies
+- KMS key policies
+- API Gateway rate limiting
 
 ---
 
-**Document Status**: ✅ Complete - Ready for infrastructure deployment and service integration  
-**Infrastructure Coverage**: Complete AWS architecture with security, monitoring, and DR  
-**Cross-References**: All system components mapped to implementation requirements  
-**Next Steps**: Database setup + Lambda deployment + security configuration + monitoring activation
+## 📚 Related Documentation
+
+- **[database-architecture.md](database-architecture.md)** - DynamoDB single-table design
+- **[api-contracts.md](api-contracts.md)** - API endpoint specifications
+- **[llm-integration-architecture.md](llm-integration-architecture.md)** - Bedrock AI integration
+- **[observability.md](observability.md)** - Monitoring and observability
+- **[deployment-procedures.md](deployment-procedures.md)** - Deployment guide
+- **[our-dev-rules.md](our-dev-rules.md)** - Development standards
+
+---
+
+**Document Status**: ✅ Complete - DynamoDB Serverless Architecture
+**Last Updated**: January 2025
+**Infrastructure:** AWS Lambda + DynamoDB + S3 + Bedrock + CloudWatch
+**No VPC, No RDS, No EC2** - Fully serverless
+**Next Review**: March 2025

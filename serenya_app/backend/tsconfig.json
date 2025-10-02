@@ -27,7 +27,8 @@
   "include": [
     "infrastructure/**/*",
     "lambdas/**/*",
-    "config/**/*"
+    "config/**/*",
+    "test-dynamodb-*.ts"
   ],
   "exclude": [
     "node_modules",

@@ -6,19 +6,22 @@ const {
   s3,
 } = require('../shared/utils');
 const { auditService } = require('../shared/audit-service');
+const { ObservabilityService } = require('../shared/observability-service');
 
 /**
  * S3 Temporary File Cleanup
  * DELETE /api/v1/process/cleanup/{jobId}
- * 
+ *
  * Called by Flutter app after successful storage to SerenyaContent table
  * to cleanup temporary S3 files for completed processing jobs
  */
 exports.handler = async (event) => {
+  const startTime = Date.now();
+  const observability = ObservabilityService.createForFunction('cleanup', event);
   const sessionId = event.requestContext?.requestId || 'unknown';
   const sourceIp = event.requestContext?.identity?.sourceIp;
   const userAgent = event.headers?.['User-Agent'];
-  
+
   try {
     const userId = getUserIdFromEvent(event);
     const jobId = event.pathParameters?.jobId;
@@ -45,16 +48,10 @@ exports.handler = async (event) => {
       dataClassification: 'medical_phi'
     });
 
-    // Clean up all possible temporary files for this job
+    // Clean up completed processing files for this job
     const filesToCleanup = [
-      // Health data input file (for doctor reports)
-      `reports/${userId}/${jobId}/health_data_export.json`,
-      // Doctor report results file  
-      `reports/${userId}/${jobId}/doctor_report_result.json`,
-      // Document analysis results file
-      `results/${userId}/${jobId}/result.json`,
-      // Any other results files that might exist
-      `results/${userId}/${jobId}/analysis_result.json`
+      // Single outgoing file for all job types (result_, chat_, report_)
+      `outgoing/${jobId}`
     ];
     const cleanupResults = [];
     
@@ -75,13 +72,16 @@ exports.handler = async (event) => {
         };
         
         await s3.deleteObject(deleteParams).promise();
-        
+
+        // Track S3 operation
+        await observability.trackS3Operation('delete', process.env.TEMP_BUCKET_NAME, s3Key, true, userId);
+
         cleanupResults.push({
           s3Key: s3Key,
           status: 'deleted',
           existed: true
         });
-        
+
         console.log(`Successfully cleaned up file: ${s3Key}`);
         
       } catch (error) {
@@ -143,17 +143,19 @@ exports.handler = async (event) => {
 
   } catch (error) {
     console.error('Cleanup error:', sanitizeError(error));
-    
+
     const userId = getUserIdFromEvent(event) || 'unknown';
     const jobId = event.pathParameters?.jobId || 'unknown';
-    
+
+    await observability.trackError(error, 's3_cleanup', userId);
+
     await auditService.logAuditEvent({
       eventType: 'document_processing',
       eventSubtype: 'cleanup_error',
       userId: userId,
-      eventDetails: { 
-        jobId, 
-        error: sanitizeError(error).substring(0, 100) 
+      eventDetails: {
+        jobId,
+        error: sanitizeError(error).substring(0, 100)
       },
       sessionId: sessionId,
       sourceIp: sourceIp,
@@ -162,7 +164,7 @@ exports.handler = async (event) => {
     }).catch(auditError => {
       console.error('Audit logging failed:', auditError);
     });
-    
+
     return createErrorResponse(500, 'Failed to cleanup temporary files');
   }
 };

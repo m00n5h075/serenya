@@ -1,9 +1,0 @@
-{
-  "name": "serenya-user-lambda",
-  "version": "1.0.0",
-  "description": "User profile management",
-  "main": "userProfile.js",
-  "dependencies": {
-    "aws-sdk": "^2.1481.0"
-  }
-}

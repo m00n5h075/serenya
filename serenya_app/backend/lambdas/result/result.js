@@ -3,29 +3,89 @@ const {
   createErrorResponse,
   getUserIdFromEvent,
   sanitizeError,
+  withRetry,
+  s3,
+  categorizeError,
+  createUnifiedError,
+  ERROR_CATEGORIES
 } = require('../shared/utils');
-const { DocumentJobService } = require('../shared/document-database');
 const { auditService } = require('../shared/audit-service');
+const { ObservabilityService } = require('../shared/observability-service');
 
 /**
- * Results Retrieval
+ * Results Retrieval for All Job Types
  * GET /api/v1/process/result/{jobId}
  */
 exports.handler = async (event) => {
+  const startTime = Date.now();
+  const observability = ObservabilityService.createForFunction('result', event);
   const sessionId = event.requestContext?.requestId || 'unknown';
   const sourceIp = event.requestContext?.identity?.sourceIp;
   const userAgent = event.headers?.['User-Agent'];
-  
+
   try {
     const userId = getUserIdFromEvent(event);
     const jobId = event.pathParameters?.jobId;
 
     if (!userId) {
-      return createErrorResponse(401, 'Invalid or missing authentication');
+      const unifiedError = createUnifiedError(new Error('Missing authentication'), {
+        service: 'result',
+        operation: 'authentication',
+        category: ERROR_CATEGORIES.BUSINESS
+      });
+      
+      await auditService.logAuditEvent({
+        eventType: 'access_control',
+        eventSubtype: 'unauthenticated_result_access',
+        userId: 'unauthenticated',
+        eventDetails: {
+          correlationId: unifiedError.correlationId,
+          jobId: event.pathParameters?.jobId
+        },
+        dataClassification: 'security_event'
+      }).catch(() => {});
+      
+      return createErrorResponse(401, 'MISSING_AUTHENTICATION', 'Invalid or missing authentication', 'Please sign in to retrieve results');
     }
 
     if (!jobId) {
-      return createErrorResponse(400, 'Missing job ID');
+      const unifiedError = createUnifiedError(new Error('Missing job ID'), {
+        service: 'result',
+        operation: 'input_validation',
+        userId: userId,
+        category: ERROR_CATEGORIES.VALIDATION
+      });
+      
+      await auditService.logAuditEvent({
+        eventType: 'validation',
+        eventSubtype: 'missing_job_id',
+        userId: userId,
+        eventDetails: {
+          correlationId: unifiedError.correlationId
+        },
+        dataClassification: 'validation_error'
+      }).catch(() => {});
+      
+      return createErrorResponse(400, 'MISSING_JOB_ID', 'Missing job ID', 'Please provide a valid job ID to retrieve results');
+    }
+
+    // Validate job ID format and ownership
+    const jobIdValidation = validateJobIdOwnership(jobId, userId);
+    if (!jobIdValidation.valid) {
+      await auditService.logAuditEvent({
+        eventType: 'security_violation',
+        eventSubtype: 'invalid_job_access_attempt',
+        userId: userId,
+        eventDetails: {
+          jobId: jobId,
+          reason: jobIdValidation.reason
+        },
+        sessionId: sessionId,
+        sourceIp: sourceIp,
+        dataClassification: 'security_event'
+      });
+      
+      return createErrorResponse(jobIdValidation.statusCode, jobIdValidation.errorCode, jobIdValidation.message, jobIdValidation.userMessage);
     }
 
     // Enhanced audit logging for result request
@@ -42,10 +102,10 @@ exports.handler = async (event) => {
       dataClassification: 'medical_phi'
     });
 
-    // Get job record using PostgreSQL service (includes user verification)
-    const jobRecord = await DocumentJobService.getJob(jobId, userId);
+    // Get results from S3 outgoing folder
+    const jobResults = await getJobResultsFromS3(jobId);
     
-    if (!jobRecord) {
+    if (!jobResults) {
       await auditService.logAuditEvent({
         eventType: 'document_processing',
         eventSubtype: 'result_job_not_found',
@@ -55,325 +115,332 @@ exports.handler = async (event) => {
         sourceIp: sourceIp,
         dataClassification: 'medical_phi'
       });
-      return createErrorResponse(404, 'Job not found');
+      return createErrorResponse(404, 'RESULTS_NOT_FOUND', 'Results not found', 'The results for this job are not yet available or do not exist');
     }
 
-    // Check if processing is complete
-    if (jobRecord.status !== 'completed') {
-      const statusMessage = getStatusMessage(jobRecord.status, jobRecord.retryCount);
-      
-      return createResponse(202, {
-        success: false,
-        job_id: jobId,
-        status: jobRecord.status,
-        message: statusMessage,
-        retry_count: jobRecord.retryCount || 0,
-        can_retry: (jobRecord.retryCount || 0) < 3 && jobRecord.status === 'failed',
+    // Check if job failed
+    if (jobResults.status === 'failed') {
+      await auditService.logAuditEvent({
+        eventType: 'document_processing',
+        eventSubtype: 'result_failed_retrieved',
+        userId: userId,
+        eventDetails: {
+          jobId: jobId,
+          errorCode: jobResults.error?.code
+        },
+        sessionId: sessionId,
+        sourceIp: sourceIp,
+        dataClassification: 'system_error'
       });
+
+      return createErrorResponse(500, 
+        jobResults.error?.code || 'PROCESSING_FAILED',
+        jobResults.error?.message || 'Processing failed',
+        jobResults.error?.user_action || 'Please try again or contact support'
+      );
     }
 
-    // Handle different job types differently
-    // Check if this is a doctor report by looking at the filename pattern
-    const isDoctorReport = jobRecord.originalFilename && 
-                          jobRecord.originalFilename.includes('health_data_export');
-    
-    if (isDoctorReport) {
-      // Doctor report results are stored in S3, not database
-      return await handleDoctorReportResults(jobRecord, userId);
-    } else {
-      // Document analysis results are stored in database
-      const results = await DocumentJobService.getResults(jobId, userId);
-      if (!results) {
-        return createErrorResponse(500, 'Results not found', 'Processing results are not available');
-      }
-      
-      return handleDocumentAnalysisResults(jobRecord, results);
-    }
+    // Success audit logging
+    await auditService.logAuditEvent({
+      eventType: 'document_processing',
+      eventSubtype: 'result_retrieved',
+      userId: userId,
+      eventDetails: {
+        jobId: jobId,
+        resultType: jobResults.result_type || 'unknown'
+      },
+      sessionId: sessionId,
+      sourceIp: sourceIp,
+      userAgent: userAgent,
+      dataClassification: 'medical_phi'
+    });
+
+    // Parse and format results based on job type
+    const parsedResults = parseJobResults(jobId, jobResults);
+
+    // Track user journey for results viewed
+    await observability.trackUserJourney(userId, 'results_viewed', {
+      jobId: jobId,
+      jobType: jobId.split('_')[0],
+      resultType: jobResults.result_type || 'unknown'
+    });
+
+    // Return the results
+    return createResponse(200, {
+      success: true,
+      job_id: jobId,
+      ...parsedResults
+    });
 
   } catch (error) {
     console.error('Result retrieval error:', sanitizeError(error));
-    
+
     const userId = getUserIdFromEvent(event) || 'unknown';
     const jobId = event.pathParameters?.jobId || 'unknown';
-    
-    auditLog('result_error', userId, { 
-      jobId, 
-      error: sanitizeError(error).substring(0, 100) 
-    });
-    
-    return createErrorResponse(500, 'Failed to retrieve results');
+
+    await observability.trackError(error, 'result_retrieval', userId);
+
+    const errorContext = {
+      service: 'result',
+      operation: 'result_retrieval',
+      userId: userId,
+      jobId: jobId
+    };
+    const unifiedError = createUnifiedError(error, errorContext);
+
+    await auditService.logAuditEvent({
+      eventType: 'document_processing',
+      eventSubtype: 'result_retrieval_error',
+      userId: userId,
+      eventDetails: {
+        correlationId: unifiedError.correlationId,
+        errorCategory: unifiedError.category,
+        recoveryStrategy: unifiedError.recoveryStrategy,
+        jobId: jobId,
+        error: sanitizeError(error).message?.substring(0, 100) || 'Unknown error'
+      },
+      dataClassification: 'system_error'
+    }).catch(() => {});
+
+    // Use categorized error response
+    if (unifiedError.category === ERROR_CATEGORIES.VALIDATION) {
+      return createErrorResponse(400, 'VALIDATION_ERROR', error.message, unifiedError.userMessage);
+    } else if (unifiedError.category === ERROR_CATEGORIES.BUSINESS) {
+      return createErrorResponse(403, 'ACCESS_DENIED', error.message, unifiedError.userMessage);
+    } else if (unifiedError.category === ERROR_CATEGORIES.EXTERNAL) {
+      return createErrorResponse(503, 'SERVICE_UNAVAILABLE', 'External service failure', 'Our results service is temporarily unavailable. Please try again shortly');
+    } else {
+      return createErrorResponse(500, 'RESULT_RETRIEVAL_FAILED', 'Failed to retrieve results', 'We had trouble getting your results. Please try again');
+    }
   }
 };
 
+
 /**
- * Handle doctor report results using unified approach
+ * Validate job ID format and ownership
  */
-async function handleDoctorReportResults(jobRecord, userId) {
+function validateJobIdOwnership(jobId, userId) {
   try {
-    // Get unified results using the same method as document analysis
-    const results = await DocumentJobService.getResults(jobRecord.jobId, userId);
-    if (!results) {
-      return createErrorResponse(500, 'Doctor report results not found', 'Processing results are not available');
+    // Job ID format: {prefix}_{user_id}_{timestamp}_{random}
+    const parts = jobId.split('_');
+    
+    if (parts.length !== 4) {
+      return {
+        valid: false,
+        statusCode: 400,
+        errorCode: 'INVALID_JOB_ID_FORMAT',
+        message: 'Invalid job ID format',
+        userMessage: 'Invalid job ID. Please check your request.',
+        reason: 'invalid_format'
+      };
     }
 
-    // Parse unified Bedrock response format (same as document analysis)
-    const bedrockResponse = results;
-    const reportMetadata = bedrockResponse.report_metadata || {};
-    const jobMetadata = results.jobMetadata || {};
+    const [prefix, jobUserId, timestamp, random] = parts;
+    
+    // Validate prefix
+    const validPrefixes = ['result', 'chat', 'report'];
+    if (!validPrefixes.includes(prefix)) {
+      return {
+        valid: false,
+        statusCode: 400,
+        errorCode: 'INVALID_JOB_ID_PREFIX',
+        message: 'Invalid job ID prefix',
+        userMessage: 'Invalid job ID format.',
+        reason: 'invalid_prefix'
+      };
+    }
+    
+    if (jobUserId !== userId) {
+      return {
+        valid: false,
+        statusCode: 404,
+        errorCode: 'INVALID_JOB_ID',
+        message: 'Job ID not found or invalid format',
+        userMessage: "Job not found or access denied.",
+        reason: 'ownership_mismatch'
+      };
+    }
 
-    // Format as interpretation result for consistency with Flutter app
-    const interpretationResult = {
-      job_id: jobRecord.jobId,
-      content_id: jobRecord.jobId,
-      title: reportMetadata.title || 'Doctor Report',
-      summary: reportMetadata.summary || 'Comprehensive medical analysis report',
-      detailed_interpretation: bedrockResponse.markdown_content || '',
-      confidence_score: reportMetadata.confidence_score || jobMetadata.confidenceScore || 8,
-      medical_flags: reportMetadata.medical_flags || [],
-      recommendations: [], // Not used per user feedback
-      disclaimers: [], // Baked into markdown content per user feedback
-      safety_warnings: [],
-      processed_at: new Date(jobRecord.completedAt).toISOString(),
-      processing_duration_ms: jobMetadata.processingTimeMs || 0,
-      ai_model_info: {
-        model_used: jobMetadata.aiModelUsed || 'claude-3-haiku-20240307',
-        processing_time_ms: jobMetadata.processingTimeMs || 0,
-        token_usage: bedrockResponse.token_usage || null,
-        cost_estimate: bedrockResponse.cost_estimate || null
-      },
-      file_info: {
-        original_name: jobRecord.original_filename || `doctor_report_${jobRecord.jobId}.json`,
-        type: 'doctor_report',
-        size: jobRecord.fileSize,
-        uploaded_at: new Date(jobRecord.uploadedAt).toISOString(),
-      },
-      // Include structured data for local storage
-      lab_results: bedrockResponse.lab_results || [],
-      vitals: bedrockResponse.vitals || []
+    // Check if timestamp is reasonable (not too old or in future)
+    const timestampNum = parseInt(timestamp);
+    const now = Date.now();
+    const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
+    const oneHourInFuture = now + (60 * 60 * 1000);
+
+    if (isNaN(timestampNum) || timestampNum < twentyFourHoursAgo || timestampNum > oneHourInFuture) {
+      return {
+        valid: false,
+        statusCode: 404,
+        errorCode: 'EXPIRED_JOB_ID',
+        message: 'Job ID expired or invalid timestamp',
+        userMessage: 'This job has expired. Please start a new request.',
+        reason: 'expired_timestamp'
+      };
+    }
+
+    return { valid: true };
+
+  } catch (error) {
+    return {
+      valid: false,
+      statusCode: 400,
+      errorCode: 'INVALID_JOB_ID',
+      message: 'Invalid job ID format',
+      userMessage: 'Invalid job ID. Please check your request.',
+      reason: 'validation_error'
+    };
+  }
+}
+
+/**
+ * Get job results from S3 outgoing folder
+ */
+async function getJobResultsFromS3(jobId) {
+  try {
+    const s3Key = `outgoing/${jobId}`;
+    
+    const params = {
+      Bucket: process.env.TEMP_BUCKET_NAME,
+      Key: s3Key
     };
 
-    // Add medical safety warnings
-    const safetyWarnings = generateSafetyWarnings(
-      interpretationResult.confidence_score,
-      interpretationResult.medical_flags
+    const result = await withRetry(
+      () => s3.getObject(params).promise(),
+      3,
+      500,
+      `S3 getObject for job ${jobId}`
     );
     
-    interpretationResult.safety_warnings = [...(interpretationResult.safety_warnings || []), ...safetyWarnings];
-    interpretationResult.confidence_level = getConfidenceLevel(interpretationResult.confidence_score);
+    return JSON.parse(result.Body.toString());
 
-    return createResponse(200, {
-      success: true,
-      ...interpretationResult,
-    });
-    
   } catch (error) {
-    console.error('Error fetching doctor report from S3:', error);
-    return createErrorResponse(500, 'Failed to retrieve doctor report', 'Unable to fetch report from storage');
-  }
-}
-
-/**
- * Handle document analysis results from unified Bedrock response
- */
-async function handleDocumentAnalysisResults(jobRecord, results) {
-  // Parse unified Bedrock response format
-  const bedrockResponse = results;
-  const documentMetadata = bedrockResponse.document_metadata || {};
-  const jobMetadata = results.jobMetadata || {};
-
-  // Prepare interpretation result with parsed data
-  const interpretationResult = {
-    job_id: jobRecord.jobId,
-    content_id: jobRecord.jobId,
-    title: documentMetadata.title || 'Medical Document Analysis',
-    summary: documentMetadata.summary || '',
-    detailed_interpretation: bedrockResponse.markdown_content || '',
-    confidence_score: documentMetadata.confidence_score || jobMetadata.confidenceScore || 5,
-    medical_flags: documentMetadata.medical_flags || [],
-    recommendations: [], // Not used per user feedback
-    disclaimers: [], // Baked into markdown content per user feedback
-    safety_warnings: [],
-    processed_at: new Date(jobRecord.completedAt).toISOString(),
-    processing_duration_ms: jobMetadata.processingTimeMs || 0,
-    ai_model_info: {
-      model_used: jobMetadata.aiModelUsed || 'claude-3-haiku-20240307',
-      processing_time_ms: jobMetadata.processingTimeMs || 0,
-      token_usage: bedrockResponse.token_usage || null,
-      cost_estimate: bedrockResponse.cost_estimate || null
-    },
-    file_info: {
-      original_name: jobRecord.original_filename,
-      type: jobRecord.fileType,
-      size: jobRecord.fileSize,
-      uploaded_at: new Date(jobRecord.uploadedAt).toISOString(),
-    },
-    // Include structured data for local storage
-    lab_results: bedrockResponse.lab_results || [],
-    vitals: bedrockResponse.vitals || []
-  };
-
-  // Add medical safety warnings based on confidence and flags
-  const safetyWarnings = generateSafetyWarnings(
-    interpretationResult.confidence_score,
-    interpretationResult.medical_flags
-  );
+    if (error.code === 'NoSuchKey') {
+      // Results not ready yet
+      return null;
+    }
     
-  interpretationResult.safety_warnings = [...(interpretationResult.safety_warnings || []), ...safetyWarnings];
-  interpretationResult.confidence_level = getConfidenceLevel(interpretationResult.confidence_score);
-
-  // Enhanced result retrieval audit
-  await auditService.logAuditEvent({
-    eventType: 'document_processing',
-    eventSubtype: 'result_retrieved',
-    userId: jobRecord.userId,
-    eventDetails: {
-      jobId: jobRecord.jobId,
-      confidenceScore: interpretationResult.confidence_score,
-      confidenceLevel: interpretationResult.confidence_level,
-      flagsCount: interpretationResult.medical_flags?.length || 0
-    },
-    dataClassification: 'medical_phi'
-  });
-
-  return createResponse(200, {
-    success: true,
-    ...interpretationResult,
-  });
+    console.error('Error retrieving job results from S3:', error);
+    throw new Error(`Failed to retrieve job results: ${error.message}`);
+  }
 }
 
 /**
- * Get status message for incomplete processing
+ * Parse and format job results based on job type
  */
-function getStatusMessage(status, retryCount = 0) {
-  switch (status) {
-    case 'uploaded':
-      return 'File uploaded successfully. Processing will start shortly.';
-    case 'processing':
-      return 'Your document is being analyzed. This usually takes 1-2 minutes.';
-    case 'failed':
-      if (retryCount === 0) {
-        return 'Processing failed. You can retry or try uploading again.';
-      } else {
-        return `Processing failed after ${retryCount} attempt(s). You can retry or contact support.`;
-      }
-    case 'retrying':
-      return `Retrying processing (attempt ${retryCount + 1}/3). Please wait...`;
-    case 'timeout':
-      return 'Processing timeout. You can retry or try uploading a different file.';
+function parseJobResults(jobId, rawResults) {
+  const jobType = getJobTypeFromId(jobId);
+  
+  switch (jobType) {
+    case 'result':
+      return parseMedicalAnalysisResults(rawResults);
+    case 'report':
+      return parseHealthDataReportResults(rawResults);
+    case 'chat':
+      return parseChatResults(rawResults);
     default:
-      return 'Processing status unknown. Please contact support.';
+      // Return raw results for unknown types
+      return rawResults;
   }
 }
 
 /**
- * Generate safety warnings based on confidence score and medical flags
+ * Get job type from job ID prefix
  */
-function generateSafetyWarnings(confidenceScore, medicalFlags = []) {
-  const warnings = [];
-
-  // Low confidence warnings
-  if (confidenceScore <= 3) {
-    warnings.push({
-      type: 'LOW_CONFIDENCE',
-      message: 'The AI interpretation has low confidence. Please consult a healthcare provider.',
-      severity: 'high',
-    });
-  } else if (confidenceScore <= 6) {
-    warnings.push({
-      type: 'MODERATE_CONFIDENCE', 
-      message: 'The AI interpretation has moderate confidence. Consider discussing with your doctor.',
-      severity: 'medium',
-    });
-  }
-
-  // Medical flag warnings
-  if (medicalFlags.includes('ABNORMAL_VALUES')) {
-    warnings.push({
-      type: 'ABNORMAL_VALUES',
-      message: 'Abnormal values detected. Please consult your healthcare provider promptly.',
-      severity: 'high',
-    });
-  }
-
-  if (medicalFlags.includes('URGENT_CONSULTATION')) {
-    warnings.push({
-      type: 'URGENT_CONSULTATION',
-      message: 'Urgent consultation recommended. Contact your healthcare provider immediately.',
-      severity: 'critical',
-    });
-  }
-
-  if (medicalFlags.includes('REQUIRES_FOLLOWUP')) {
-    warnings.push({
-      type: 'FOLLOWUP_NEEDED',
-      message: 'Follow-up recommended. Schedule an appointment with your healthcare provider.',
-      severity: 'medium',
-    });
-  }
-
-  // Always include general disclaimer
-  warnings.push({
-    type: 'MEDICAL_DISCLAIMER',
-    message: 'This interpretation is for informational purposes only. Always consult healthcare professionals for medical advice.',
-    severity: 'info',
-  });
-
-  return warnings;
+function getJobTypeFromId(jobId) {
+  const prefix = jobId.split('_')[0];
+  return prefix; // 'result', 'chat', 'report'
 }
 
 /**
- * Get confidence level category
+ * Parse medical analysis results (result_ jobs)
  */
-function getConfidenceLevel(confidenceScore) {
-  if (confidenceScore <= 3) {
-    return 'low';
-  } else if (confidenceScore <= 6) {
-    return 'moderate';
-  } else {
-    return 'high';
+function parseMedicalAnalysisResults(rawResults) {
+  try {
+    // Extract shared structure
+    const baseResult = {
+      title: rawResults.title || 'Medical Analysis Results',
+      confidence_score: rawResults.extraction_metadata?.confidence_score || 5,
+      summary: rawResults.extraction_metadata?.summary || 'Medical analysis completed',
+      medical_flags: rawResults.extraction_metadata?.medical_flags || [],
+      generated_at: rawResults.generated_at || new Date().toISOString()
+    };
+
+    // Extract structured data for results
+    if (rawResults.lab_results || rawResults.vitals) {
+      baseResult.structured_data = {
+        lab_results: rawResults.lab_results || [],
+        vitals: rawResults.vitals || []
+      };
+    }
+
+    // Include markdown content if present
+    if (rawResults.markdown_content) {
+      baseResult.markdown_content = rawResults.markdown_content;
+    }
+
+    return baseResult;
+  } catch (error) {
+    console.error('Error parsing medical analysis results:', error);
+    return rawResults; // Return raw results if parsing fails
   }
 }
 
 /**
- * Check if result has expired (for additional security)
+ * Parse health data report results (report_ jobs)
  */
-function isResultExpired(completedAt) {
-  const now = Date.now();
-  const resultExpiryHours = 24;
-  const expiryTime = completedAt + (resultExpiryHours * 60 * 60 * 1000);
-  
-  return now > expiryTime;
+function parseHealthDataReportResults(rawResults) {
+  try {
+    // Extract shared structure for reports
+    const baseResult = {
+      title: rawResults.title || 'Health Data Report',
+      confidence_score: rawResults.metadata?.confidence_score || rawResults.confidence || 5,
+      summary: rawResults.summary || 'Health data analysis completed',
+      generated_at: rawResults.generated_at || new Date().toISOString()
+    };
+
+    // Include report content
+    if (rawResults.report_content) {
+      baseResult.report_content = rawResults.report_content;
+    }
+
+    // Include additional report-specific fields
+    if (rawResults.health_summary) {
+      baseResult.health_summary = rawResults.health_summary;
+    }
+
+    if (rawResults.trend_analysis) {
+      baseResult.trend_analysis = rawResults.trend_analysis;
+    }
+
+    if (rawResults.clinical_recommendations) {
+      baseResult.clinical_recommendations = rawResults.clinical_recommendations;
+    }
+
+    return baseResult;
+  } catch (error) {
+    console.error('Error parsing health data report results:', error);
+    return rawResults; // Return raw results if parsing fails
+  }
 }
 
 /**
- * Sanitize interpretation text for safe display
+ * Parse chat results (chat_ jobs)
  */
-function sanitizeInterpretationText(text) {
-  if (!text) return '';
-  
-  // Remove any potential script injections
-  return text
-    .replace(/<script[^>]*>.*?<\/script>/gi, '')
-    .replace(/<[^>]*>/g, '')
-    .replace(/javascript:/gi, '')
-    .substring(0, 5000); // Limit length
-}
+function parseChatResults(rawResults) {
+  try {
+    // Chat results structure (from chat-status.js)
+    const baseResult = {
+      chat_id: rawResults.chat_response?.chat_id || rawResults.chat_id,
+      content_id: rawResults.chat_response?.content_id || rawResults.content_id,
+      original_message: rawResults.chat_response?.original_message || rawResults.original_message,
+      ai_response: rawResults.chat_response?.ai_response || rawResults.ai_response,
+      metadata: rawResults.chat_response?.metadata || rawResults.metadata || {},
+      generated_at: rawResults.generated_at || new Date().toISOString()
+    };
 
-/**
- * Format medical flags for display
- */
-function formatMedicalFlags(flags = []) {
-  const flagDescriptions = {
-    'ABNORMAL_VALUES': 'Some values appear outside normal ranges',
-    'URGENT_CONSULTATION': 'Urgent medical consultation recommended',
-    'REQUIRES_FOLLOWUP': 'Follow-up appointment recommended',
-    'PROCESSING_ERROR': 'Processing completed with technical issues',
-    'LOW_QUALITY_IMAGE': 'Image quality may affect interpretation accuracy',
-    'INCOMPLETE_DATA': 'Some information may be missing or unclear',
-  };
-
-  return flags.map(flag => ({
-    code: flag,
-    description: flagDescriptions[flag] || flag,
-  }));
+    return baseResult;
+  } catch (error) {
+    console.error('Error parsing chat results:', error);
+    return rawResults; // Return raw results if parsing fails
+  }
 }

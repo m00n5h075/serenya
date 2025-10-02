@@ -1,9 +1,0 @@
-{
-  "name": "serenya-status-lambda",
-  "version": "1.0.0",
-  "description": "Processing status tracking",
-  "main": "status.js",
-  "dependencies": {
-    "aws-sdk": "^2.1481.0"
-  }
-}

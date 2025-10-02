@@ -5,7 +5,7 @@ class AppConstants {
   static const String appDescription = 'AI Health Agent for medical document interpretation';
 
   // API Configuration
-  static const String baseApiUrl = 'https://qsyo1tsjrb.execute-api.eu-west-1.amazonaws.com/dev';
+  static const String baseApiUrl = 'https://l3u482qux7.execute-api.eu-west-1.amazonaws.com/dev';
   static const String processingEndpoint = '/api/v1/process';
   static const String authEndpoint = '/auth';
   

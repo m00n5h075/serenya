@@ -1,26 +1,28 @@
 # Database Architecture - Serenya AI Health Agent
 
-**Date:** September 4, 2025 (Updated)  
-**Domain:** Data Design & Database Management  
-**AI Agent:** Database Design Agent  
-**Dependencies:** None (foundational document)  
-**Cross-References:** 
-- **→ encryption-strategy.md**: Table encryption requirements and key management
+**Date:** January 2025 (Updated for DynamoDB)
+**Domain:** Data Design & Database Management
+**AI Agent:** Database Design Agent
+**Dependencies:** None (foundational document)
+**Cross-References:**
+- **→ encryption-strategy.md**: Field-level encryption requirements and AWS KMS integration
 - **→ api-contracts.md**: Data schemas for API endpoints
-- **→ audit-logging.md**: Audit event database schemas
-- **→ system-architecture.md**: Infrastructure and deployment considerations
+- **→ audit-logging.md**: DynamoDB Streams audit event architecture
+- **→ observability.md**: Observability event processing via DynamoDB Streams
 
 ---
 
 ## 🎯 **Database Strategy Overview**
 
 ### **Core Architecture Principles**
-- **UUIDs for all primary keys**: Server-generated UUIDs used as primary keys and foreign keys
+- **DynamoDB Single-Table Design**: All server-side data in one DynamoDB table with partition/sort key access patterns
+- **UUIDs for identifiers**: Server-generated UUIDs used for all entity IDs
 - **No persistent document storage**: Documents processed temporarily via S3, then deleted - only extracted medical data persists
 - **Privacy-first architecture**: Complete medical data stored locally on device after processing
-- **Minimal server storage**: Only authentication, consent, and reference data on server - NO medical data tables (serenya_content, lab_results, vitals, chat_messages) on server
-- **Hybrid ENUM management**: Database-level constraints + code-level constants + documentation
+- **Minimal server storage**: Only authentication, consent, and subscription data on server - NO medical data (lab_results, vitals, chat_messages) in DynamoDB
+- **Embedded objects**: Consents, subscriptions, devices, sessions embedded in user profile for atomic updates
 - **Temporary S3 processing**: Original files and AI results stored temporarily in S3 during asynchronous processing
+- **DynamoDB Streams**: Automatic observability event capture to S3 events bucket for audit logging
 
 ### **Storage Distribution**
 ```
@@ -31,26 +33,27 @@
 │ • User profiles         │    │ • Lab results           │
 │ • Consent records       │    │ • Vital signs           │
 │ • Subscription data     │    │ • AI analyses           │
-│ • Payment transactions  │    │ • Chat conversations    │
-│ • Chat options (ref)    │    │ • Timeline history      │
-│ • Audit logs           │    │ • Search indexes        │
+│ • Device registration   │    │ • Chat conversations    │
+│ • Session tokens        │    │ • Timeline history      │
+│ • Biometric registration│    │ • Search indexes        │
 └─────────────────────────┘    └─────────────────────────┘
+     DynamoDB + S3                  SQLite Database
 ```
 
 ### **Document Processing Data Flow**
 ```
 1. Document Upload → S3 Temporary Storage
-   └─ s3://serenya-temp-processing/jobs/{job_id}_original
+   └─ s3://serenya-temp-files-{env}-{account}/jobs/{job_id}_original
 
-2. AI Processing → S3 Results Storage  
-   └─ s3://serenya-temp-processing/results/{job_id}.json
+2. AI Processing (AWS Bedrock) → S3 Results Storage
+   └─ s3://serenya-temp-files-{env}-{account}/results/{job_id}.json
 
 3. Client Polling → API Response Transformation
    └─ S3 data → Encrypted API chunks → Local device storage
 
 4. Local Storage Population → S3 Cleanup
-   └─ serenya_content, lab_results, vitals tables populated
-   └─ S3 files deleted (or auto-expire in 2 days)
+   └─ Local SQLite tables populated (serenya_content, lab_results, vitals)
+   └─ S3 files deleted (or auto-expire in 2 days via lifecycle policy)
 ```
 
 **Key Points:**
@@ -58,487 +61,706 @@
 - **Temporary S3 storage only**: Files exist only during processing and polling
 - **Final storage on device**: All medical data ends up in local SQLite database
 - **Automatic cleanup**: S3 lifecycle policy removes files older than 2 days
+- **Audit logging**: DynamoDB Streams capture all database changes to S3 events bucket
 
 ---
 
-## 📊 **ENUM Definitions**
+## 📊 **DynamoDB Table Design**
 
-### **Database ENUM Types**
-```sql
--- Authentication & User Management
-CREATE TYPE auth_provider_type AS ENUM ('google', 'apple', 'facebook');
-CREATE TYPE account_status_type AS ENUM ('active', 'suspended', 'deactivated', 'deleted');
-CREATE TYPE device_status_type AS ENUM ('active', 'inactive', 'revoked');
-CREATE TYPE biometric_type AS ENUM ('fingerprint', 'face', 'voice');
-CREATE TYPE session_status_type AS ENUM ('active', 'expired', 'revoked');
+### **Single-Table Design Philosophy**
 
--- Legal Compliance (5 consent types for onboarding)
--- UI Implementation: 2 bundled checkboxes map to these 5 consent types
--- Checkbox 1 -> terms_of_service, privacy_policy, healthcare_consultation
--- Checkbox 2 -> medical_disclaimer, emergency_care_limitation
-CREATE TYPE consent_type AS ENUM (
-  'terms_of_service', 
-  'privacy_policy', 
-  'medical_disclaimer', 
-  'healthcare_consultation', 
+Serenya uses a **single DynamoDB table** with partition key (PK) and sort key (SK) to support all server-side data access patterns. This approach:
+
+- **Reduces costs**: Single table billing vs multiple tables
+- **Simplifies operations**: One table to monitor, backup, and scale
+- **Improves performance**: Related data stored together for efficient queries
+- **Enables transactions**: Atomic updates across related entities
+- **Supports streams**: Single stream for all observability events
+
+### **Table Configuration**
+
+```typescript
+Table Name: serenya-{environment}
+Partition Key: PK (String)
+Sort Key: SK (String)
+Billing Mode: PAY_PER_REQUEST
+Encryption: AWS_MANAGED
+Point-in-Time Recovery: Enabled (production)
+DynamoDB Streams: NEW_AND_OLD_IMAGES
+TTL Attribute: ttl (currently disabled - all records permanent)
+```
+
+### **Global Secondary Indexes**
+
+**GSI1-EmailLookup**: Email-based user lookup
+```
+Partition Key: GSI1PK (String) - Format: EMAIL#{sha256(email)}
+Sort Key: GSI1SK (String) - Format: USER#{userId}
+Projection: ALL
+Use Case: Find user by email for account linking
+```
+
+**GSI2-ExternalAuth**: OAuth provider lookup
+```
+Partition Key: GSI2PK (String) - Format: EXTERNAL#{provider}#{external_id}
+Sort Key: GSI2SK (String) - Format: USER#{userId}
+Projection: ALL
+Use Case: Find user by Google/Apple OAuth ID during authentication
+```
+
+---
+
+## 🔑 **Access Patterns & Data Model**
+
+### **Entity Type Definitions**
+
+The single table stores multiple entity types distinguished by PK/SK patterns:
+
+| Entity Type | PK Pattern | SK Pattern | Description |
+|-------------|------------|------------|-------------|
+| User Profile | `USER#{userId}` | `PROFILE` | Core user data with embedded consents, subscription, device, session |
+
+**Note**: All user-related data is consolidated into a single DynamoDB item with embedded objects for atomic updates and simplified queries.
+
+---
+
+## 👤 **User Profile Entity**
+
+### **Consolidated User Profile Item**
+
+The user profile item embeds all frequently-accessed user data in a single DynamoDB item:
+
+```javascript
+{
+  // Primary Keys
+  PK: "USER#{userId}",
+  SK: "PROFILE",
+
+  // Core Identity
+  id: "uuid",                           // User unique identifier
+  external_id: "string",                // OAuth provider user ID (Google 'sub', Apple ID)
+  auth_provider: "google|apple",        // OAuth provider type
+
+  // Personal Information (ENCRYPTED via AWS KMS)
+  email: "encrypted_base64_string",     // KMS-encrypted email
+  email_hash: "sha256_hash",            // For GSI1 lookup
+  name: "encrypted_base64_string",      // KMS-encrypted full name
+  given_name: "encrypted_base64_string", // KMS-encrypted first name
+  family_name: "encrypted_base64_string", // KMS-encrypted last name
+  email_verified: true,                 // Email verification status
+
+  // Account Status
+  account_status: "active|suspended|deactivated|deleted",
+
+  // Embedded Consents (created during onboarding)
+  consents: {
+    privacy_policy: {
+      consented: true,
+      version: "1.0",
+      timestamp: 1704672000000,
+      ip_address: "1.2.3.4",
+      user_agent: "Mozilla/5.0..."
+    },
+    terms_of_service: {
+      consented: true,
+      version: "1.0",
+      timestamp: 1704672000000,
+      ip_address: "1.2.3.4",
+      user_agent: "Mozilla/5.0..."
+    },
+    medical_disclaimer: {
+      consented: true,
+      version: "1.0",
+      timestamp: 1704672000000,
+      ip_address: "1.2.3.4",
+      user_agent: "Mozilla/5.0..."
+    },
+    healthcare_consultation: {
+      consented: true,
+      version: "1.0",
+      timestamp: 1704672000000,
+      ip_address: "1.2.3.4",
+      user_agent: "Mozilla/5.0..."
+    },
+    emergency_care_limitation: {
+      consented: true,
+      version: "1.0",
+      timestamp: 1704672000000,
+      ip_address: "1.2.3.4",
+      user_agent: "Mozilla/5.0..."
+    }
+  },
+
+  // Embedded Subscription (always present)
+  current_subscription: {
+    id: "subscription-id",
+    type: "free|premium",
+    status: "active|expired|cancelled",
+    provider: "system|apple|google",    // 'system' for free tier
+    external_subscription_id: null,     // Apple/Google subscription ID (null for free)
+    start_date: 1704672000000,
+    end_date: 1736208000000,            // 1 year from start
+    created_at: 1704672000000,
+    updated_at: 1704672000000
+  },
+
+  // Embedded Device (updated on login)
+  current_device: {
+    device_id: "client-generated-uuid",
+    platform: "ios|android",
+    device_model: "iPhone 14 Pro",
+    device_name: "John's iPhone",
+    app_version: "1.2.3",
+    os_version: "17.1",
+    device_status: "active|inactive|revoked",
+    registered_at: 1704672000000,
+    last_seen_at: 1704672000000,
+    registration_ip: "1.2.3.4",
+    registration_user_agent: "Mozilla/5.0..."
+  },
+
+  // Embedded Session (updated on login)
+  current_session: {
+    session_id: "jwt-session-id",
+    created_at: 1704672000000,
+    expires_at: 1707350400000,          // 30 days from creation
+    last_activity_at: 1704672000000,
+    session_status: "active|expired|revoked",
+    source_ip: "1.2.3.4",
+    user_agent: "Mozilla/5.0...",
+    login_method: "oauth"
+  },
+
+  // Embedded Biometric (optional, varies per user)
+  current_biometric: {
+    biometric_id: "uuid",
+    biometric_type: "fingerprint|face|voice",
+    biometric_hash: "encrypted_base64_string", // KMS-encrypted biometric hash
+    device_id: "client-generated-uuid",
+    registered_at: 1704672000000,
+    last_used_at: 1704672000000,
+    registration_ip: "1.2.3.4",
+    status: "active|revoked"
+  } || null,                            // null if biometric not registered
+
+  // GSI Keys for Efficient Lookups
+  GSI1PK: "EMAIL#{sha256(email)}",      // Email lookup via GSI1
+  GSI1SK: "USER#{userId}",
+  GSI2PK: "EXTERNAL#{provider}#{external_id}", // OAuth lookup via GSI2
+  GSI2SK: "USER#{userId}",
+
+  // Metadata
+  created_at: 1704672000000,
+  updated_at: 1704672000000,
+  last_login_at: 1704672000000,
+
+  // Audit Fields
+  created_ip: "1.2.3.4",
+  created_user_agent: "Mozilla/5.0..."
+}
+```
+
+### **Why Single Item for User Profile?**
+
+**Benefits of Embedded Objects:**
+
+1. **Atomic Updates**: All user data updates in single transaction
+2. **Simplified Queries**: One GetItem call retrieves complete user profile
+3. **Reduced Costs**: Fewer read/write operations vs separate items
+4. **Consistency**: No eventual consistency issues between related entities
+5. **DynamoDB Streams**: Single stream event captures all user changes
+
+**When to Embed vs Separate:**
+
+✅ **Embed (One-to-One, Updated Together):**
+- Consents (always created during onboarding)
+- Subscription (one active subscription per user)
+- Current device (one device per user)
+- Current session (one active session per user)
+- Current biometric (optional, one per user)
+
+❌ **Separate (One-to-Many, Independent Lifecycle):**
+- Medical data (stored locally, not in DynamoDB)
+- Audit logs (stored in S3 via DynamoDB Streams)
+- Processing jobs (tracked via S3 object existence, not DynamoDB)
+
+---
+
+## 🔐 **Field-Level Encryption**
+
+### **AWS KMS Integration**
+
+**Encrypted Fields:**
+- `email` - User's email address (PII)
+- `name` - Full display name (PII)
+- `given_name` - First name (PII)
+- `family_name` - Last name (PII)
+- `current_biometric.biometric_hash` - Biometric template hash (sensitive)
+
+**Encryption Context:**
+```javascript
+{
+  userId: "uuid",
+  operation: "user_profile_creation|user_profile_update|biometric_registration"
+}
+```
+
+**Encryption Process:**
+1. **Encrypt on Write**: Lambda encrypts PII fields using AWS KMS before DynamoDB PutItem/UpdateItem
+2. **Decrypt on Read**: Lambda decrypts PII fields using AWS KMS after DynamoDB GetItem/Query
+3. **Encryption at Rest**: DynamoDB uses AWS-managed encryption for all data
+4. **Transport Encryption**: TLS 1.3 for all API communication
+
+**See [encryption-strategy.md](encryption-strategy.md) for detailed encryption architecture.**
+
+---
+
+## 🔍 **Common Query Patterns**
+
+### **1. User Authentication (OAuth Login)**
+
+**Scenario**: User logs in with Google/Apple OAuth
+
+```javascript
+// Query GSI2 by external OAuth ID
+const params = {
+  TableName: 'serenya-prod',
+  IndexName: 'GSI2-ExternalAuth',
+  KeyConditionExpression: 'GSI2PK = :pk',
+  ExpressionAttributeValues: {
+    ':pk': `EXTERNAL#google#${googleUserId}`
+  }
+};
+
+const result = await dynamodb.query(params).promise();
+// Returns complete user profile with embedded consents, subscription, device, session
+```
+
+**Performance**: Single query returns all user data needed for authentication
+
+---
+
+### **2. User Profile Lookup by Email**
+
+**Scenario**: Check if user exists by email (account linking)
+
+```javascript
+// Generate email hash
+const emailHash = crypto.createHash('sha256')
+  .update(email.toLowerCase())
+  .digest('hex');
+
+// Query GSI1 by email hash
+const params = {
+  TableName: 'serenya-prod',
+  IndexName: 'GSI1-EmailLookup',
+  KeyConditionExpression: 'GSI1PK = :pk',
+  ExpressionAttributeValues: {
+    ':pk': `EMAIL#${emailHash}`
+  }
+};
+
+const result = await dynamodb.query(params).promise();
+```
+
+**Performance**: Single query with email hash lookup
+
+---
+
+### **3. Get Complete User Profile**
+
+**Scenario**: Retrieve user's complete profile for API response
+
+```javascript
+// Get user profile by ID
+const params = {
+  TableName: 'serenya-prod',
+  Key: {
+    PK: `USER#${userId}`,
+    SK: 'PROFILE'
+  }
+};
+
+const result = await dynamodb.get(params).promise();
+// Returns user profile with all embedded objects (consents, subscription, device, session, biometric)
+// Lambda decrypts PII fields (email, name, given_name, family_name) using AWS KMS
+```
+
+**Performance**: Single GetItem call, ~10ms latency
+
+---
+
+### **4. Update User Subscription**
+
+**Scenario**: User upgrades from free to premium via Apple/Google in-app purchase
+
+```javascript
+// Update subscription object embedded in user profile
+const params = {
+  TableName: 'serenya-prod',
+  Key: {
+    PK: `USER#${userId}`,
+    SK: 'PROFILE'
+  },
+  UpdateExpression: 'SET current_subscription = :sub, updated_at = :timestamp',
+  ExpressionAttributeValues: {
+    ':sub': {
+      id: 'premium-subscription-id',
+      type: 'premium',
+      status: 'active',
+      provider: 'apple',
+      external_subscription_id: 'apple-subscription-id',
+      start_date: Date.now(),
+      end_date: Date.now() + (365 * 24 * 60 * 60 * 1000), // 1 year
+      created_at: Date.now(),
+      updated_at: Date.now()
+    },
+    ':timestamp': Date.now()
+  },
+  ReturnValues: 'ALL_NEW'
+};
+
+const result = await dynamodb.update(params).promise();
+```
+
+**Performance**: Single UpdateItem operation, atomic subscription change
+
+---
+
+### **5. Update Current Session on Login**
+
+**Scenario**: User logs in, create new session
+
+```javascript
+// Update session object embedded in user profile
+const params = {
+  TableName: 'serenya-prod',
+  Key: {
+    PK: `USER#${userId}`,
+    SK: 'PROFILE'
+  },
+  UpdateExpression: 'SET current_session = :session, updated_at = :timestamp, last_login_at = :timestamp',
+  ExpressionAttributeValues: {
+    ':session': {
+      session_id: 'jwt-session-id',
+      created_at: Date.now(),
+      expires_at: Date.now() + (30 * 24 * 60 * 60 * 1000), // 30 days
+      last_activity_at: Date.now(),
+      session_status: 'active',
+      source_ip: '1.2.3.4',
+      user_agent: 'Mozilla/5.0...',
+      login_method: 'oauth'
+    },
+    ':timestamp': Date.now()
+  },
+  ReturnValues: 'ALL_NEW'
+};
+
+const result = await dynamodb.update(params).promise();
+```
+
+**Performance**: Single UpdateItem operation, replaces old session atomically
+
+---
+
+### **6. Check User Subscription Tier**
+
+**Scenario**: Validate if user can access premium feature (doctor reports)
+
+```javascript
+// Get user profile
+const userProfile = await getUserProfile(userId);
+
+// Check subscription from embedded object
+const subscription = userProfile.current_subscription;
+const hasPremiumAccess =
+  subscription.type === 'premium' &&
+  subscription.status === 'active' &&
+  subscription.end_date > Date.now();
+
+if (!hasPremiumAccess) {
+  return {
+    error: 'PREMIUM_REQUIRED',
+    message: 'Premium subscription required for doctor reports'
+  };
+}
+```
+
+**Performance**: No additional query needed, subscription data already in user profile
+
+---
+
+## 📈 **DynamoDB Streams & Observability**
+
+### **Stream Configuration**
+
+```typescript
+Stream: NEW_AND_OLD_IMAGES
+Purpose: Capture all database changes for observability and audit logging
+Processing: Lambda function processes stream events and writes to S3 events bucket
+```
+
+### **Stream Event Processing**
+
+**Stream Processor Lambda**: `stream-processor/streamProcessor.js`
+
+**Event Types Captured:**
+1. **User Registration**: New user profile creation (INSERT event)
+2. **User Updates**: Profile, subscription, device, session changes (MODIFY event)
+3. **Subscription Changes**: Free → Premium, Premium → Expired (MODIFY event)
+4. **Session Activity**: Login, logout, session expiration (MODIFY event)
+
+**S3 Event Storage:**
+```
+s3://serenya-events-{environment}-{account}/
+└── observability/
+    ├── year=2025/
+    │   └── month=01/
+    │       └── day=15/
+    │           ├── user-registration-{timestamp}.json
+    │           ├── subscription-change-{timestamp}.json
+    │           └── session-activity-{timestamp}.json
+```
+
+**Lifecycle Policy:**
+- **Infrequent Access**: After 90 days
+- **Glacier**: After 365 days
+- **Retention**: 7 years (HIPAA compliance)
+
+**See [observability.md](observability.md) for detailed stream processing architecture.**
+
+---
+
+## 📊 **Capacity Planning & Performance**
+
+### **Estimated Data Volumes**
+
+**User Profiles:**
+- Average item size: ~5 KB (with embedded objects)
+- 10,000 users: ~50 MB
+- 100,000 users: ~500 MB
+- 1,000,000 users: ~5 GB
+
+**Growth Projections:**
+- Year 1: 10,000 users
+- Year 2: 50,000 users
+- Year 3: 200,000 users
+- Year 5: 1,000,000 users
+
+### **Performance Benchmarks**
+
+**Read Operations:**
+- GetItem (user profile): ~10ms p50, ~20ms p99
+- Query GSI1 (email lookup): ~15ms p50, ~30ms p99
+- Query GSI2 (OAuth lookup): ~15ms p50, ~30ms p99
+
+**Write Operations:**
+- PutItem (new user): ~20ms p50, ~40ms p99
+- UpdateItem (subscription): ~15ms p50, ~30ms p99
+- UpdateItem (session): ~15ms p50, ~30ms p99
+
+**Billing Mode: PAY_PER_REQUEST**
+- No capacity planning required
+- Automatic scaling to handle traffic spikes
+- Cost-effective for unpredictable workloads
+- Estimated cost: $1.25 per million read requests, $6.25 per million write requests
+
+### **Optimization Strategies**
+
+1. **Embedded Objects**: Reduce read operations by embedding frequently-accessed data
+2. **GSI Projections**: ALL projection for complete data access without base table reads
+3. **DynamoDB Streams**: Asynchronous event processing reduces API response time
+4. **AWS KMS Caching**: Cache KMS data keys to reduce encryption/decryption latency
+5. **Connection Pooling**: Reuse DynamoDB DocumentClient across Lambda invocations
+
+---
+
+## 🔄 **Migration from PostgreSQL to DynamoDB**
+
+### **Migration Summary**
+
+**Previous Architecture (PostgreSQL):**
+- Multiple relational tables (users, consents, subscriptions, devices, sessions, biometric_registrations)
+- Foreign key constraints
+- SQL transactions
+- RDS connection pooling
+
+**Current Architecture (DynamoDB):**
+- Single table with embedded objects
+- Partition/sort key access patterns
+- Atomic item updates
+- Serverless auto-scaling
+
+### **Migration Benefits**
+
+1. **Serverless**: No database server management, automatic scaling
+2. **Performance**: Single-digit millisecond latency at any scale
+3. **Cost-Effective**: Pay-per-request billing for unpredictable workloads
+4. **High Availability**: Multi-AZ replication with automatic failover
+5. **Simplified Schema**: No foreign key constraints, easier to evolve
+6. **DynamoDB Streams**: Built-in change data capture for observability
+
+### **Migration Challenges Addressed**
+
+1. **Relational Data → Embedded Objects**: Consolidated frequently-accessed data into single items
+2. **SQL Queries → GSI Patterns**: Designed GSIs for common query patterns (email, OAuth lookup)
+3. **Transactions → Atomic Updates**: Embedded objects enable atomic updates without transactions
+4. **Connection Pooling → Serverless SDK**: AWS SDK manages connections automatically
+5. **Audit Logging → DynamoDB Streams**: Stream events replace database triggers for audit logging
+
+---
+
+## 📋 **Data Model Validation Rules**
+
+### **User Profile Validation**
+
+```javascript
+const USER_PROFILE_SCHEMA = {
+  // Required Fields
+  id: { type: 'uuid', required: true },
+  external_id: { type: 'string', required: true },
+  auth_provider: { type: 'enum', values: ['google', 'apple'], required: true },
+  email: { type: 'encrypted_string', required: true },
+  name: { type: 'encrypted_string', required: true },
+  account_status: { type: 'enum', values: ['active', 'suspended', 'deactivated', 'deleted'], required: true },
+
+  // Embedded Objects (Required)
+  consents: { type: 'object', required: true },
+  current_subscription: { type: 'object', required: true },
+
+  // Embedded Objects (Optional)
+  current_device: { type: 'object', required: false },
+  current_session: { type: 'object', required: false },
+  current_biometric: { type: 'object', required: false },
+
+  // GSI Keys
+  GSI1PK: { type: 'string', pattern: /^EMAIL#[a-f0-9]{64}$/, required: true },
+  GSI1SK: { type: 'string', pattern: /^USER#[a-f0-9-]{36}$/, required: true },
+  GSI2PK: { type: 'string', pattern: /^EXTERNAL#(google|apple)#.+$/, required: true },
+  GSI2SK: { type: 'string', pattern: /^USER#[a-f0-9-]{36}$/, required: true },
+
+  // Timestamps
+  created_at: { type: 'number', required: true },
+  updated_at: { type: 'number', required: true }
+};
+```
+
+### **Subscription Validation**
+
+```javascript
+const SUBSCRIPTION_SCHEMA = {
+  id: { type: 'string', required: true },
+  type: { type: 'enum', values: ['free', 'premium'], required: true },
+  status: { type: 'enum', values: ['active', 'expired', 'cancelled'], required: true },
+  provider: { type: 'enum', values: ['system', 'apple', 'google'], required: true },
+  external_subscription_id: { type: 'string', required: false },
+  start_date: { type: 'number', required: true },
+  end_date: { type: 'number', required: true },
+  created_at: { type: 'number', required: true },
+  updated_at: { type: 'number', required: true }
+};
+```
+
+### **Consent Validation**
+
+```javascript
+const CONSENT_SCHEMA = {
+  consented: { type: 'boolean', required: true },
+  version: { type: 'string', required: true },
+  timestamp: { type: 'number', required: true },
+  ip_address: { type: 'string', required: true },
+  user_agent: { type: 'string', required: true }
+};
+
+const REQUIRED_CONSENT_TYPES = [
+  'privacy_policy',
+  'terms_of_service',
+  'medical_disclaimer',
+  'healthcare_consultation',
   'emergency_care_limitation'
-);
-
--- Subscription & Payments
-CREATE TYPE subscription_status_type AS ENUM ('active', 'expired', 'cancelled', 'pending');
-CREATE TYPE subscription_type AS ENUM ('monthly', 'yearly');
-CREATE TYPE payment_provider_type AS ENUM ('apple', 'google', 'stripe');
-CREATE TYPE payment_status_type AS ENUM ('pending', 'completed', 'failed', 'refunded', 'disputed');
-
--- Content & Processing (Local Device)
-CREATE TYPE content_type AS ENUM ('result', 'report');
-CREATE TYPE message_sender_type AS ENUM ('user', 'serenya');
-
--- Medical Data Categories (Local Device)
-CREATE TYPE test_category_type AS ENUM ('blood', 'urine', 'imaging', 'other');
-CREATE TYPE vital_type AS ENUM ('blood_pressure', 'heart_rate', 'temperature', 'weight', 'height', 'oxygen_saturation');
-
--- Chat & UI (Both Server & Local)
-CREATE TYPE chat_category_type AS ENUM ('explanation', 'doctor_prep', 'clarification', 'general');
+];
 ```
-
-### **ENUM Value Descriptions**
-
-**Account Status:**
-- `active`: Normal functioning account
-- `suspended`: Temporarily disabled (admin action, policy violations)
-- `deactivated`: User-initiated deactivation (can be reactivated)
-- `deleted`: Permanent deletion (GDPR/user request)
-
-**Subscription Status:**
-- `active`: Current subscription with valid billing
-- `expired`: Subscription period ended, grace period may apply
-- `cancelled`: User cancelled, access until period end
-- `pending`: New subscription awaiting payment confirmation
-
-**Payment Status:**
-- `pending`: Payment initiated but not confirmed
-- `completed`: Successful payment processed
-- `failed`: Payment attempt unsuccessful
-- `refunded`: Payment reversed to customer
-- `disputed`: Payment under dispute/chargeback
-
-**Content Type:**
-- `result`: AI analysis of specific medical documents/data (free tier)
-- `report`: Comprehensive reports derived from complete medical history (premium tier)
-
-**Vital Types:**
-- `blood_pressure`: Systolic/diastolic measurements
-- `heart_rate`: Beats per minute
-- `temperature`: Body temperature in Celsius/Fahrenheit
-- `weight`: Body weight in kg/lbs
-- `height`: Body height in cm/inches
-- `oxygen_saturation`: SpO2 percentage
 
 ---
 
-## 🖥️ **Server-Side Database Schema**
+## 🛡️ **Security & Compliance**
 
-### **Data Flow Context**
-**Agent Handoff Note**: Server-side tables support the single-server-round-trip workflow defined in **→ system-architecture.md**. Authentication data flows to **→ encryption-strategy.md** for biometric session management.
+### **Data Protection**
 
-### **`users` Table**
-```sql
-CREATE TABLE users (
-    -- Primary identification
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    external_id VARCHAR(255) NOT NULL,  -- Provider's user ID (e.g., Google 'sub')
-    auth_provider auth_provider_type NOT NULL,
-    
-    -- Profile information  
-    email VARCHAR(255) NOT NULL,
-    email_verified BOOLEAN DEFAULT FALSE,
-    name VARCHAR(255) NOT NULL,         -- Full display name
-    given_name VARCHAR(255),            -- First name
-    family_name VARCHAR(255),           -- Last name
-    
-    -- Account management
-    account_status account_status_type DEFAULT 'active',
-    
-    -- Timestamps
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    last_login_at TIMESTAMP WITH TIME ZONE,
-    deactivated_at TIMESTAMP WITH TIME ZONE,
-    
-    -- Constraints
-    CONSTRAINT unique_external_provider UNIQUE (external_id, auth_provider)
-);
+1. **Encryption at Rest**: AWS-managed DynamoDB encryption for all data
+2. **Encryption in Transit**: TLS 1.3 for all API communication
+3. **Field-Level Encryption**: AWS KMS encryption for PII fields (email, name, given_name, family_name)
+4. **Access Control**: IAM roles with least-privilege access to DynamoDB
+5. **DynamoDB Streams**: Encrypted stream events for audit logging
 
--- Indexes for performance
-CREATE INDEX idx_users_external_id ON users(external_id);
-CREATE INDEX idx_users_auth_provider ON users(auth_provider);
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_account_status ON users(account_status);
-```
+### **HIPAA Compliance**
 
-**Encryption Requirements**: See **→ encryption-strategy.md** for field-level encryption of `email, name, given_name, family_name`
+- **No PHI in DynamoDB**: All medical data stored locally on device
+- **Audit Logging**: DynamoDB Streams capture all user data changes
+- **7-Year Retention**: S3 events bucket with 7-year lifecycle policy
+- **Encryption**: AWS KMS encryption for all PII fields
+- **Access Logs**: CloudWatch logs for all DynamoDB access
 
-### **`consent_records` Table**
-```sql
-CREATE TABLE consent_records (
-    -- Primary identification
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    
-    -- Consent details
-    consent_type consent_type NOT NULL,
-    consent_given BOOLEAN NOT NULL,
-    consent_version VARCHAR(50) NOT NULL,    -- e.g., "v2.1.0"
-    
-    -- Bundled consent tracking (UI -> Database mapping)
-    consent_method VARCHAR(20) DEFAULT 'bundled_consent',  -- 'bundled_consent' | 'granular_consent'
-    ui_checkbox_group INTEGER,                             -- 1 or 2 (which checkbox collected this consent)
-    
-    -- Timestamps
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    withdrawn_at TIMESTAMP WITH TIME ZONE,   -- NULL when consent is active
-    
-    -- Constraints: One record per consent type per user
-    CONSTRAINT unique_user_consent_type UNIQUE (user_id, consent_type)
-);
+### **GDPR Compliance**
 
--- Indexes for compliance queries
-CREATE INDEX idx_consent_user_id ON consent_records(user_id);
-CREATE INDEX idx_consent_type ON consent_records(consent_type);
-CREATE INDEX idx_consent_withdrawn ON consent_records(withdrawn_at);
-```
-
-**Purpose**: Legal compliance tracking - exactly 3 records per user during onboarding (medical_disclaimers, terms_of_service, privacy_policy)
-
-### **`subscriptions` Table**
-```sql
-CREATE TABLE subscriptions (
-    -- Primary identification
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    
-    -- Subscription details
-    subscription_status subscription_status_type DEFAULT 'pending',
-    subscription_type subscription_type NOT NULL,
-    
-    -- Provider integration
-    provider payment_provider_type NOT NULL,
-    external_subscription_id VARCHAR(255) NOT NULL,  -- Apple/Google subscription ID
-    
-    -- Billing periods
-    start_date TIMESTAMP WITH TIME ZONE NOT NULL,
-    end_date TIMESTAMP WITH TIME ZONE NOT NULL,
-    
-    -- Timestamps
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
-    -- Constraints
-    CONSTRAINT unique_external_subscription UNIQUE (provider, external_subscription_id)
-);
-
--- Indexes for subscription management
-CREATE INDEX idx_subscriptions_user_id ON subscriptions(user_id);
-CREATE INDEX idx_subscriptions_status ON subscriptions(subscription_status);
-CREATE INDEX idx_subscriptions_provider ON subscriptions(provider);
-CREATE INDEX idx_subscriptions_end_date ON subscriptions(end_date);
-```
-
-**Encryption Requirements**: See **→ encryption-strategy.md** for field-level encryption of `user_id, subscription_status, subscription_type`
-
-### **`subscription_tiers` Table**
-```sql
-CREATE TABLE subscription_tiers (
-    -- Primary identification
-    tier_name VARCHAR(20) PRIMARY KEY,  -- 'free', 'premium'
-    
-    -- Feature flags
-    medical_reports BOOLEAN DEFAULT FALSE,  -- AI-generated professional analysis
-    
-    -- Metadata
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- Default tier configurations
-INSERT INTO subscription_tiers (tier_name, medical_reports) VALUES
-('free', FALSE),      -- Free: Document upload, processing, chat - NO medical reports
-('premium', TRUE);    -- Premium: All features including medical reports
-
--- Index for efficient tier lookups
-CREATE INDEX idx_subscription_tiers_medical_reports ON subscription_tiers(medical_reports);
-```
-
-**Purpose**: Defines available features for each subscription tier
-**No Encryption Required**: Reference data, no PII or sensitive information
-
-### **`payments` Table**
-```sql
-CREATE TABLE payments (
-    -- Primary identification
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    subscription_id UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    
-    -- Payment details
-    amount DECIMAL(10,2) NOT NULL,           -- e.g., 9.99
-    currency CHAR(3) NOT NULL,               -- ISO 4217: USD, EUR, etc.
-    payment_status payment_status_type DEFAULT 'pending',
-    
-    -- Provider integration
-    provider_transaction_id VARCHAR(255) NOT NULL,    -- Apple/Google/Stripe transaction ID
-    payment_method VARCHAR(100) NOT NULL,             -- 'apple_pay', 'google_pay', 'credit_card'
-    
-    -- Timestamps
-    processed_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Indexes for payment tracking
-CREATE INDEX idx_payments_subscription_id ON payments(subscription_id);
-CREATE INDEX idx_payments_user_id ON payments(user_id);
-CREATE INDEX idx_payments_status ON payments(payment_status);
-CREATE INDEX idx_payments_provider_transaction ON payments(provider_transaction_id);
-```
-
-**Encryption Requirements**: See **→ encryption-strategy.md** for full table encryption (PCI DSS compliance)
-
-### **`chat_options` Table**
-```sql
-CREATE TABLE chat_options (
-    -- Primary identification
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    
-    -- Content categorization
-    content_type content_type NOT NULL,     -- 'result' or 'report'
-    category chat_category_type NOT NULL,   -- grouping for UI organization
-    
-    -- Option details
-    option_text TEXT NOT NULL,              -- The suggested question/prompt
-    display_order INTEGER NOT NULL,         -- For consistent UI ordering
-    is_active BOOLEAN DEFAULT TRUE,         -- Enable/disable without deletion
-    
-    -- Timestamps
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
-    -- Constraints
-    CONSTRAINT unique_content_category_order UNIQUE (content_type, category, display_order)
-);
-
--- Indexes for UI queries
-CREATE INDEX idx_chat_options_content_type ON chat_options(content_type, is_active, display_order);
-CREATE INDEX idx_chat_options_category ON chat_options(category);
-```
-
-**Purpose**: Reference data for predefined chat prompts. **Agent Handoff**: Content managed by **→ ui-specifications.md** Chat Interface specifications.
-
-**Example Options**:
-- **Results**: "Can you explain this in simpler terms?", "What should I ask my doctor?"
-- **Reports**: "How should I present this to my doctor?", "What are the key points?"
-
-**Encryption Requirements**: No encryption required (public reference data)
-
-### **`user_devices` Table**
-```sql
-CREATE TABLE user_devices (
-    -- Primary identification
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    
-    -- User association
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    
-    -- Device identification
-    device_id TEXT NOT NULL,                    -- Client-generated unique device ID
-    device_name TEXT,                          -- User-friendly device name
-    
-    -- Device information
-    platform TEXT NOT NULL,                   -- 'ios' or 'android'
-    model TEXT,                               -- Device model (e.g., 'iPhone 14 Pro')
-    os_version TEXT,                          -- Operating system version
-    app_version TEXT,                         -- App version at registration
-    
-    -- Biometric capability
-    biometric_type biometric_type,            -- Primary biometric method
-    secure_element BOOLEAN DEFAULT FALSE,     -- Hardware security support
-    public_key TEXT,                          -- Device hardware public key for verification
-    
-    -- Device status
-    status device_status_type DEFAULT 'active',
-    last_active_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
-    -- Timestamps
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
-    -- Constraints
-    CONSTRAINT unique_device_per_user UNIQUE (user_id, device_id)
-);
-
--- Indexes for authentication queries
-CREATE INDEX idx_user_devices_user_id ON user_devices(user_id, status);
-CREATE INDEX idx_user_devices_device_id ON user_devices(device_id);
-CREATE INDEX idx_user_devices_active ON user_devices(status, last_active_at);
-```
-
-**Purpose**: Track registered devices for authentication and session management. Supports single-device policy with future multi-device capability.
-
-**Encryption Requirements**: Device information and public keys - no encryption needed (non-sensitive technical data)
-
-### **`user_sessions` Table**
-```sql
-CREATE TABLE user_sessions (
-    -- Primary identification
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    
-    -- User and device association
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    device_id UUID NOT NULL REFERENCES user_devices(id) ON DELETE CASCADE,
-    
-    -- Session tokens
-    session_id TEXT NOT NULL UNIQUE,          -- JWT session identifier
-    refresh_token_hash TEXT NOT NULL,        -- Hashed refresh token
-    access_token_hash TEXT,                  -- Optional: hashed access token
-    
-    -- Session lifecycle
-    status session_status_type DEFAULT 'active',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    last_accessed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    
-    -- Biometric authentication tracking
-    last_biometric_auth_at TIMESTAMP WITH TIME ZONE,
-    biometric_expires_at TIMESTAMP WITH TIME ZONE,
-    requires_biometric_reauth BOOLEAN DEFAULT FALSE,
-    
-    -- Timestamps
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Indexes for session management
-CREATE INDEX idx_user_sessions_user_device ON user_sessions(user_id, device_id);
-CREATE INDEX idx_user_sessions_token ON user_sessions(session_id, status);
-CREATE INDEX idx_user_sessions_refresh ON user_sessions(refresh_token_hash);
-CREATE INDEX idx_user_sessions_expiry ON user_sessions(expires_at, status);
-CREATE INDEX idx_user_sessions_biometric ON user_sessions(biometric_expires_at, requires_biometric_reauth);
-```
-
-**Purpose**: Track user sessions, refresh tokens, and biometric re-authentication requirements. Supports 15-minute access tokens and 7-day refresh tokens with 7-day biometric cycles.
-
-**Encryption Requirements**: Token hashes stored (already hashed), no additional encryption needed
-
-### **`biometric_registrations` Table**
-```sql
-CREATE TABLE biometric_registrations (
-    -- Primary identification
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    
-    -- Device association
-    device_id UUID NOT NULL REFERENCES user_devices(id) ON DELETE CASCADE,
-    
-    -- Registration details
-    registration_id TEXT NOT NULL UNIQUE,     -- Client-facing registration ID
-    biometric_type biometric_type NOT NULL,  -- Type of biometric registered
-    
-    -- Challenge-response data
-    challenge TEXT NOT NULL,                  -- Current verification challenge
-    challenge_expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    
-    -- Registration status
-    is_verified BOOLEAN DEFAULT FALSE,       -- Initial registration verified
-    is_active BOOLEAN DEFAULT TRUE,          -- Registration is active
-    verification_failures INTEGER DEFAULT 0, -- Failed verification attempts
-    
-    -- Security metadata
-    device_attestation_data JSONB,           -- Device security attestation
-    registration_metadata JSONB,             -- Additional registration context
-    
-    -- Timestamps
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    last_verified_at TIMESTAMP WITH TIME ZONE,
-    
-    -- Constraints
-    CONSTRAINT unique_device_biometric UNIQUE (device_id, biometric_type)
-);
-
--- Indexes for biometric operations
-CREATE INDEX idx_biometric_registrations_device ON biometric_registrations(device_id, is_active);
-CREATE INDEX idx_biometric_registrations_id ON biometric_registrations(registration_id);
-CREATE INDEX idx_biometric_registrations_challenge ON biometric_registrations(challenge_expires_at, is_active);
-CREATE INDEX idx_biometric_registrations_failures ON biometric_registrations(verification_failures, is_active);
-```
-
-**Purpose**: Manage biometric authentication registrations, challenges, and verification status per device. Supports challenge-response authentication flow.
-
-**Encryption Requirements**: Challenge data and device attestation may contain sensitive information - consider field-level encryption for challenge and attestation data
-
----
-
-## 📱 **Local Device Database Schema**
-
-**Note**: Local SQLite database schema and implementation details have been moved to **→ flutter-app-architecture.md** to avoid duplication and provide better context for mobile developers.
-
-- **Local SQLite Schema**: Table definitions, indexes, and relationships → `flutter-app-architecture.md`
-- **Local Data Access Patterns**: Query examples and performance optimization → `flutter-app-architecture.md` 
-- **Local Storage Estimates**: Data volume calculations → `flutter-app-architecture.md`
-- **Entity Relationships**: Local database foreign key relationships → `flutter-app-architecture.md`
-
----
-
-## 🔄 **Database Schema Migrations**
-
-### **Version Control Strategy**
-```sql
-CREATE TABLE schema_versions (
-    version INTEGER PRIMARY KEY,
-    applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    description TEXT,
-    rollback_sql TEXT  -- Optional rollback commands
-);
-
--- Track current schema version
-INSERT INTO schema_versions VALUES (1, NOW(), 'Initial Serenya schema', NULL);
-```
-
-### **Migration Approach**
-1. **Additive Changes**: New columns, indexes - safe for production
-2. **Structural Changes**: Column renames, type changes - require migration planning  
-3. **Data Migrations**: ENUM updates, data transformations - require downtime planning
-4. **Breaking Changes**: Table renames, relationship changes - major version updates
+- **Right to Access**: User profile retrieval with decrypted PII
+- **Right to Erasure**: DeleteItem operation removes user profile
+- **Right to Portability**: Export user profile as JSON
+- **Consent Management**: Embedded consents object with timestamps and IP addresses
+- **Data Minimization**: Only authentication and consent data on server
 
 ---
 
 ## ✅ **Implementation Checklist**
 
 ### **Database Setup**
-- [ ] PostgreSQL server configuration and optimization
-- [ ] ENUM type creation and validation
-- [ ] Table creation with proper constraints
-- [ ] Index creation and performance testing
+- [x] DynamoDB table creation with PK/SK
+- [x] GSI1-EmailLookup configuration
+- [x] GSI2-ExternalAuth configuration
+- [x] DynamoDB Streams enabled (NEW_AND_OLD_IMAGES)
+- [x] Point-in-Time Recovery enabled (production)
+- [x] CloudWatch alarms for throttling
 
-### **Data Validation**
-- [ ] UUID generation and validation
-- [ ] ENUM value validation in application code
-- [ ] Foreign key constraint testing
-- [ ] Data integrity validation rules
+### **Encryption Implementation**
+- [x] AWS KMS key for field-level encryption
+- [x] Encryption service for PII fields
+- [x] Decryption on read operations
+- [x] Encryption context for audit trails
 
-### **Performance Testing**
-- [ ] Timeline query performance benchmarking
-- [ ] Index effectiveness validation
-- [ ] Memory usage optimization
+### **Access Patterns**
+- [x] User authentication via GSI2
+- [x] Email lookup via GSI1
+- [x] User profile retrieval by ID
+- [x] Subscription updates
+- [x] Session management
+- [x] Device registration
 
-### **Security Implementation**
-- [ ] Encryption requirements implementation (→ encryption-strategy.md)
-- [ ] Access control and authentication integration
-- [ ] Audit logging integration (→ audit-logging.md)
-- [ ] Data masking and privacy controls
+### **Observability**
+- [x] DynamoDB Streams processor Lambda
+- [x] S3 events bucket for audit logs
+- [x] CloudWatch dashboards for metrics
+- [x] Alarms for critical operations
+
+### **Security & Compliance**
+- [x] IAM roles with least-privilege access
+- [x] Encryption at rest and in transit
+- [x] Field-level encryption for PII
+- [x] Audit logging via DynamoDB Streams
+- [x] HIPAA compliance measures
+- [x] GDPR compliance measures
 
 ---
 
-**Document Status**: ✅ Complete - Ready for agent handoff  
-**Last Updated**: September 4, 2025  
-**Next Reviews**: Security Agent, API Agent, System Architecture Agent
+## 📚 **Related Documentation**
+
+- **[api-contracts.md](api-contracts.md)**: API endpoint schemas and DynamoDB operations
+- **[encryption-strategy.md](encryption-strategy.md)**: AWS KMS encryption architecture
+- **[observability.md](observability.md)**: DynamoDB Streams event processing
+- **[audit-logging.md](audit-logging.md)**: S3 events bucket audit logging
+- **[our-dev-rules.md](our-dev-rules.md)**: DynamoDB development guidelines
+
+---
+
+**Document Status**: ✅ Complete - DynamoDB Architecture
+**Last Updated**: January 2025
+**Previous Version**: PostgreSQL architecture archived in `/archive/database-architecture-postgresql.md`

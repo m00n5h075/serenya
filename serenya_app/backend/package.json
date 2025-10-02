@@ -29,7 +29,10 @@
     "security:audit": "npm audit && echo 'Security audit completed'",
     "docs:generate": "echo 'Documentation generated in docs/ directory'",
     "init:database": "node scripts/init-database.sh",
-    "validate:database": "node scripts/validate-database-schema.js"
+    "validate:database": "node scripts/validate-database-schema.js",
+    "test:dynamodb": "npm run build && cdk deploy --app 'node dist/test-dynamodb-app.js' SerenyaDynamoDBConnectivityTest --require-approval never",
+    "test:dynamodb:invoke": "aws lambda invoke --function-name $(aws cloudformation describe-stacks --stack-name SerenyaDynamoDBConnectivityTest --query 'Stacks[0].Outputs[?OutputKey==`TestFunctionName`].OutputValue' --output text --region eu-west-1) --region eu-west-1 /tmp/dynamodb-test-result.json && cat /tmp/dynamodb-test-result.json",
+    "test:dynamodb:cleanup": "cdk destroy --app 'node dist/test-dynamodb-app.js' SerenyaDynamoDBConnectivityTest --force"
   },
   "dependencies": {
     "aws-cdk-lib": "^2.100.0",

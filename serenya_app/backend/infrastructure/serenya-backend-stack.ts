@@ -2,14 +2,17 @@ import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
+// RDS and EC2 imports removed - migrated to DynamoDB-only architecture
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as kms from 'aws-cdk-lib/aws-kms';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as path from 'path';
 import { Construct } from 'constructs';
+import { SerenyaDynamoDBTable } from './serenya-dynamodb-table';
+import { ObservabilityConstruct } from './observability-construct';
 
 interface SerenyaBackendStackProps extends cdk.StackProps {
   environment: string;
@@ -18,15 +21,14 @@ interface SerenyaBackendStackProps extends cdk.StackProps {
     allowOrigins: string[];
     retentionDays: number;
     enableDetailedLogging: boolean;
+    alertEmail?: string;
   };
 }
 
 export class SerenyaBackendStack extends cdk.Stack {
   public readonly api: apigateway.RestApi;
   public readonly tempFilesBucket: s3.Bucket;
-  public readonly vpc: ec2.Vpc;
-  public readonly database: rds.DatabaseCluster;
-  public readonly dbSecret: secretsmanager.Secret;
+  public readonly dynamoDBTable: SerenyaDynamoDBTable;
 
   constructor(scope: Construct, id: string, props: SerenyaBackendStackProps) {
     super(scope, id, props);
@@ -40,89 +42,12 @@ export class SerenyaBackendStack extends cdk.Stack {
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
-    // VPC for healthcare-compliant network isolation
-    this.vpc = new ec2.Vpc(this, 'SerenyaVpc', {
-      maxAzs: 2, // Multi-AZ for high availability
-      natGateways: 1, // Cost optimization - single NAT gateway
-      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
-      subnetConfiguration: [
-        {
-          cidrMask: 24,
-          name: 'Public',
-          subnetType: ec2.SubnetType.PUBLIC,
-        },
-        {
-          cidrMask: 24,
-          name: 'Private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-        {
-          cidrMask: 24,
-          name: 'Database',
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        },
-      ],
-    });
+    // Phase 1: DynamoDB Table for RDS Migration
+    this.dynamoDBTable = new SerenyaDynamoDBTable(this, 'SerenyaDynamoDBTable', environment);
 
-    // Database credentials secret
-    this.dbSecret = new secretsmanager.Secret(this, 'DatabaseSecret', {
-      description: `Serenya ${environment} database credentials`,
-      secretName: `serenya/${environment}/database`,
-      generateSecretString: {
-        secretStringTemplate: JSON.stringify({
-          username: 'serenya_admin',
-        }),
-        generateStringKey: 'password',
-        excludeCharacters: '"@/\\',
-        passwordLength: 32,
-      },
-      encryptionKey,
-    });
+    // VPC removed - DynamoDB doesn't require VPC, Lambda functions outside VPC
 
-    // Security group for database
-    const dbSecurityGroup = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
-      vpc: this.vpc,
-      description: 'Security group for PostgreSQL database',
-      allowAllOutbound: false,
-    });
-
-    // Security group for Lambda functions
-    const lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSecurityGroup', {
-      vpc: this.vpc,
-      description: 'Security group for Lambda functions',
-      allowAllOutbound: true,
-    });
-
-    // Allow Lambda to access database on port 5432
-    dbSecurityGroup.addIngressRule(
-      lambdaSecurityGroup,
-      ec2.Port.tcp(5432),
-      'Allow Lambda access to PostgreSQL'
-    );
-
-    // Aurora Serverless v2 PostgreSQL Cluster
-    this.database = new rds.DatabaseCluster(this, 'SerenyaDatabase', {
-      engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_15_8,
-      }),
-      serverlessV2MinCapacity: 0.5, // Minimum 0.5 ACU for cost optimization
-      serverlessV2MaxCapacity: 16,  // Maximum 16 ACU for scalability
-      credentials: rds.Credentials.fromSecret(this.dbSecret),
-      vpc: this.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-      },
-      securityGroups: [dbSecurityGroup],
-      defaultDatabaseName: 'serenya',
-      storageEncrypted: true,
-      storageEncryptionKey: encryptionKey,
-      backup: {
-        retention: cdk.Duration.days(7),
-      },
-      deletionProtection: environment === 'prod',
-      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.SNAPSHOT : cdk.RemovalPolicy.DESTROY,
-      writer: rds.ClusterInstance.serverlessV2('writer'),
-    });
+    // RDS infrastructure removed - migrated to DynamoDB
 
     // Secrets Manager for API keys
     const apiSecrets = new secretsmanager.Secret(this, 'SerenyaApiSecrets', {
@@ -174,27 +99,45 @@ export class SerenyaBackendStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // S3 bucket for observability event logs
+    const eventsBucket = new s3.Bucket(this, 'ObservabilityEventsBucket', {
+      bucketName: `serenya-events-${environment}-${this.account}`,
+      encryption: s3.BucketEncryption.KMS,
+      encryptionKey,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      enforceSSL: true,
+      versioned: false,
+      lifecycleRules: [
+        {
+          id: 'ArchiveOldEvents',
+          enabled: true,
+          transitions: [
+            {
+              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+              transitionAfter: cdk.Duration.days(90),
+            },
+            {
+              storageClass: s3.StorageClass.GLACIER,
+              transitionAfter: cdk.Duration.days(365),
+            }
+          ],
+        }
+      ],
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
 
-    // Lambda execution role with least privilege
+
+    // Lambda execution role with least privilege and IAM database access
     const lambdaExecutionRole = new iam.Role(this, 'LambdaExecutionRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole'),
+        // Note: CloudWatchLambdaInsightsExecutionRolePolicy is automatically added by Lambda when insightsVersion is specified
       ],
       inlinePolicies: {
         SerenyaLambdaPolicy: new iam.PolicyDocument({
           statements: [
-            // RDS permissions for PostgreSQL access
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'rds-db:connect',
-              ],
-              resources: [
-                `arn:aws:rds-db:${config.region}:${this.account}:dbuser:${this.database.clusterResourceIdentifier}/serenya_app`,
-              ],
-            }),
+            // RDS permissions removed - migrated to DynamoDB
             // S3 permissions
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -204,7 +147,10 @@ export class SerenyaBackendStack extends cdk.Stack {
                 's3:DeleteObject',
                 's3:PutObjectAcl',
               ],
-              resources: [`${this.tempFilesBucket.bucketArn}/*`],
+              resources: [
+                `${this.tempFilesBucket.bucketArn}/*`,
+                `${eventsBucket.bucketArn}/*`,
+              ],
             }),
             // Secrets Manager permissions
             new iam.PolicyStatement({
@@ -214,7 +160,7 @@ export class SerenyaBackendStack extends cdk.Stack {
                 'secretsmanager:CreateSecret',
                 'secretsmanager:UpdateSecret',
               ],
-              resources: [apiSecrets.secretArn, this.dbSecret.secretArn, `arn:aws:secretsmanager:${config.region}:${this.account}:secret:serenya/${environment}/app-database*`],
+              resources: [apiSecrets.secretArn, `arn:aws:secretsmanager:${config.region}:${this.account}:secret:serenya/${environment}/app-database*`],
             }),
             // KMS permissions
             new iam.PolicyStatement({
@@ -224,6 +170,24 @@ export class SerenyaBackendStack extends cdk.Stack {
                 'kms:GenerateDataKey',
               ],
               resources: [encryptionKey.keyArn],
+            }),
+            // DynamoDB permissions for Phase 1 migration
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'dynamodb:PutItem',
+                'dynamodb:GetItem',
+                'dynamodb:UpdateItem',
+                'dynamodb:DeleteItem',
+                'dynamodb:Query',
+                'dynamodb:Scan',
+                'dynamodb:BatchGetItem',
+                'dynamodb:BatchWriteItem',
+              ],
+              resources: [
+                this.dynamoDBTable.table.tableArn,
+                `${this.dynamoDBTable.table.tableArn}/index/*`,
+              ],
             }),
             // Bedrock permissions for AI chat functionality
             new iam.PolicyStatement({
@@ -242,35 +206,34 @@ export class SerenyaBackendStack extends cdk.Stack {
       },
     });
 
-    // Common Lambda environment variables
+    // Common Lambda environment variables for DynamoDB-only architecture
     const commonLambdaEnvironment = {
       REGION: config.region,
       ENVIRONMENT: environment,
-      DB_HOST: this.database.clusterEndpoint.hostname,
-      DB_PORT: this.database.clusterEndpoint.port.toString(),
-      DB_NAME: 'serenya',
-      DB_SECRET_ARN: this.dbSecret.secretArn,
+      // DynamoDB Configuration
+      DYNAMO_TABLE_NAME: this.dynamoDBTable.table.tableName,
       TEMP_BUCKET_NAME: this.tempFilesBucket.bucketName,
+      EVENTS_BUCKET: eventsBucket.bucketName,
       API_SECRETS_ARN: apiSecrets.secretArn,
       KMS_KEY_ID: encryptionKey.keyId,
       ENABLE_DETAILED_LOGGING: config.enableDetailedLogging.toString(),
+      LOG_LEVEL: 'INFO',
+      ENABLE_REQUEST_LOGGING: 'true',
+      ENABLE_PERFORMANCE_MONITORING: 'true',
     };
 
-    // Lambda functions with VPC configuration
+    // Lambda functions without VPC - direct AWS service access
     const authFunction = new lambda.Function(this, 'AuthFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'auth.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/auth')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
-      vpc: this.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
       logRetention: logs.RetentionDays.ONE_MONTH,
+      insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0, // Enhanced monitoring
+      tracing: lambda.Tracing.ACTIVE, // Enable X-Ray tracing
       description: 'Google OAuth verification and JWT generation',
     });
 
@@ -280,14 +243,11 @@ export class SerenyaBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/user')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
-      vpc: this.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.seconds(15),
       memorySize: 256,
       logRetention: logs.RetentionDays.ONE_MONTH,
+      insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
+      tracing: lambda.Tracing.ACTIVE,
       description: 'User profile management',
     });
 
@@ -297,14 +257,11 @@ export class SerenyaBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/upload')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
-      vpc: this.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.seconds(60),
       memorySize: 512,
       logRetention: logs.RetentionDays.ONE_MONTH,
+      insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
+      tracing: lambda.Tracing.ACTIVE,
       description: 'File upload with virus scanning',
     });
 
@@ -314,14 +271,11 @@ export class SerenyaBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/process')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
-      vpc: this.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.minutes(3),
       memorySize: 1024,
       logRetention: logs.RetentionDays.ONE_MONTH,
+      insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
+      tracing: lambda.Tracing.ACTIVE,
       description: 'AI processing with Anthropic Claude',
     });
 
@@ -331,14 +285,11 @@ export class SerenyaBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/status')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
-      vpc: this.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.seconds(15),
       memorySize: 256,
       logRetention: logs.RetentionDays.ONE_MONTH,
+      insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
+      tracing: lambda.Tracing.ACTIVE,
       description: 'Processing status tracking',
     });
 
@@ -348,14 +299,11 @@ export class SerenyaBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/result')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
-      vpc: this.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
       logRetention: logs.RetentionDays.ONE_MONTH,
+      insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
+      tracing: lambda.Tracing.ACTIVE,
       description: 'Results retrieval',
     });
 
@@ -365,14 +313,11 @@ export class SerenyaBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/retry')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
-      vpc: this.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
       logRetention: logs.RetentionDays.ONE_MONTH,
+      insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
+      tracing: lambda.Tracing.ACTIVE,
       description: 'Processing retry management',
     });
 
@@ -382,14 +327,11 @@ export class SerenyaBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/doctor-report')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
-      vpc: this.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.minutes(2),
       memorySize: 512,
       logRetention: logs.RetentionDays.ONE_MONTH,
+      insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
+      tracing: lambda.Tracing.ACTIVE,
       description: 'Premium doctor report generation',
     });
 
@@ -399,14 +341,11 @@ export class SerenyaBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/cleanup')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
-      vpc: this.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
       logRetention: logs.RetentionDays.ONE_MONTH,
+      insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
+      tracing: lambda.Tracing.ACTIVE,
       description: 'S3 temporary file cleanup after successful Flutter storage',
     });
 
@@ -421,14 +360,11 @@ export class SerenyaBackendStack extends cdk.Stack {
         TOKEN_ISSUER: 'serenya.health',
         TOKEN_AUDIENCE: 'serenya-mobile-app',
       },
-      vpc: this.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.seconds(15),
       memorySize: 256,
       logRetention: logs.RetentionDays.ONE_MONTH,
+      insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
+      tracing: lambda.Tracing.ACTIVE,
       description: 'JWT token authorization',
     });
 
@@ -439,14 +375,11 @@ export class SerenyaBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/db-init')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
-      vpc: this.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.minutes(5),
       memorySize: 512,
       logRetention: logs.RetentionDays.ONE_MONTH,
+      insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
+      tracing: lambda.Tracing.ACTIVE,
       description: 'Database schema initialization and migrations',
     });
 
@@ -457,14 +390,11 @@ export class SerenyaBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/chat-prompts')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
-      vpc: this.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.seconds(15),
       memorySize: 256,
       logRetention: logs.RetentionDays.ONE_MONTH,
+      insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
+      tracing: lambda.Tracing.ACTIVE,
       description: 'Chat prompts retrieval for conversation starters',
     });
 
@@ -477,14 +407,11 @@ export class SerenyaBackendStack extends cdk.Stack {
         ...commonLambdaEnvironment,
         BEDROCK_MODEL_ID: 'anthropic.claude-3-haiku-20240307-v1:0',
       },
-      vpc: this.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.seconds(30),
       memorySize: 512,
       logRetention: logs.RetentionDays.ONE_MONTH,
+      insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
+      tracing: lambda.Tracing.ACTIVE,
       description: 'Chat message processing with AI response generation',
     });
 
@@ -494,14 +421,11 @@ export class SerenyaBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/chat-status')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
-      vpc: this.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.seconds(15),
       memorySize: 256,
       logRetention: logs.RetentionDays.ONE_MONTH,
+      insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
+      tracing: lambda.Tracing.ACTIVE,
       description: 'Chat response status polling',
     });
 
@@ -511,16 +435,37 @@ export class SerenyaBackendStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/subscriptions')),
       role: lambdaExecutionRole,
       environment: commonLambdaEnvironment,
-      vpc: this.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroups: [lambdaSecurityGroup],
       timeout: cdk.Duration.seconds(15),
       memorySize: 256,
       logRetention: logs.RetentionDays.ONE_MONTH,
+      insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
+      tracing: lambda.Tracing.ACTIVE,
       description: 'Subscription management and billing',
     });
+
+    // DynamoDB Stream Processor for Observability
+    const streamProcessorFunction = new lambda.Function(this, 'StreamProcessorFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'streamProcessor.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/stream-processor')),
+      role: lambdaExecutionRole,
+      environment: commonLambdaEnvironment,
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 512,
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
+      tracing: lambda.Tracing.ACTIVE,
+      description: 'DynamoDB stream processor for observability and business intelligence',
+    });
+
+    // Add DynamoDB stream event source to stream processor
+    streamProcessorFunction.addEventSource(new lambdaEventSources.DynamoEventSource(this.dynamoDBTable.table, {
+      startingPosition: lambda.StartingPosition.LATEST,
+      batchSize: 100,
+      bisectBatchOnError: true,
+      retryAttempts: 3,
+      maxBatchingWindow: cdk.Duration.seconds(5),
+    }));
 
     // Custom authorizer
     const jwtAuthorizer = new apigateway.TokenAuthorizer(this, 'JWTAuthorizer', {
@@ -613,28 +558,54 @@ export class SerenyaBackendStack extends cdk.Stack {
       exportName: `serenya-kms-key-${environment}`,
     });
 
-    new cdk.CfnOutput(this, 'DatabaseHost', {
-      value: this.database.clusterEndpoint.hostname,
-      description: 'PostgreSQL database hostname',
-      exportName: `serenya-db-host-${environment}`,
+    // RDS and VPC outputs removed - migrated to DynamoDB
+
+    new cdk.CfnOutput(this, 'DynamoTableName', {
+      value: this.dynamoDBTable.table.tableName,
+      description: 'DynamoDB table name for Phase 1 migration',
+      exportName: `serenya-dynamo-table-${environment}`,
     });
 
-    new cdk.CfnOutput(this, 'DatabasePort', {
-      value: this.database.clusterEndpoint.port.toString(),
-      description: 'PostgreSQL database port',
-      exportName: `serenya-db-port-${environment}`,
+    new cdk.CfnOutput(this, 'DynamoTableArn', {
+      value: this.dynamoDBTable.table.tableArn,
+      description: 'DynamoDB table ARN for Phase 1 migration',
+      exportName: `serenya-dynamo-table-arn-${environment}`,
     });
 
-    new cdk.CfnOutput(this, 'DatabaseSecretArn', {
-      value: this.dbSecret.secretArn,
-      description: 'Database credentials secret ARN',
-      exportName: `serenya-db-secret-${environment}`,
+    new cdk.CfnOutput(this, 'EventsBucketName', {
+      value: eventsBucket.bucketName,
+      description: 'Observability events S3 bucket name',
+      exportName: `serenya-events-bucket-${environment}`,
     });
 
-    new cdk.CfnOutput(this, 'VpcId', {
-      value: this.vpc.vpcId,
-      description: 'VPC ID for healthcare compliance',
-      exportName: `serenya-vpc-${environment}`,
+    // Observability: Dashboards and Alarms
+    const observability = new ObservabilityConstruct(this, 'Observability', {
+      environment,
+      api: this.api,
+      table: this.dynamoDBTable.table,
+      lambdaFunctions: {
+        auth: authFunction,
+        userProfile: userProfileFunction,
+        upload: uploadFunction,
+        process: processFunction,
+        status: statusFunction,
+        result: resultFunction,
+        retry: retryFunction,
+        doctorReport: doctorReportFunction,
+        cleanup: cleanupFunction,
+        chatPrompts: chatPromptsFunction,
+        chatMessages: chatMessagesFunction,
+        chatStatus: chatStatusFunction,
+        subscriptions: subscriptionsFunction,
+        streamProcessor: streamProcessorFunction,
+      },
+      alertEmail: config.alertEmail,
+    });
+
+    new cdk.CfnOutput(this, 'AlertTopicArn', {
+      value: observability.alertTopic.topicArn,
+      description: 'SNS topic for critical alerts',
+      exportName: `serenya-alert-topic-${environment}`,
     });
   }
 

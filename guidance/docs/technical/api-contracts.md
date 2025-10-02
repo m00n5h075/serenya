@@ -29,15 +29,16 @@
 
 ### **Core Technical Stack**
 - **Runtime**: AWS Lambda with Node.js 18.x
-- **Database**: PostgreSQL with connection pooling (server-side: users, consent, subscriptions, payments only - NO medical data)
-- **Authentication**: JWT tokens with Google OAuth integration + biometric key material exchange
-- **Development LLM**: Mock server for testing and development (modular configuration)
-- **Encryption**: 
-  - **Server-side**: AWS KMS for field encryption
-  - **Client-server**: AES-256-GCM application-layer encryption for medical data
-  - **Key Management**: HKDF-derived table keys with biometric protection
+- **Database**: Amazon DynamoDB serverless NoSQL database (single-table design with partition key PK and sort key SK)
+- **Authentication**: JWT tokens with Google OAuth and Apple OAuth integration
+- **LLM Provider**: AWS Bedrock (Claude 3.5 Sonnet) for production medical analysis
+- **Encryption**:
+  - **Server-side**: AWS KMS for field-level encryption of PII data
+  - **Storage**: Server-side encryption at rest (AWS KMS)
+  - **Transport**: TLS 1.3 for data in transit
 - **Rate Limiting**: AWS API Gateway throttling (100 requests/minute per user)
-- **Monitoring**: CloudWatch with custom metrics and alerts + encryption performance tracking
+- **Monitoring**: CloudWatch with custom metrics + DynamoDB Streams for observability events
+- **Storage**: S3 temporary files bucket with lifecycle policies for automatic cleanup
 
 ### **API Base Configuration**
 ```
@@ -52,12 +53,13 @@ Timeout: 30 seconds per request
 
 ## 🔐 **Authentication & Session Management**
 
-### **POST /auth/google-onboarding**
-**Purpose**: Complete user onboarding with Google OAuth authentication and consent collection  
-**User Flow**: New user onboarding - synchronous consent + authentication (**→ user-flows.md** Flow 3A)  
-**Processing**: Synchronous Google token validation + user account creation + consent recording  
-**Device Limit**: One device per user (app installation ID based)  
-**Database Operations**: INSERT into users, user_consents, user_devices tables (**→ database-architecture.md**)
+### **POST /auth/oauth-onboarding** (Primary Endpoint)
+**Alias Endpoints**: `/auth/google` and `/auth/google-onboarding` (backward compatibility)
+**Purpose**: Complete user onboarding with OAuth authentication (Google or Apple) and consent collection
+**User Flow**: New user onboarding - synchronous consent + authentication (**→ user-flows.md** Flow 3A)
+**Processing**: Synchronous OAuth token validation + user account creation + consent recording
+**Device Limit**: One device per user (app installation ID based)
+**Database Operations**: DynamoDB PutItem for consolidated user profile with embedded consents and initial free subscription
 
 #### **Consent Types Defined**
 ```typescript
@@ -224,15 +226,20 @@ async function validateGoogleAuth(accessToken: string, idToken: string) {
 }
 ```
 
-#### **Database Operations (Synchronous Transaction)**
-1. **Google Token Validation:** Call Google tokeninfo API to validate access_token
-2. **Google Profile Fetch:** Call Google People API to get user profile data
-3. **User Existence Check:** Query users table by google_user_id and app_installation_id
-4. **`users` table:** INSERT new user with encrypted PII fields
-5. **`user_consents` table:** INSERT 5 consent records with identical timestamp
-6. **`user_devices` table:** INSERT device registration record
-7. **Session creation:** Generate JWT and refresh tokens
-8. **Audit logging:** Record successful onboarding with all details
+#### **Database Operations (DynamoDB Single-Table Design)**
+1. **OAuth Token Validation:** Call Google or Apple token validation API
+2. **OAuth Profile Fetch:** Retrieve user profile data from OAuth provider
+3. **User Existence Check:** DynamoDB Query on GSI2 (External Auth Index) by `EXTERNAL#{provider}#{external_id}`
+4. **Consolidated User Profile:** Single DynamoDB PutItem operation creates:
+   - Core user profile (`PK: USER#{userId}`, `SK: PROFILE`)
+   - Embedded consents object with all 5 consent types
+   - Initial free subscription embedded in user profile
+   - Encrypted PII fields (email, name, given_name, family_name) using AWS KMS
+5. **GSI Indexes Populated:**
+   - GSI1: Email lookup (`EMAIL#{email_hash}`)
+   - GSI2: External auth lookup (`EXTERNAL#{provider}#{external_id}`)
+6. **Session Creation:** Generate JWT access tokens (no refresh tokens stored)
+7. **Audit Logging:** DynamoDB Streams trigger observability events to S3 events bucket
 
 #### **Error Responses**
 
@@ -303,176 +310,9 @@ GOOGLE_PEOPLE_API_URL=https://people.googleapis.com/v1/people/me
 - **Consent Recording**: Individual consent records with timestamps for all 5 consent types
 - **Device Registration**: App installation ID, platform, version tracking
 
----
+**Note on Token Refresh**: Current implementation uses JWT access tokens without server-side refresh token storage. Token refresh functionality may be added in future iterations.
 
-### **POST /auth/refresh**
-**Purpose**: Refresh expired JWT tokens without full re-authentication  
-**User Flow**: Automatic token refresh during app usage  
-**Token Architecture**: 15-minute access tokens, 7-day refresh tokens, 7-day biometric re-auth cycle  
-**Rate Limit**: 10 requests/minute per user
-
-#### **Request**
-```json
-{
-  "refresh_token": "string"                    // Required - 7-day refresh token
-}
-```
-
-#### **Response Success (200)**
-```json
-{
-  "success": true,
-  "data": {
-    "access_token": "string",                  // New JWT token (15-minute expiry)
-    "expires_at": "iso8601",                   // Access token expiration (15 min from now)
-    "session": {
-      "session_id": "uuid",                    // Current session ID  
-      "biometric_required": "boolean",         // True if 7+ days since last biometric auth
-      "biometric_expires_at": "iso8601"       // When biometric re-auth is required
-    }
-  },
-  "audit_logged": true
-}
-```
-
-#### **Error Responses**
-
-**Refresh Token Expired (401)**
-```json
-{
-  "success": false,
-  "error": {
-    "code": "REFRESH_TOKEN_EXPIRED",
-    "message": "Refresh token has expired", 
-    "user_message": "Your session expired for security. Please sign in again",
-    "action_required": "full_authentication"
-  }
-}
-```
-
-**Account Disabled/Suspended (403)**
-```json
-{
-  "success": false,
-  "error": {
-    "code": "ACCOUNT_SUSPENDED",
-    "message": "User account has been suspended",
-    "user_message": "We've paused your account temporarily. Please contact support",
-    "action_required": "contact_support",
-    "support_contact": "support@serenya.health"
-  }
-}
-```
-
-**Invalid/Revoked Token (401)**
-```json
-{
-  "success": false,
-  "error": {
-    "code": "INVALID_REFRESH_TOKEN",
-    "message": "Refresh token is invalid or revoked",
-    "user_message": "Your session expired for security. Please sign in again", 
-    "action_required": "full_authentication"
-  }
-}
-```
-
-#### **Database Operations**
-1. **Validate refresh token:** Check token exists, hasn't expired, and belongs to active user
-2. **User status check:** Verify account status is 'active' (not suspended/disabled)
-3. **Biometric check:** Calculate days since last biometric authentication
-4. **Generate new access token:** Create new 15-minute JWT token
-5. **Update session:** Record token refresh timestamp (keep same session_id)
-6. **Audit logging:** Log successful token refresh
-
-#### **Token Management Behavior**
-- **Refresh Token:** Same token used until 7-day expiry (no rotation for simplicity)
-- **Biometric Requirement:** 7 days from last biometric auth (doesn't reset on refresh)
-- **Access Token:** Always 15 minutes from refresh time
-- **Session Continuity:** Same session_id maintained across refreshes
-
----
-
-### **POST /auth/biometric/register**
-**Purpose**: Register device biometric authentication capability  
-**User Flow**: Initial biometric setup during app onboarding  
-**Security**: Hardware-backed key storage with device attestation  
-**Rate Limit**: 5 requests/hour per device_id
-
-#### **Request**
-```json
-{
-  "device_id": "string",                       // Unique device identifier
-  "public_key": "string",                      // Device hardware public key
-  "biometric_type": "fingerprint|face|voice", // Available biometric method
-  "device_info": {
-    "platform": "ios|android",
-    "model": "string",
-    "os_version": "string",
-    "secure_element": "boolean"                // Hardware security support
-  }
-}
-```
-
-#### **Response Success (201)**
-```json
-{
-  "success": true,
-  "data": {
-    "registration_id": "uuid",
-    "challenge": "string",                     // For verification
-    "expires_at": "iso8601_string"
-  },
-  "audit_logged": true
-}
-```
-
-### **POST /auth/biometric/verify**
-**Purpose**: Verify biometric authentication for secure operations  
-**User Flow**: Before accessing encrypted medical data or premium features  
-**Rate Limit**: 10 requests/minute per device_id
-
-#### **Request**
-```json
-{
-  "device_id": "string",                       // Registered device ID
-  "challenge_response": "string",              // Signed challenge from registration
-  "biometric_hash": "string"                   // Encrypted biometric signature
-}
-```
-
-#### **Response Success (200)**
-```json
-{
-  "success": true,
-  "data": {
-    "verification_token": "string",            // Short-lived verification token
-    "expires_at": "iso8601_string",            // Token expiration
-    "next_verification_required": "iso8601_string" // 7 days from now
-  },
-  "audit_logged": true
-}
-```
-
-### **GET /auth/biometric/status**
-**Purpose**: Check biometric authentication status for device  
-**User Flow**: App startup to determine authentication requirements  
-**Rate Limit**: 20 requests/minute per user
-
-#### **Response Success (200)**
-```json
-{
-  "success": true,
-  "data": {
-    "is_registered": "boolean",
-    "device_count": "number",                  // Total registered devices
-    "last_verification": "iso8601_string|null",
-    "requires_re_registration": "boolean",     // If device needs re-setup
-    "verification_valid_until": "iso8601_string|null"
-  },
-  "audit_logged": true
-}
-```
+**Note on Biometric Authentication**: Biometric authentication endpoints (`/auth/biometric/*`) are not currently implemented in the production API. These features are planned for future releases.
 
 ---
 
@@ -482,12 +322,13 @@ GOOGLE_PEOPLE_API_URL=https://people.googleapis.com/v1/people/me
 
 ## 📄 **Document Processing APIs**
 
-### **POST /documents/upload**
-**Purpose**: Upload medical document for asynchronous AI processing  
-**User Flow**: Simple file upload without user metadata input (**→ user-flows.md** Flow 1A, Step 2)  
-**Processing Model**: Asynchronous with S3 temporary storage and polling for results  
-**Max File Size**: 10MB  
+### **POST /api/v1/process/upload**
+**Purpose**: Upload medical document for asynchronous AI processing via AWS Bedrock
+**User Flow**: Simple file upload without user metadata input (**→ user-flows.md** Flow 1A, Step 2)
+**Processing Model**: Asynchronous with S3 temporary storage and polling for results
+**Max File Size**: 10MB
 **Rate Limit**: 5 requests/minute per user
+**AI Provider**: AWS Bedrock (Claude 3.5 Sonnet)
 
 #### **Request Structure**
 ```json
@@ -529,30 +370,35 @@ Example: "550e8400-e29b-41d4-a716-446655440000_1725456789_abc123"
 
 #### **S3 Storage Architecture**
 ```
-s3://serenya-temp-processing/
-├── jobs/{job_id}_original          # Encrypted uploaded file (temporary)
-├── results/{job_id}.json          # AI processing results (when ready)
+s3://serenya-temp-files-{environment}-{account}/
+├── jobs/{job_id}_original          # Uploaded medical documents (temporary)
+├── results/{job_id}.json           # AI processing results from Bedrock (when ready)
 └── chat-responses/{job_id}.json    # Chat response results (when ready)
+
+s3://serenya-events-{environment}-{account}/
+└── observability/                  # DynamoDB Streams events for audit logging
 ```
 
 #### **S3 Lifecycle Policy**
-- **Automatic Cleanup**: All files older than 2 days are automatically deleted
-- **Manual Cleanup**: Files deleted immediately after successful client retrieval
+- **Automatic Cleanup**: All files in temp-files bucket older than 2 days are automatically deleted
+- **Manual Cleanup**: Files deleted immediately after successful client retrieval via DELETE /api/v1/process/cleanup/{jobId}
+- **Events Retention**: Observability events retained for 90 days for compliance
 
 #### **Server-Side Processing Requirements**
 **Medical Document Processing Workflow**:
-1. **Encrypted Upload**: Client uploads encrypted document to S3 temporary storage
-2. **Server Decryption**: Lambda function temporarily decrypts document in memory for AI processing
-3. **AWS Bedrock Processing**: Decrypted content sent to Bedrock via VPC PrivateLink for AI analysis
-4. **Secure Memory Cleanup**: Plaintext document immediately removed from server memory  
-5. **Response Encryption**: AI results encrypted using client's biometric keys
-6. **S3 Cleanup**: Original encrypted document and AI results deleted from S3
+1. **Upload to S3**: Client uploads document (base64 encoded) to S3 temp bucket via Lambda
+2. **AWS Bedrock Processing**: Lambda function sends document to AWS Bedrock Claude 3.5 Sonnet for AI analysis
+3. **Structured Data Extraction**: Bedrock returns structured medical data (lab results, vitals, analysis)
+4. **S3 Result Storage**: AI processing results stored in S3 at `results/{job_id}.json`
+5. **Client Polling**: Client polls GET /api/v1/process/status/{jobId} for completion
+6. **Result Retrieval**: Client retrieves results via GET /api/v1/process/result/{jobId}
+7. **S3 Cleanup**: Client calls DELETE /api/v1/process/cleanup/{jobId} to remove temporary files
 
 **Security Constraints**:
-- **Temporary Decryption Only**: Documents decrypted in memory only for AI processing
-- **VPC PrivateLink Required**: Bedrock communication never leaves AWS network  
-- **No Persistent Storage**: Plaintext medical data never persisted server-side
-- **Automatic Memory Cleanup**: Secure deletion of plaintext content from server memory
+- **S3 Server-Side Encryption**: All S3 buckets use AWS KMS encryption at rest
+- **Bedrock VPC Endpoint**: Bedrock communication stays within AWS network (no internet egress)
+- **No Database Storage**: Medical data never stored in DynamoDB (only S3 temporarily)
+- **Automatic Lifecycle**: S3 lifecycle policies auto-delete files after 2 days
 
 #### **Error Responses**
 ```json
@@ -580,119 +426,21 @@ s3://serenya-temp-processing/
 ```
 
 #### **Database Operations**
-- **No server-side jobs table**: Job tracking handled via S3 and job_id validation
-- **Temporary S3 storage**: Original file and AI results stored temporarily
-- **Final storage**: Results stored in client's local database after polling
-- **Audit logging**: Document upload event with job_id
+- **No DynamoDB jobs table**: Job tracking handled via S3 object existence and job_id validation
+- **Temporary S3 storage**: Original file stored at `jobs/{job_id}_original`, results at `results/{job_id}.json`
+- **Final storage**: Client stores results in local SQLite database after polling
+- **Audit logging**: DynamoDB Streams capture events to S3 events bucket for compliance
+
+**Note on Batch Upload**: Batch upload endpoints (`/documents/batch-upload` and `/batches/{batch_id}/status`) are not currently implemented. Clients should upload documents individually using POST /api/v1/process/upload.
 
 ---
 
-### **POST /documents/batch-upload**
-**Purpose**: Upload multiple medical documents for batch processing  
-**User Flow**: Mobile app uploads multiple documents at once for efficiency  
-**Performance**: Optimized for mobile data constraints and batch processing  
-**Rate Limit**: 2 requests/minute per user, max 5 documents per batch
-
-#### **Request**
-```json
-{
-  "documents": [
-    {
-      "encrypted_file_data": "string",           // Base64 encrypted file content
-      "encryption_metadata": {
-        "version": "v1",
-        "algorithm": "AES-256-GCM",
-        "table_key_id": "local_medical_data",
-        "checksum": "string"
-      },
-      "file_metadata": {
-        "file_type": "image/jpeg|image/png|application/pdf",
-        "file_size_bytes": "number",
-        "filename": "string"                     // Original filename for processing context
-      }
-    }
-  ],
-  "batch_options": {
-    "processing_priority": "standard|high",     // High priority for premium users
-    "return_format": "individual|combined",     // Individual job IDs or combined result
-    "notification_preference": "polling|none"   // How client wants to receive results
-  }
-}
-```
-
-#### **Response Success (202 Accepted)**
-```json
-{
-  "success": true,
-  "data": {
-    "batch_id": "uuid",                          // Batch tracking identifier
-    "job_ids": ["string", "string"],            // Individual job IDs for each document
-    "estimated_processing_time_seconds": 240,   // Total batch processing estimate
-    "individual_polling_endpoints": [           // Endpoints for each document
-      "/jobs/job1/status",
-      "/jobs/job2/status"  
-    ],
-    "batch_status_endpoint": "/batches/{batch_id}/status"
-  },
-  "audit_logged": true
-}
-```
-
-#### **Error Response - Batch Too Large (413)**
-```json
-{
-  "success": false,
-  "error": {
-    "code": "BATCH_TOO_LARGE",
-    "message": "Batch exceeds maximum document limit",
-    "user_message": "That's too many files at once. Please try 5 or fewer",
-    "details": {
-      "max_documents": 5,
-      "documents_provided": 8
-    }
-  }
-}
-```
-
----
-
-### **GET /batches/{batch_id}/status**
-**Purpose**: Check overall batch processing status  
-**User Flow**: Mobile app checks batch completion status  
-**Rate Limit**: 50 requests/minute per user
-
-#### **Response Success (200)**
-```json
-{
-  "success": true,
-  "data": {
-    "batch_id": "uuid",
-    "status": "processing|completed|partial_failed|failed",
-    "documents_completed": 3,
-    "documents_total": 5,
-    "individual_results": [
-      {
-        "job_id": "string",
-        "status": "completed|processing|failed",
-        "serenya_content_id": "uuid|null"        // Available when completed
-      }
-    ],
-    "processing_summary": {
-      "total_lab_results": 25,
-      "total_vitals": 12,
-      "overall_confidence": 0.89
-    }
-  }
-}
-```
-
----
-
-### **GET /jobs/{job_id}/status**
-**Purpose**: Poll for AI processing results and retrieve processed medical data  
-**User Flow**: Asynchronous result retrieval via polling (**→ user-flows.md** Flow 1A, Step 3)  
-**Polling Frequency**: Every 10 seconds recommended  
+### **GET /api/v1/process/status/{jobId}**
+**Purpose**: Poll for AI processing status (does not return results, only status)
+**User Flow**: Asynchronous status checking via polling (**→ user-flows.md** Flow 1A, Step 3)
+**Polling Frequency**: Every 10 seconds recommended
 **Rate Limit**: 200 requests/minute per user (higher limit for polling)
+**Note**: Use GET /api/v1/process/result/{jobId} to retrieve actual results
 
 #### **Job Validation Process**
 ```typescript
@@ -725,25 +473,46 @@ if (user_id !== authenticated_user_id) {
   "data": {
     "job_id": "string",
     "status": "completed",
+    "processing_summary": {
+      "processing_time_seconds": 85,
+      "lab_results_count": 12,
+      "vitals_count": 5,
+      "confidence_score": 0.92
+    }
+  },
+  "audit_logged": true
+}
+```
+
+**Note**: Status endpoint only returns completion status. Use GET /api/v1/process/result/{jobId} to retrieve actual medical data results.
+
+---
+
+### **GET /api/v1/process/result/{jobId}**
+**Purpose**: Retrieve AI-processed medical data results after job completion
+**User Flow**: Called after status endpoint confirms job is complete
+**Rate Limit**: 100 requests/minute per user
+**Auto-Cleanup**: Results are automatically deleted from S3 after successful retrieval
+
+#### **Response - Results Available (200)**
+```json
+{
+  "success": true,
+  "data": {
+    "job_id": "string",
     "results": {
       "serenya_content_id": "uuid",           // ✅ CRITICAL: Parent content identifier for data relationships
-      "encrypted_lab_results": "string",      // Base64 encrypted lab data (if any found)
-      "encrypted_vitals_data": "string",      // Base64 encrypted vitals data (if any found)
-      "encrypted_analysis": "string",         // Base64 encrypted single markdown analysis document
-      "encryption_metadata": {
-        "version": "v1",
-        "algorithm": "AES-256-GCM",
-        "table_key_id": "local_medical_data",
-        "checksum": "string"
-      }
+      "lab_results": [],                      // Array of structured lab result objects (from Bedrock)
+      "vitals": [],                           // Array of structured vital sign objects (from Bedrock)
+      "analysis_markdown": "string",          // Single markdown document with ALL AI analysis
+      "confidence_score": 0.92
     },
     "processing_summary": {
       "processing_time_seconds": 85,
-      "lab_results_count": 12,                // Number of lab results extracted
-      "vitals_count": 5,                      // Number of vitals extracted
-      "data_types_found": ["analysis", "lab_results", "vitals"], // What was extracted
-      "confidence_score": 0.92,               // Overall processing confidence
-      "bedrock_model_used": "claude-3.5-sonnet-v2"
+      "lab_results_count": 12,
+      "vitals_count": 5,
+      "data_types_found": ["analysis", "lab_results", "vitals"],
+      "bedrock_model_used": "anthropic.claude-3-5-sonnet-20241022-v2:0"
     }
   },
   "audit_logged": true
@@ -863,12 +632,13 @@ if (user_id !== authenticated_user_id) {
 
 ---
 
-### **POST /reports/generate**
-**Purpose**: Generate comprehensive doctor report from all user's medical data (Premium feature)  
-**User Flow**: Premium feature - comprehensive medical report generation  
-**Processing Model**: Asynchronous with S3 temporary storage and polling for results  
-**Subscription Required**: Premium tier only
+### **POST /api/v1/process/doctor-report**
+**Purpose**: Generate comprehensive doctor report from all user's medical data (Premium feature)
+**User Flow**: Premium feature - comprehensive medical report generation
+**Processing Model**: Asynchronous with S3 temporary storage and polling for results
+**Subscription Required**: Premium tier only (verified via DynamoDB user profile)
 **Rate Limit**: 5 requests/minute per user
+**AI Provider**: AWS Bedrock (Claude 3.5 Sonnet)
 
 #### **Premium Subscription Check**
 - Server validates user has active premium subscription before processing
@@ -986,13 +756,12 @@ s3://serenya-temp-processing/
 ```
 
 #### **Database Operations**
-- **Premium Check**: Validate subscription_tiers.medical_reports = TRUE
-- **Job Validation**: Extract user_id from job_id and validate against authenticated user  
-- **S3 Processing**: Store medical data temporarily, retrieve AI-generated report
-- **Data Transformation**: Convert S3 markdown response to encrypted API response
-- **Cleanup**: Delete both S3 files after successful response
-- **Final Storage**: Client creates new local record as "reports" content type in SQLite only upon successful polling response
-- **Audit Logging**: Log premium feature usage and report generation success
+- **Premium Check**: DynamoDB GetItem on user profile, validate `current_subscription.type = 'premium'` and `status = 'active'`
+- **Job Validation**: Extract user_id from job_id and validate against authenticated user
+- **S3 Processing**: Store medical data temporarily at `jobs/{job_id}_medical_data`, retrieve AI-generated report from `results/{job_id}.json`
+- **Cleanup**: Delete both S3 files after successful response via DELETE /api/v1/process/cleanup/{jobId}
+- **Final Storage**: Client creates new local record as "reports" content type in SQLite only upon successful polling
+- **Audit Logging**: DynamoDB Streams capture premium feature usage events to S3 events bucket
 
 #### **Audit Events Triggered**
 - **Report Request**: Premium user, data volume, processing initiation
@@ -1003,11 +772,12 @@ s3://serenya-temp-processing/
 
 ## 💬 **Chat Prompts & Conversation APIs**
 
-### **GET /chat/prompts**
-**Purpose**: Retrieve pre-defined conversation starters from centralized repository  
-**User Flow**: Loading chat interface, refreshing available questions based on content type  
-**Caching**: 1-day TTL for optimal performance and offline capability  
+### **GET /api/v1/chat/prompts**
+**Purpose**: Retrieve pre-defined conversation starters for medical content
+**User Flow**: Loading chat interface, refreshing available questions based on content type
+**Caching**: 1-day TTL for optimal performance and offline capability
 **Rate Limit**: 50 requests/minute per user
+**Data Source**: Pre-defined prompts (not dynamically generated by LLM)
 
 #### **Query Parameters**
 - `content_type` (required): ENUM - `results` | `reports`
@@ -1096,29 +866,19 @@ Expires: {24_hours_from_generation}
 }
 ```
 
-#### **Chat Prompts Database Context**
-```sql
--- Chat prompts are stored in database, not generated by LLM
--- These are pre-defined questions users can select from
-CREATE TABLE chat_options (
-  id UUID PRIMARY KEY,
-  content_type content_type_enum NOT NULL, -- ENUM: 'results' OR 'reports' ONLY
-  question TEXT NOT NULL,
-  category VARCHAR(50), -- 'explanation', 'clarification', 'next_steps'
-  priority INTEGER -- 1=high, 2=medium, 3=low
-);
+#### **Chat Prompts Data Source**
+**Current Implementation**: Chat prompts are currently hardcoded in the Lambda function, not stored in DynamoDB. This is a temporary implementation that may be moved to DynamoDB in future iterations.
 
--- Content type enum definition
-CREATE TYPE content_type_enum AS ENUM ('results', 'reports');
+**Prompt Categories**:
+- `explanation` - Help users understand medical terminology
+- `clarification` - Answer specific questions about results
+- `next_steps` - Provide guidance on what to do next
 
--- Sample data (seeded in database)
-INSERT INTO chat_options VALUES
-('uuid1', 'results', 'What do my lab values mean?', 'explanation', 1),
-('uuid2', 'results', 'Should I be concerned about any of these results?', 'clarification', 1),
-('uuid3', 'results', 'What should I discuss with my doctor?', 'next_steps', 2),
-('uuid4', 'reports', 'Can you explain this analysis in simpler terms?', 'explanation', 1),
-('uuid5', 'reports', 'What are the key takeaways from this report?', 'clarification', 1);
-```
+**Sample Prompts**:
+- Results: "What do my lab values mean?", "Should I be concerned about any of these results?"
+- Reports: "Can you explain this analysis in simpler terms?", "What are the key takeaways?"
+
+**Future Enhancement**: Prompts may be moved to DynamoDB for easier management and customization per user.
 
 #### **Implementation Notes**
 - **Independent of Processing**: Can be called separately from document processing completion
@@ -1132,11 +892,12 @@ INSERT INTO chat_options VALUES
 
 ## 💬 **Chat & Conversation APIs**
 
-### **POST /chat/messages**
-**Purpose**: Send user question for AI analysis - asynchronous processing  
-**User Flow**: Interactive conversation (**→ user-flows.md** Flow 2A, Step 3)  
-**Processing Time**: 5-15 seconds (asynchronous)  
+### **POST /api/v1/chat/messages**
+**Purpose**: Send user question for AI analysis via AWS Bedrock - asynchronous processing
+**User Flow**: Interactive conversation (**→ user-flows.md** Flow 2A, Step 3)
+**Processing Time**: 5-15 seconds (asynchronous)
 **Processing Model**: Asynchronous with S3 temporary storage and polling for results
+**AI Provider**: AWS Bedrock (Claude 3.5 Sonnet)
 
 #### **Request**
 ```json
@@ -1171,25 +932,35 @@ s3://serenya-temp-processing/chat-responses/{job_id}.json
 - **Lifecycle**: 2-day automatic deletion + immediate cleanup after client retrieval
 - **Purpose**: Temporary storage while client is offline
 
-#### **Subscription Tiers Database Context**
-```sql
--- Subscription tier feature definitions
-CREATE TABLE subscription_tiers (
-  tier_name VARCHAR(20) PRIMARY KEY,    -- 'free', 'premium'
-  medical_reports BOOLEAN DEFAULT FALSE -- AI-generated professional analysis
-);
+#### **Subscription Tiers (DynamoDB Embedded)**
+Subscription information is embedded in the user profile DynamoDB item, not a separate table.
 
--- Default tier configurations
-INSERT INTO subscription_tiers VALUES
-('free', FALSE),      -- Free: Document upload, processing, chat - NO medical reports
-('premium', TRUE);    -- Premium: All features including medical reports
+**User Profile Structure**:
+```json
+{
+  "PK": "USER#{userId}",
+  "SK": "PROFILE",
+  "current_subscription": {
+    "id": "subscription-id",
+    "type": "free|premium",
+    "status": "active|expired|cancelled",
+    "provider": "system|apple|google",
+    "start_date": "timestamp",
+    "end_date": "timestamp"
+  }
+}
 ```
+
+**Subscription Tiers**:
+- `free`: Document upload, processing, chat - NO medical reports
+- `premium`: All features including AI-generated doctor reports
 
 #### **Database Operations**
 1. **Generate chat_id**: UUID for the chat message/response pair
-2. **Create job_id**: Structured format for ownership validation  
-3. **Queue for AI processing**: Send to LLM service with content context
-4. **No server-side persistence**: Chat responses stored temporarily in S3 only
+2. **Create job_id**: Structured format `{user_id}_{timestamp}_{random}` for ownership validation
+3. **Queue for Bedrock Processing**: Send to AWS Bedrock with content context
+4. **S3 Temporary Storage**: Chat responses stored at `chat-responses/{job_id}.json`
+5. **No DynamoDB Persistence**: Chat history stored client-side only
 
 #### **Error Responses**
 
@@ -1232,10 +1003,11 @@ INSERT INTO subscription_tiers VALUES
 
 ---
 
-### **GET /chat/jobs/{job_id}/status**
-**Purpose**: Poll for chat response completion and retrieve AI answer  
-**User Flow**: Polling after sending chat message  
+### **GET /api/v1/chat/jobs/{job_id}/status**
+**Purpose**: Poll for chat response completion and retrieve AI answer from Bedrock
+**User Flow**: Polling after sending chat message
 **Rate Limit**: 10 requests/minute per job_id
+**AI Provider**: AWS Bedrock (Claude 3.5 Sonnet)
 
 #### **Job Validation Process**
 - **Extract user_id** from job_id format: `{user_id}_{timestamp}_{random}`
@@ -1322,9 +1094,9 @@ INSERT INTO subscription_tiers VALUES
 - **Local Storage**: Client stores response locally for conversation history
 
 #### **Database Operations (Polling Endpoint)**
-- **No database queries**: All validation done via job_id structure
-- **S3 operations only**: Check existence, retrieve content, delete after retrieval
-- **Audit logging**: Record successful chat response delivery
+- **No DynamoDB queries**: All validation done via job_id structure (user_id embedded in job_id)
+- **S3 operations only**: Check existence at `chat-responses/{job_id}.json`, retrieve content, delete after retrieval
+- **Audit logging**: DynamoDB Streams capture events to S3 events bucket
 
 #### **Audit Events Triggered**
 - **Chat Response Delivered**: User received AI response, content context, response quality metrics
@@ -1335,118 +1107,53 @@ INSERT INTO subscription_tiers VALUES
 
 ## ⭐ **Premium Subscription APIs**
 
-### **POST /subscriptions/create**
-**Purpose**: Create new premium subscription  
-**User Flow**: Premium upgrade discovery (**→ user-flows.md** Flow 4A, Step 3)  
-**Payment Processing**: Apple App Store / Google Play integration  
-**Database Operations**: INSERT into subscriptions table
-
-#### **Request**
-```json
-{
-  "subscription_plan": "monthly|annual",
-  "payment_platform": "apple|google",
-  "platform_transaction": {
-    "receipt_data": "string", // Platform-specific receipt
-    "transaction_id": "string",
-    "product_id": "string"
-  },
-  "billing_info": {
-    "country_code": "string",
-    "currency": "string"
-  }
-}
-```
-
-#### **Response Success (201)**
-```json
-{
-  "success": true,
-  "data": {
-    "subscription_id": "uuid",
-    "subscription_tier": "premium",
-    "plan_type": "monthly|annual", 
-    "status": "active",
-    "billing": {
-      "start_date": "iso8601",
-      "next_billing_date": "iso8601",
-      "amount": "number",
-      "currency": "string"
-    },
-    "features_unlocked": [
-      "medical_reports"
-    ]
-  },
-  "audit_logged": true
-}
-```
-
-#### **Error Responses**
-```json
-// Payment failed (402)
-{
-  "success": false,
-  "error": {
-    "code": "PAYMENT_FAILED",
-    "message": "Payment could not be processed",
-    "user_message": "Payment couldn't be processed. Please check your card details",
-    "platform_error": "string" // Apple/Google specific error
-  }
-}
-
-// Invalid receipt (400)
-{
-  "success": false,
-  "error": {
-    "code": "INVALID_RECEIPT",
-    "message": "Payment receipt validation failed",
-    "user_message": "Payment verification failed. Contact support if you were charged",
-    "support_reference": "uuid"
-  }
-}
-```
-
-#### **Audit Events Triggered**
-- **Subscription Created**: Plan details, payment info, user tier upgrade
-- **Payment Processed**: Transaction details, platform confirmation, billing cycle start
-- **Premium Access Granted**: Features unlocked, subscription status change
-
----
-
-### **GET /subscriptions/status**
-**Purpose**: Check current subscription status and billing info  
+### **GET /subscriptions/current**
+**Purpose**: Get current subscription status for authenticated user
 **User Flow**: Settings page, premium content access validation
+**Database Operations**: DynamoDB GetItem on user profile, return embedded subscription object
 
 #### **Response Success (200)**
 ```json
 {
   "success": true,
   "data": {
-    "subscription_id": "uuid",
-    "subscription_tier": "free|premium",
-    "status": "active|expired|cancelled|pending",
-    "plan_type": "monthly|annual|null",
-    "billing": {
-      "next_billing_date": "iso8601",
-      "amount": "number",
-      "currency": "string",
-      "payment_method": "apple|google"
+    "subscription": {
+      "id": "subscription-id",
+      "type": "free|premium",
+      "status": "active|expired|cancelled",
+      "provider": "system|apple|google",
+      "external_subscription_id": "string|null",
+      "start_date": "timestamp",
+      "end_date": "timestamp"
     },
     "features": {
-      "medical_reports": "boolean" // Only premium feature - AI-generated professional analysis
+      "document_processing": true,
+      "chat_analysis": true,
+      "medical_reports": "boolean"  // true for premium, false for free
     }
-  }
+  },
+  "audit_logged": true
 }
 ```
+
+**Note on Subscription Management**: POST /subscriptions/create endpoint is not currently implemented. Subscription upgrades are handled through Apple App Store or Google Play Store in-app purchases, with webhook notifications updating the DynamoDB user profile's `current_subscription` object.
 
 ---
 
 ## 🛡️ **GDPR Data Subject Rights APIs**
 
-### **POST /gdpr/erasure-request**
-**Purpose**: Submit GDPR right to erasure (right to be forgotten) request  
-**User Flow**: Settings → Privacy → Delete Account  
-**Business Logic**: Initiates complete user data deletion process from server-side databases  
+**Note on GDPR Endpoints**: GDPR data subject rights endpoints (`/gdpr/erasure-request` and `/gdpr/erasure-status/{erasure_request_id}`) are not currently implemented in the production API. These features are planned for future releases.
+
+**Current Data Deletion Process**:
+1. User can request account deletion through support contact
+2. Manual DynamoDB DeleteItem operation removes user profile
+3. S3 temporary files auto-delete via lifecycle policies (2-day TTL)
+4. Medical data stored client-side is deleted when app is uninstalled
+
+### **POST /gdpr/erasure-request** (Planned)
+**Purpose**: Submit GDPR right to erasure (right to be forgotten) request
+**User Flow**: Settings → Privacy → Delete Account
+**Business Logic**: Initiates complete user data deletion from DynamoDB and S3
 **Processing**: Asynchronous deletion with status tracking
 
 #### **Request**
@@ -1919,14 +1626,132 @@ BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20241022-v2:0
 
 ---
 
-**Document Status**: ✅ Updated - Ready for LLM Provider Architecture and Bedrock integration  
-**Endpoint Coverage**: 18 REST endpoints + Comprehensive LLM integration specifications + GDPR compliance  
-**LLM Integration**: Mock/Bedrock/Direct provider abstraction with cost optimization  
-**Cross-References**: All user flows and database operations mapped to API calls  
-**Next Steps**: 
-- **Priority 1**: LLM Provider Architecture implementation (Task M00-177)
-- **Priority 2**: Bedrock integration in Document Processing APIs (Task M00-169)
-- **Priority 3**: Mobile integration with enhanced API contracts
-- **Priority 4**: Cost monitoring and optimization deployment
+---
 
-**Cost Projections**: $50-500/month for initial scale with 30-40% optimization potential
+## 📊 **API Implementation Summary**
+
+### **Implemented Endpoints (Production Ready)**
+
+**Authentication & User Management:**
+- ✅ POST `/auth/oauth-onboarding` - OAuth authentication (Google/Apple) with aliases `/auth/google` and `/auth/google-onboarding`
+- ✅ GET `/user/profile` - User profile retrieval
+
+**Document Processing:**
+- ✅ POST `/api/v1/process/upload` - Document upload for AI processing
+- ✅ GET `/api/v1/process/status/{jobId}` - Job status polling
+- ✅ GET `/api/v1/process/result/{jobId}` - Retrieve processing results
+- ✅ POST `/api/v1/process/retry/{jobId}` - Retry failed jobs
+- ✅ DELETE `/api/v1/process/cleanup/{jobId}` - S3 cleanup
+- ✅ POST `/api/v1/process/doctor-report` - Generate doctor report (premium)
+
+**Chat & Conversation:**
+- ✅ GET `/api/v1/chat/prompts?content_type=results|reports` - Get chat prompts
+- ✅ POST `/api/v1/chat/messages` - Send chat message
+- ✅ GET `/api/v1/chat/jobs/{job_id}/status` - Chat job status
+
+**Subscriptions:**
+- ✅ GET `/subscriptions/current` - Current subscription status
+
+### **Endpoints Removed/Not Implemented**
+
+**Authentication:**
+- ❌ POST `/auth/refresh` - Token refresh (no server-side refresh token storage)
+- ❌ POST `/auth/biometric/register` - Biometric registration (planned for future)
+- ❌ POST `/auth/biometric/verify` - Biometric verification (planned for future)
+- ❌ GET `/auth/biometric/status` - Biometric status (planned for future)
+
+**Document Processing:**
+- ❌ POST `/documents/batch-upload` - Batch upload (not implemented)
+- ❌ GET `/batches/{batch_id}/status` - Batch status (not implemented)
+
+**Subscriptions:**
+- ❌ POST `/subscriptions/create` - Subscription creation (handled by Apple/Google in-app purchases)
+
+**GDPR:**
+- ❌ POST `/gdpr/erasure-request` - Data erasure request (planned for future)
+- ❌ GET `/gdpr/erasure-status/{erasure_request_id}` - Erasure status (planned for future)
+
+### **Database Architecture Changes**
+
+**PostgreSQL → DynamoDB Migration:**
+- ✅ Single-table design with `PK` and `SK` partition/sort keys
+- ✅ GSI1-EmailLookup: `EMAIL#{email_hash}` for user lookup
+- ✅ GSI2-ExternalAuth: `EXTERNAL#{provider}#{external_id}` for OAuth lookup
+- ✅ Embedded consents in user profile (no separate consents table)
+- ✅ Embedded subscription in user profile (no separate subscriptions table)
+- ✅ Embedded device, session, biometric in user profile
+- ✅ DynamoDB Streams for observability events to S3
+- ✅ AWS KMS encryption for PII fields (email, name, given_name, family_name)
+
+**Storage Architecture:**
+- ✅ S3 bucket: `serenya-temp-files-{environment}-{account}` for temporary document storage
+- ✅ S3 bucket: `serenya-events-{environment}-{account}` for observability events
+- ✅ Lifecycle policies: Auto-delete files older than 2 days
+- ✅ Manual cleanup via DELETE `/api/v1/process/cleanup/{jobId}`
+
+### **AI/LLM Integration Updates**
+
+**AWS Bedrock Integration:**
+- ✅ Model: `anthropic.claude-3-5-sonnet-20241022-v2:0`
+- ✅ VPC endpoint for secure communication (no internet egress)
+- ✅ Document processing: Extract lab results, vitals, analysis
+- ✅ Chat responses: Interactive medical Q&A
+- ✅ Doctor reports: Comprehensive medical analysis (premium)
+
+**Removed References:**
+- ❌ "Development LLM: Mock server" → Use AWS Bedrock in all environments
+- ❌ "Direct Anthropic API" references → Use AWS Bedrock instead
+
+### **Major Technical Stack Changes**
+
+| Component | Before (Documented) | After (Actual) |
+|-----------|---------------------|----------------|
+| Database | PostgreSQL with connection pooling | Amazon DynamoDB (serverless NoSQL) |
+| Data Model | Relational tables (users, consents, subscriptions, devices) | Single-table design with embedded objects |
+| Transactions | SQL BEGIN/COMMIT | DynamoDB PutItem/UpdateItem operations |
+| Indexing | PostgreSQL indexes | DynamoDB GSI (GSI1-EmailLookup, GSI2-ExternalAuth) |
+| Encryption | Application-layer + AWS KMS | AWS KMS field-level encryption only |
+| LLM Provider | Mock server / Direct Anthropic | AWS Bedrock (Claude 3.5 Sonnet) |
+| Audit Logging | PostgreSQL audit table | DynamoDB Streams → S3 events bucket |
+| Job Tracking | PostgreSQL jobs table | S3 object existence + job_id validation |
+
+### **Response Schema Updates**
+
+**User Profile:**
+- Changed from separate table rows to single DynamoDB item with embedded objects
+- Added `current_subscription`, `current_device`, `current_session`, `current_biometric` nested objects
+- Removed separate table references
+
+**Job Processing:**
+- Changed from database-tracked jobs to S3-based job tracking
+- Job validation via job_id format: `{user_id}_{timestamp}_{random}`
+- No job status in DynamoDB, only S3 object existence
+
+**Subscription Data:**
+- Changed from separate subscriptions table to embedded `current_subscription` object
+- Provider field indicates `system` (free), `apple`, or `google` (premium)
+- No billing table, external subscription IDs stored in user profile
+
+### **Verification Results**
+
+**✅ Endpoint Path Verification:**
+- All endpoints match infrastructure/serenya-backend-stack.ts routes (lines 612-812)
+- Correct path prefixes: `/api/v1/process/*`, `/api/v1/chat/*`, `/subscriptions/*`
+
+**✅ Lambda Function Verification:**
+- DynamoDB operations confirmed in lambdas/shared/dynamodb-service.js
+- S3 operations for job storage confirmed
+- AWS Bedrock integration verified
+- KMS encryption for PII fields confirmed
+
+**✅ No PostgreSQL References Remaining:**
+- Removed all SQL table references (users, user_consents, user_devices, subscriptions)
+- Removed SQL transaction descriptions (BEGIN/COMMIT)
+- Removed RDS/connection pooling mentions
+- Updated to DynamoDB operations (PutItem, GetItem, Query, UpdateItem)
+
+**Document Status**: ✅ **UPDATED** - Reflects current DynamoDB-only architecture with AWS Bedrock integration
+**Endpoint Coverage**: 12 implemented REST endpoints + 8 planned/removed endpoints documented
+**Database Migration**: PostgreSQL → DynamoDB single-table design complete
+**LLM Integration**: AWS Bedrock (Claude 3.5 Sonnet) production-ready
+**Cross-References**: All user flows and database operations updated to DynamoDB model

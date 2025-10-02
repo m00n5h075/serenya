@@ -4,12 +4,18 @@ const {
   getUserIdFromEvent,
   sanitizeError,
   generateJobId,
+  withRetry,
   s3,
+  categorizeError,
+  createUnifiedError,
+  ERROR_CATEGORIES
 } = require('../shared/utils');
-const { DocumentJobService } = require('../shared/document-database');
 const { auditService } = require('../shared/audit-service');
 const { bedrockService } = require('../shared/bedrock-service');
-const { query } = require('../shared/database');
+const { DynamoDBUserService } = require('../shared/dynamodb-service');
+const { ObservabilityService } = require('../shared/observability-service');
+const { v4: uuidv4 } = require('uuid');
+const { isPremiumSubscription } = require('../shared/subscription-constants');
 const crypto = require('crypto');
 
 /**
@@ -17,10 +23,30 @@ const crypto = require('crypto');
  * POST /api/v1/process/doctor-report
  */
 exports.handler = async (event) => {
+  const startTime = Date.now();
+  const observability = ObservabilityService.createForFunction('doctor-report', event);
+  let userId = 'unknown';
+
   try {
-    const userId = getUserIdFromEvent(event);
+    userId = getUserIdFromEvent(event);
 
     if (!userId) {
+      const unifiedError = createUnifiedError(new Error('Missing authentication'), {
+        service: 'doctor_report',
+        operation: 'authentication',
+        category: ERROR_CATEGORIES.BUSINESS
+      });
+      
+      await auditService.logAuditEvent({
+        eventType: 'access_control',
+        eventSubtype: 'unauthenticated_doctor_report_attempt',
+        userId: 'unauthenticated',
+        eventDetails: {
+          correlationId: unifiedError.correlationId
+        },
+        dataClassification: 'security_event'
+      }).catch(() => {}); // Don't fail on audit failure
+      
       return createErrorResponse(401, 'MISSING_AUTHENTICATION', 'Invalid or missing authentication', 'Please sign in to generate doctor reports');
     }
 
@@ -28,357 +54,319 @@ exports.handler = async (event) => {
     try {
       body = JSON.parse(event.body || '{}');
     } catch (parseError) {
+      const unifiedError = createUnifiedError(parseError, {
+        service: 'doctor_report',
+        operation: 'request_parsing',
+        userId: userId,
+        category: ERROR_CATEGORIES.VALIDATION
+      });
+      
+      await auditService.logAuditEvent({
+        eventType: 'validation',
+        eventSubtype: 'invalid_json_doctor_report',
+        userId: userId,
+        eventDetails: {
+          correlationId: unifiedError.correlationId,
+          error: 'Invalid JSON in request body'
+        },
+        dataClassification: 'validation_error'
+      }).catch(() => {});
+      
       return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body', 'Please provide valid JSON data');
     }
 
     const { 
-      document_id, 
       report_type = 'medical_summary',
-      content_type = 'result',  // 'result' for document reports, 'report' for health data reports
-      health_data    // For health data reports, Flutter app sends the exported health data
+      health_data
     } = body;
 
-    // Validate request based on content type
-    if (content_type === 'result' && !document_id) {
-      return createErrorResponse(400, 'MISSING_DOCUMENT_ID', 'Missing document_id', 'Please provide a valid document_id for report generation');
-    }
-    
-    if (content_type === 'report' && !health_data) {
+    // Validate health data
+    if (!health_data) {
+      const unifiedError = createUnifiedError(new Error('Missing health data'), {
+        service: 'doctor_report',
+        operation: 'input_validation',
+        userId: userId,
+        category: ERROR_CATEGORIES.VALIDATION
+      });
+      
+      await auditService.logAuditEvent({
+        eventType: 'validation',
+        eventSubtype: 'missing_health_data',
+        userId: userId,
+        eventDetails: {
+          correlationId: unifiedError.correlationId,
+          reportType: report_type
+        },
+        dataClassification: 'validation_error'
+      }).catch(() => {});
+      
       return createErrorResponse(400, 'MISSING_HEALTH_DATA', 'Missing health_data', 'Please provide health data for report generation');
     }
 
     // Enhanced audit logging
     await auditService.logAuditEvent({
       eventType: 'premium_feature',
-      eventSubtype: content_type === 'report' ? 'health_data_report_request' : 'doctor_report_request',
+      eventSubtype: 'health_data_report_request',
       userId: userId,
       eventDetails: {
-        documentId: document_id,
-        reportType: report_type,
-        contentType: content_type
+        reportType: report_type
       },
       dataClassification: 'medical_phi'
     });
 
-    // Document-specific validation (only for document reports)
-    if (content_type === 'result') {
-      // For this implementation, we'll use job_id instead of document_id
-      // since we don't have a separate documents table
-      const jobId = document_id;
+    // Check user's premium status with enhanced error handling
+    let isPremiumUser;
+    try {
+      isPremiumUser = await checkPremiumStatus(userId);
+    } catch (premiumCheckError) {
+      const unifiedError = createUnifiedError(premiumCheckError, {
+        service: 'doctor_report',
+        operation: 'premium_status_check',
+        userId: userId,
+        category: ERROR_CATEGORIES.TECHNICAL
+      });
       
-      // Get job record using PostgreSQL service
-      const jobRecord = await DocumentJobService.getJob(jobId, userId);
+      await auditService.logAuditEvent({
+        eventType: 'subscription',
+        eventSubtype: 'premium_check_error',
+        userId: userId,
+        eventDetails: {
+          correlationId: unifiedError.correlationId,
+          error: sanitizeError(premiumCheckError).message?.substring(0, 100)
+        },
+        dataClassification: 'system_error'
+      }).catch(() => {});
       
-      if (!jobRecord) {
-        await auditService.logAuditEvent({
-          eventType: 'premium_feature',
-          eventSubtype: 'doctor_report_job_not_found',
-          userId: userId,
-          eventDetails: { jobId: jobId },
-          dataClassification: 'medical_phi'
-        });
-        
-        return createErrorResponse(404, 'DOCUMENT_NOT_FOUND', 'Document not found', 'The specified document could not be found or you do not have access to it');
-      }
-
-      // Check if processing is complete
-      if (jobRecord.status !== 'completed') {
-        return createErrorResponse(400, 'PROCESSING_INCOMPLETE', 'Document processing not complete', 'Please wait for document analysis to complete before generating reports');
-      }
+      return createErrorResponse(500, 'SUBSCRIPTION_CHECK_FAILED', 'Failed to verify subscription status', 'We had trouble checking your subscription. Please try again');
     }
-
-    // Check user's premium status
-    const isPremiumUser = await checkPremiumStatus(userId);
+    
     if (!isPremiumUser) {
+      const unifiedError = createUnifiedError(new Error('Premium subscription required'), {
+        service: 'doctor_report',
+        operation: 'premium_access_check',
+        userId: userId,
+        category: ERROR_CATEGORIES.BUSINESS
+      });
+      
+      await auditService.logAuditEvent({
+        eventType: 'access_control',
+        eventSubtype: 'premium_feature_access_denied',
+        userId: userId,
+        eventDetails: {
+          correlationId: unifiedError.correlationId,
+          feature: 'doctor_report',
+          reportType: report_type
+        },
+        dataClassification: 'business_logic'
+      }).catch(() => {});
+      
       return createErrorResponse(403, 'PREMIUM_REQUIRED', 'Premium subscription required for doctor reports', 'Upgrade to premium to generate professional medical reports');
     }
 
-    let bedrockResult;
-    let jobId;
+    // Health Data Report Flow - Store request and queue for async processing
+    const timestamp = Date.now();
+    const randomString = Math.random().toString(36).substring(2, 8);
+    const jobId = `report_${userId}_${timestamp}_${randomString}`;
+    
+    // Store health data report request in S3 for processing
+    const reportRequestData = {
+      job_id: jobId,
+      user_id: userId,
+      health_data: health_data,
+      report_type: report_type,
+      request_type: 'health_data_report',
+      created_at: new Date().toISOString()
+    };
 
-    if (content_type === 'report') {
-      // Health Data Report Flow - Generate new job and store health data in S3
-      jobId = generateJobId();
-      const correlationId = crypto.randomUUID();
+    const s3Key = `incoming/${jobId}`;
+    
+    const uploadParams = {
+      Bucket: process.env.TEMP_BUCKET_NAME,
+      Key: s3Key,
+      Body: JSON.stringify(reportRequestData),
+      ContentType: 'application/json',
+      ServerSideEncryption: 'aws:kms',
+      SSEKMSKeyId: process.env.KMS_KEY_ID,
+      Metadata: {
+        'job-id': jobId,
+        'user-id': userId,
+        'request-type': 'health_data_report',
+        'upload-timestamp': Date.now().toString()
+      },
+      Tagging: 'Classification=PHI-Temporary&AutoDelete=true'
+    };
+
+    try {
+      await withRetry(
+        () => s3.upload(uploadParams).promise(),
+        3,
+        1000,
+        `S3 upload for health data report job ${jobId}`
+      );
+    } catch (s3UploadError) {
+      const unifiedError = createUnifiedError(s3UploadError, {
+        service: 'doctor_report',
+        operation: 's3_upload',
+        userId: userId,
+        category: ERROR_CATEGORIES.EXTERNAL
+      });
       
-      // Store health data in temporary S3 storage (same pattern as document uploads)
-      const s3Key = `reports/${userId}/${jobId}/health_data_export.json`;
-      const healthDataString = JSON.stringify(health_data);
-      
-      const uploadParams = {
-        Bucket: process.env.TEMP_BUCKET_NAME,
-        Key: s3Key,
-        Body: healthDataString,
-        ContentType: 'application/json',
-        ServerSideEncryption: 'aws:kms',
-        SSEKMSKeyId: process.env.KMS_KEY_ID,
-        Metadata: {
-          'original-filename': `health_data_export_${new Date().toISOString().split('T')[0]}.json`,
-          'user-id': userId,
-          'file-type': 'json',
-          'upload-timestamp': Date.now().toString(),
-          'job-id': jobId,
-          'content-type': 'report',
-          'job-type': 'doctor_report'
-        },
-        Tagging: 'Classification=PHI-Temporary&AutoDelete=true',
-      };
-
-      await s3.upload(uploadParams).promise();
-
-      // Create job record in processing_jobs table (same pattern as uploads)
-      const jobData = {
-        jobId,
-        userId,
-        originalFilename: `health_data_export_${new Date().toISOString().split('T')[0]}.json`,
-        sanitizedFilename: `health_data_export_${jobId}.json`,
-        fileType: 'json',
-        fileSize: healthDataString.length,
-        s3Bucket: process.env.TEMP_BUCKET_NAME,
-        s3Key,
-        userAgent: event.headers?.['User-Agent'],
-        sourceIp: event.requestContext?.identity?.sourceIp,
-        sessionId: event.requestContext?.requestId,
-        correlationId: correlationId
-      };
-
-      await DocumentJobService.createJob(jobData);
-      
-      // Enhanced processing started audit
       await auditService.logAuditEvent({
-        eventType: 'premium_feature',
-        eventSubtype: 'doctor_report_processing_started',
+        eventType: 'storage',
+        eventSubtype: 'doctor_report_upload_failed',
         userId: userId,
         eventDetails: {
+          correlationId: unifiedError.correlationId,
           jobId: jobId,
-          reportType: report_type,
-          healthDataSizeKB: Math.round(healthDataString.length / 1024)
+          error: sanitizeError(s3UploadError).message?.substring(0, 100)
         },
-        dataClassification: 'medical_phi'
-      });
-
-      // Update status to processing
-      await DocumentJobService.updateJobStatus(jobId, 'processing', {
-        processingStartedAt: Date.now(),
-      }, userId);
-
-      // Process with Bedrock synchronously (same pattern as document processing)
-      const bedrockResult = await bedrockService.generateHealthDataReport(health_data, {
-        userId: userId,
-        reportType: report_type,
-        jobId: jobId
-      });
-
-      // Handle Bedrock processing failure
-      if (!bedrockResult.success) {
-        await DocumentJobService.updateJobStatus(jobId, 'failed', {
-          failedAt: Date.now(),
-          errorMessage: bedrockResult.error.message,
-        }, userId);
-
-        return createErrorResponse(500, bedrockResult.error.code, bedrockResult.error.message, bedrockResult.error.user_action);
-      }
-
-      // Store results using unified approach
-      await DocumentJobService.storeResultsToS3(jobId, {
-        markdown_content: bedrockResult.report.report_content || bedrockResult.report.response_content || '',
-        report_metadata: {
-          title: bedrockResult.report.title || 'Doctor Report',
-          summary: bedrockResult.report.summary || 'Comprehensive medical analysis report',
-          confidence_score: bedrockResult.metadata.confidence_score || 8,
-          report_type: report_type
-        },
-        jobMetadata: {
-          aiModelUsed: bedrockResult.metadata.model_used,
-          processingTimeMs: bedrockResult.metadata.processing_time_ms,
-          token_usage: bedrockResult.metadata.token_usage,
-          cost_estimate: bedrockResult.metadata.cost_estimate_cents
-        }
-      }, userId);
-
-      // Update job status to completed
-      await DocumentJobService.updateJobStatus(jobId, 'completed', {
-        completedAt: Date.now(),
-        processingDuration: bedrockResult.metadata.processing_time_ms,
-      }, userId);
-
-      // Clean up input health data file immediately after successful processing
-      await cleanupS3File(s3Key);
-
-      // Enhanced processing completed audit
-      await auditService.logAuditEvent({
-        eventType: 'premium_feature',
-        eventSubtype: 'doctor_report_completed',
-        userId: userId,
-        eventDetails: {
-          jobId: jobId,
-          reportType: report_type,
-          processingDurationMs: bedrockResult.metadata.processing_time_ms,
-          tokenUsage: bedrockResult.metadata.token_usage,
-          costCents: bedrockResult.metadata.cost_estimate_cents
-        },
-        dataClassification: 'medical_phi'
-      });
-
-      // Return success response with results (same pattern as document processing)
-      return createResponse(200, {
-        success: true,
-        job_id: jobId,
-        status: 'completed',
-        message: 'Doctor report generated successfully.',
-        processing_metadata: {
-          model_used: bedrockResult.metadata.model_used,
-          processing_time_ms: bedrockResult.metadata.processing_time_ms,
-          token_usage: bedrockResult.metadata.token_usage,
-          cost_estimate_cents: bedrockResult.metadata.cost_estimate_cents
-        }
-      });
-    } else {
-      // Document Report Flow (existing) - this remains synchronous as it uses existing results
-      jobId = document_id;
+        dataClassification: 'system_error'
+      }).catch(() => {});
       
-      // Get existing analysis results
-      const analysisResults = await DocumentJobService.getResults(jobId, userId);
-      if (!analysisResults) {
-        return createErrorResponse(404, 'ANALYSIS_NOT_FOUND', 'Analysis results not found', 'No analysis results available for this document');
-      }
-
-      // Generate comprehensive medical report using Bedrock (synchronous for document reports)
-      const bedrockResult = await bedrockService.generateDoctorReport(analysisResults, {
-        userId: userId,
-        reportType: report_type,
-        jobId: jobId
-      });
-
-      // Handle Bedrock processing failure for document reports
-      if (!bedrockResult.success) {
-        await auditService.logAuditEvent({
-          eventType: 'premium_feature',
-          eventSubtype: 'doctor_report_generation_failed',
-          userId: userId,
-          eventDetails: {
-            jobId: jobId,
-            errorCode: bedrockResult.error.code,
-            errorCategory: bedrockResult.error.category
-          },
-          dataClassification: 'medical_phi'
-        });
-
-        return createErrorResponse(500, bedrockResult.error.code, bedrockResult.error.message, bedrockResult.error.user_action);
-      }
-
-      // Store report generation record for billing/tracking
-      await storeReportRecord(userId, jobId, report_type, bedrockResult.metadata);
-
-      // Enhanced success audit logging
-      await auditService.logAuditEvent({
-        eventType: 'premium_feature',
-        eventSubtype: 'doctor_report_generated',
-        userId: userId,
-        eventDetails: {
-          jobId: jobId,
-          reportType: report_type,
-          reportLength: bedrockResult.report.report_content?.length || 0,
-          processingTimeMs: bedrockResult.metadata.processing_time_ms,
-          tokenUsage: bedrockResult.metadata.token_usage,
-          costCents: bedrockResult.metadata.cost_estimate_cents
-        },
-        dataClassification: 'medical_phi'
-      });
-
-      // Return synchronous response for document reports
-      return createResponse(200, {
-        success: true,
-        report: {
-          type: report_type,
-          content: bedrockResult.report.report_content || bedrockResult.report.response_content,
-          clinical_recommendations: bedrockResult.report.clinical_recommendations || bedrockResult.report.recommendations,
-          disclaimers: bedrockResult.report.disclaimers,
-          metadata: {
-            generation_timestamp: new Date().toISOString(),
-            model_used: bedrockResult.metadata.model_used,
-            processing_time_ms: bedrockResult.metadata.processing_time_ms,
-            token_usage: bedrockResult.metadata.token_usage,
-            cost_estimate_cents: bedrockResult.metadata.cost_estimate_cents
-          }
-        },
-        generated_at: new Date().toISOString(),
-        document_info: {
-          job_id: jobId,
-          original_filename: analysisResults.originalFileName,
-          processed_at: new Date(analysisResults.completedAt).toISOString(),
-          ai_confidence: bedrockResult.metadata?.confidence_score || 'high'
-        }
-      });
+      throw s3UploadError; // Let main catch block handle this
     }
+
+    // Enhanced processing queued audit
+    await auditService.logAuditEvent({
+      eventType: 'premium_feature',
+      eventSubtype: 'health_data_report_queued',
+      userId: userId,
+      eventDetails: {
+        jobId: jobId,
+        reportType: report_type,
+        healthDataSizeKB: Math.round(JSON.stringify(health_data).length / 1024)
+      },
+      dataClassification: 'medical_phi'
+    });
+
+    // Track AI processing for report generation
+    await observability.trackAIProcessing(userId, 'bedrock', 'claude-3-sonnet', 'doctor_report', {
+      reportType: report_type,
+      jobId: jobId
+    });
+
+    // Track user journey for premium report generation
+    await observability.trackUserJourney(userId, 'doctor_report_requested', {
+      reportType: report_type,
+      jobId: jobId
+    });
+
+    // Track subscription usage (premium feature)
+    await observability.trackSubscription(userId, 'doctor_report_generated', {
+      reportType: report_type,
+      jobId: jobId
+    });
+
+    // Return immediate response with job ID for polling
+    return createResponse(202, {
+      success: true,
+      job_id: jobId,
+      estimated_completion_seconds: 30,
+      message: 'Health data report request queued for processing'
+    });
 
   } catch (error) {
     console.error('Doctor report error:', sanitizeError(error));
-    
-    const userId = getUserIdFromEvent(event) || 'unknown';
-    
-    // Mark job as failed if we have a jobId
-    if (jobId) {
-      try {
-        await DocumentJobService.updateJobStatus(jobId, 'failed', {
-          failedAt: Date.now(),
-          errorMessage: sanitizeError(error).message?.substring(0, 500) || 'Unknown processing error',
-        }, userId);
 
-        await auditService.logAuditEvent({
-          eventType: 'premium_feature',
-          eventSubtype: 'doctor_report_processing_error',
-          userId: userId,
-          eventDetails: {
-            jobId: jobId,
-            error: sanitizeError(error).message?.substring(0, 100) || 'Unknown error'
-          },
-          dataClassification: 'system_error'
-        });
-      } catch (auditError) {
-        console.error('Error logging processing failure:', auditError);
-      }
+    await observability.trackError(error, 'doctor_report', userId);
+
+    // Enhanced error categorization and handling
+    const errorContext = {
+      service: 'doctor_report',
+      operation: 'request_processing',
+      userId: userId
+    };
+    const unifiedError = createUnifiedError(error, errorContext);
+
+    await auditService.logAuditEvent({
+      eventType: 'premium_feature',
+      eventSubtype: 'doctor_report_error',
+      userId: userId,
+      eventDetails: {
+        correlationId: unifiedError.correlationId,
+        errorCategory: unifiedError.category,
+        recoveryStrategy: unifiedError.recoveryStrategy,
+        error: sanitizeError(error).message?.substring(0, 100) || 'Unknown error'
+      },
+      dataClassification: 'system_error'
+    }).catch(() => {}); // Don't fail on audit failure
+
+    // Use categorized error response
+    if (unifiedError.category === ERROR_CATEGORIES.VALIDATION) {
+      return createErrorResponse(400, 'VALIDATION_ERROR', error.message, unifiedError.userMessage);
+    } else if (unifiedError.category === ERROR_CATEGORIES.BUSINESS) {
+      return createErrorResponse(403, 'ACCESS_DENIED', error.message, unifiedError.userMessage);
+    } else if (unifiedError.category === ERROR_CATEGORIES.EXTERNAL) {
+      return createErrorResponse(503, 'SERVICE_UNAVAILABLE', 'External service failure', 'Our report service is temporarily unavailable. Please try again shortly');
+    } else {
+      return createErrorResponse(500, 'REPORT_GENERATION_FAILED', 'Failed to generate doctor report', 'We had trouble generating your medical report. Please try again');
     }
-    
-    return createErrorResponse(500, 'REPORT_GENERATION_FAILED', 'Failed to generate doctor report', 'An error occurred while generating your medical report. Please try again or contact support.');
   }
 };
 
-/**
- * Clean up S3 file after processing
- */
-async function cleanupS3File(s3Key) {
-  try {
-    await s3.deleteObject({
-      Bucket: process.env.TEMP_BUCKET_NAME,
-      Key: s3Key,
-    }).promise();
-    
-    console.log(`Cleaned up S3 file: ${s3Key}`);
-  } catch (error) {
-    console.error('S3 cleanup error:', error);
-    // Don't throw - file will be cleaned up by lifecycle policy
-  }
-}
 
 /**
  * Check premium subscription status
  */
 async function checkPremiumStatus(userId) {
   try {
-    // For now, allow all users to generate reports
-    // In production, this would check subscription status from the users table
+    const userService = new DynamoDBUserService();
     
-    // Get user's report generation count for basic rate limiting
-    const reportCount = await getUserReportCount(userId);
+    // Get user profile with subscription data with retry logic
+    const userProfile = await withRetry(
+      () => userService.getUserProfile(userId),
+      3,
+      1000,
+      `DynamoDB getUserProfile for premium check ${userId}`
+    );
     
-    // Allow 1 free report per user per month, then require premium
-    const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
-    return reportCount < 1; // First report is free for demo purposes
+    if (!userProfile) {
+      console.log('User profile not found for premium check:', userId);
+      return false;
+    }
+    
+    // Check subscription status
+    const subscription = userProfile.current_subscription;
+    if (!subscription) {
+      // No subscription = free tier = no premium access
+      return false;
+    }
+    
+    // Check if user has active premium subscription using subscription constants
+    const isPremium = isPremiumSubscription(subscription.type) && subscription.status === 'active';
+    
+    console.log(`Premium status check for user ${userId}: ${isPremium ? 'Premium' : 'Free'}`);
+    
+    // For now, also allow first free report for demo purposes
+    if (!isPremium) {
+      try {
+        const reportCount = await getUserReportCount(userId);
+        return reportCount < 1; // First report is free
+      } catch (reportCountError) {
+        console.error('Error getting report count, defaulting to no premium access:', reportCountError);
+        return false;
+      }
+    }
+    
+    return isPremium;
     
   } catch (error) {
-    console.error('Premium status check error:', error);
-    return false;
+    console.error('Premium status check error:', sanitizeError(error));
+    
+    // Categorize the error for better handling
+    const errorContext = {
+      service: 'doctor_report',
+      operation: 'premium_status_check',
+      userId: userId,
+      category: ERROR_CATEGORIES.TECHNICAL
+    };
+    const categorization = categorizeError(error, errorContext);
+    
+    console.error(`Premium check failed - Category: ${categorization.category}, Recovery: ${categorization.recovery_strategy}`);
+    
+    // Don't allow premium access if we can't verify subscription
+    // This is a security-first approach for medical applications
+    throw error;
   }
 }
 
@@ -401,24 +389,3 @@ async function getUserReportCount(userId) {
   }
 }
 
-/**
- * Store report generation record for billing/tracking
- */
-async function storeReportRecord(userId, jobId, reportType, metadata) {
-  try {
-    // Update job record with report generation info
-    await DocumentJobService.updateJobStatus(jobId, 'completed', {
-      reportGeneratedAt: Date.now(),
-      reportType: reportType,
-      reportTokenUsage: metadata.token_usage,
-      reportCostCents: metadata.cost_estimate_cents,
-      reportProcessingTimeMs: metadata.processing_time_ms
-    }, userId);
-
-    console.log(`Doctor report generated for user ${userId}, job ${jobId}, type ${reportType}`);
-    console.log(`Report cost: ${metadata.cost_estimate_cents} cents, tokens: ${JSON.stringify(metadata.token_usage)}`);
-  } catch (error) {
-    console.error('Error storing report record:', error);
-    // Don't throw - report was generated successfully
-  }
-}

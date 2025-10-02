@@ -5,6 +5,7 @@ import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
+import { SerenyaDynamoDBTable } from './serenya-dynamodb-table';
 interface SerenyaBackendStackProps extends cdk.StackProps {
     environment: string;
     config: {
@@ -20,6 +21,7 @@ export declare class SerenyaBackendStack extends cdk.Stack {
     readonly vpc: ec2.Vpc;
     readonly database: rds.DatabaseCluster;
     readonly dbSecret: secretsmanager.Secret;
+    readonly dynamoDBTable: SerenyaDynamoDBTable;
     constructor(scope: Construct, id: string, props: SerenyaBackendStackProps);
     private setupApiRoutes;
 }

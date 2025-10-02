@@ -93,20 +93,12 @@ function createResponse(statusCode, body, headers = {}) {
 }
 
 /**
- * Create error response
+ * Create error response - now supports both 3 and 4 parameter signatures
+ * Uses new unified error handling service for healthcare-appropriate responses
  */
-function createErrorResponse(statusCode, message, details = null) {
-  const body = {
-    error: true,
-    message,
-    timestamp: new Date().toISOString(),
-  };
-  
-  if (details && process.env.ENABLE_DETAILED_LOGGING === 'true') {
-    body.details = details;
-  }
-
-  return createResponse(statusCode, body);
+function createErrorResponse(statusCode, errorCodeOrMessage, technicalDetails = null, userMessage = null) {
+  const { errorHandlingService } = require('./error-handling');
+  return errorHandlingService.createErrorResponse(statusCode, errorCodeOrMessage, technicalDetails, userMessage);
 }
 
 /**
@@ -158,98 +150,8 @@ function getUserIdFromEvent(event) {
   }
 }
 
-/**
- * Store job record in DynamoDB
- */
-async function storeJobRecord(jobData) {
-  const ttl = Math.floor(Date.now() / 1000) + (24 * 60 * 60); // 24 hours TTL
-  
-  const item = {
-    ...jobData,
-    ttl,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
-
-  return await dynamodb.put({
-    TableName: process.env.JOBS_TABLE_NAME,
-    Item: item,
-  }).promise();
-}
-
-/**
- * Update job status in DynamoDB
- */
-async function updateJobStatus(jobId, status, additionalData = {}) {
-  const updateExpression = 'SET #status = :status, updatedAt = :updatedAt';
-  const expressionAttributeNames = { '#status': 'status' };
-  const expressionAttributeValues = {
-    ':status': status,
-    ':updatedAt': Date.now(),
-  };
-
-  // Add additional fields if provided
-  Object.keys(additionalData).forEach((key, index) => {
-    const placeholder = `:val${index}`;
-    updateExpression += `, ${key} = ${placeholder}`;
-    expressionAttributeValues[placeholder] = additionalData[key];
-  });
-
-  return await dynamodb.update({
-    TableName: process.env.JOBS_TABLE_NAME,
-    Key: { jobId },
-    UpdateExpression: updateExpression,
-    ExpressionAttributeNames: expressionAttributeNames,
-    ExpressionAttributeValues: expressionAttributeValues,
-  }).promise();
-}
-
-/**
- * Get job record from DynamoDB
- */
-async function getJobRecord(jobId) {
-  const result = await dynamodb.get({
-    TableName: process.env.JOBS_TABLE_NAME,
-    Key: { jobId },
-  }).promise();
-
-  return result.Item || null;
-}
-
-/**
- * Store/update user profile
- */
-async function storeUserProfile(userData) {
-  const ttl = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60); // 30 days TTL
-  
-  const item = {
-    userId: userData.userId,
-    email: userData.email,
-    name: userData.name,
-    profilePicture: userData.profilePicture,
-    lastLoginAt: Date.now(),
-    ttl,
-    createdAt: userData.createdAt || Date.now(),
-    updatedAt: Date.now(),
-  };
-
-  return await dynamodb.put({
-    TableName: process.env.USERS_TABLE_NAME,
-    Item: item,
-  }).promise();
-}
-
-/**
- * Get user profile from DynamoDB
- */
-async function getUserProfile(userId) {
-  const result = await dynamodb.get({
-    TableName: process.env.USERS_TABLE_NAME,
-    Key: { userId },
-  }).promise();
-
-  return result.Item || null;
-}
+// Note: Database functions have been moved to the unified DynamoDB service
+// Use DynamoDBUserService from ../shared/dynamodb-service for all database operations
 
 /**
  * Sanitize filename for S3 storage
@@ -294,6 +196,60 @@ function sanitizeError(error) {
     .replace(/\b\d{4}\s?\d{4}\s?\d{4}\s?\d{4}\b/g, '[CARD-REDACTED]');
 }
 
+/**
+ * Retry helper with exponential backoff and jitter
+ * @param {Function} operation - The async operation to retry
+ * @param {number} maxRetries - Maximum number of retry attempts (default: 3)
+ * @param {number} baseDelay - Base delay in milliseconds (default: 1000)
+ * @param {string} operationName - Name for logging purposes
+ * @returns {Promise} Result of the operation
+ */
+async function withRetry(operation, maxRetries = 3, baseDelay = 1000, operationName = 'operation') {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await operation();
+      if (attempt > 1) {
+        console.log(`✓ ${operationName} succeeded on attempt ${attempt}`);
+      }
+      return result;
+    } catch (error) {
+      const isLastAttempt = attempt === maxRetries;
+      
+      if (isLastAttempt) {
+        console.error(`✗ ${operationName} failed after ${maxRetries} attempts:`, error.message);
+        throw error;
+      }
+      
+      // Calculate delay with exponential backoff and jitter
+      const exponentialDelay = baseDelay * Math.pow(2, attempt - 1);
+      const jitter = Math.random() * 1000; // 0-1000ms jitter
+      const totalDelay = exponentialDelay + jitter;
+      
+      console.warn(`⚠ ${operationName} failed on attempt ${attempt}/${maxRetries}: ${error.message}. Retrying in ${Math.round(totalDelay)}ms...`);
+      
+      await new Promise(resolve => setTimeout(resolve, totalDelay));
+    }
+  }
+}
+
+// Import unified error handling for additional exports
+const { errorHandlingService, ERROR_CATEGORIES, RECOVERY_STRATEGIES } = require('./error-handling');
+
+/**
+ * Enhanced error handling utilities using new unified service
+ */
+function categorizeError(error, context = {}) {
+  return errorHandlingService.categorizeError(error, context);
+}
+
+function createUnifiedError(error, context = {}) {
+  return errorHandlingService.createUnifiedError(error, context);
+}
+
+function updateCircuitBreaker(service, isSuccess) {
+  return errorHandlingService.updateCircuitBreaker(service, isSuccess);
+}
+
 module.exports = {
   getSecrets,
   generateJWT,
@@ -303,14 +259,17 @@ module.exports = {
   validateFile,
   generateJobId,
   getUserIdFromEvent,
-  storeJobRecord,
-  updateJobStatus,
-  getJobRecord,
-  storeUserProfile,
-  getUserProfile,
   sanitizeFileName,
   auditLog,
   sanitizeError,
+  withRetry,
   dynamodb,
   s3,
+  // New unified error handling exports
+  categorizeError,
+  createUnifiedError,
+  updateCircuitBreaker,
+  errorHandlingService,
+  ERROR_CATEGORIES,
+  RECOVERY_STRATEGIES
 };
